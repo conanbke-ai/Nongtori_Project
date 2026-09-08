@@ -4,7 +4,7 @@
 
 | Workstream | Canonical branch / PR | 상태 | 주요 범위 | 주의 |
 |---|---|---|---|---|
-| TORI UI System v1 | `ui/tori-design-system-v1` / PR #1 | IN_PROGRESS | theme/token, 모바일 접근성, cat jelly paw cursor contract, 초기 UI 구조 기준 | 농토리는 구현 초기 단계이므로 별도 UI branch를 새로 만들지 않고 PR #1 기준으로 시작한다. |
+| TORI UI System v1 | `main` / merged PR #1 | MERGED_BASELINE | theme/token, 모바일 접근성, cat jelly paw cursor contract, 초기 UI 구조 기준 | 이후 UI 구현은 main의 이 기준을 재사용한다. 같은 foundation branch를 다시 만들지 않는다. |
 
 ## 작업 시작 체크
 
@@ -16,7 +16,7 @@
 
 ## Branch hygiene
 
-동일한 농장/작업자/권한/다국어/UI 기능을 다른 대화창에서 다시 branch로 만들지 않는다. 기존 branch가 있으면 이어간다.
+동일한 농장/작업자/권한/다국어/UI 기능을 다른 대화창에서 다시 branch로 만들지 않는다. 기존 branch가 있으면 이어간다. 이미 main에 병합된 기반 기능은 재구현하지 않는다.
 
 ## 데이터 안전
 
