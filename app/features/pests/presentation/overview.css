@@ -1,0 +1,67 @@
+.home-screen .overview-heading h1 { color: var(--tori-ink); }
+.home-screen .overview-heading .primary-action { background: var(--tori-primary-deep); box-shadow: 0 6px 16px rgb(57 126 153 / 15%); }
+.home-screen .nongtori-overview { border-color: #d4e7e7; background: linear-gradient(120deg, var(--tori-sky-soft) 0%, var(--tori-cream) 78%); }
+.home-screen .nongtori-overview-art::before { background: linear-gradient(90deg, var(--tori-cream), transparent 35%); }
+.home-screen .nongtori-overview-copy>button { background: var(--tori-primary-deep); }
+.home-screen .nongtori-overview.alert .nongtori-overview-copy>button { background: var(--tori-strawberry-deep); }
+.home-screen .nongtori-context-row .pest-context { flex: 1 1 180px; min-width: 0; max-width: 100%; }
+.home-screen .pest-context b { overflow-wrap: anywhere; }
+.home-screen .workflow-grid { align-items: stretch; gap: 22px; }
+.home-screen .fruit-workflow { position: relative; overflow: hidden; border-color: #ecd9d9; border-top-color: var(--tori-strawberry); background: linear-gradient(145deg, var(--tori-strawberry-soft), var(--surface) 60%); }
+.home-screen .fruit-workflow h2 { max-width: 310px; margin-top: 28px; }
+.home-screen .fruit-workflow .workflow-tags span { border-color: #ebcfd5; background: #fff9fa; color: var(--tori-strawberry-deep); }
+.home-screen .fruit-workflow header>span { color: var(--tori-strawberry-deep); }
+.home-screen .fruit-workflow footer { margin-top: 24px; border-color: #ecd9d9; }
+.home-screen .fruit-workflow footer button { min-height: 46px; background: var(--tori-strawberry-deep); color: #fff; border-color: transparent; }
+.home-screen .fruit-workflow footer button:hover { background: var(--tori-strawberry-deep); border-color: transparent; box-shadow: 0 4px 12px rgb(150 63 84 / 20%); }
+.fruit-workflow-illustration { display: grid; place-items: center; flex: 1 0 110px; margin-top: 20px; min-height: 110px; border-radius: 16px; background: radial-gradient(ellipse, #ffe3e7 0%, transparent 65%); }
+.fruit-workflow-illustration svg { width: 110px; height: 100px; color: var(--tori-strawberry-deep); }
+
+.pest-overview-card { padding: 26px; min-width: 0; border: 1px solid #cce3eb; border-top: 3px solid var(--tori-primary); border-radius: 20px; background: linear-gradient(145deg, var(--tori-sky-soft), var(--surface) 55%); box-shadow: var(--shadow); }
+.pest-overview-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.overview-eyebrow { color: var(--tori-primary-deep); font-size: 12px; font-weight: 850; }
+.pest-overview-heading h2 { margin: 6px 0 0; color: var(--tori-ink); font-size: 25px; letter-spacing: -.04em; }
+.overview-section-icon { display: grid; place-items: center; flex: 0 0 50px; height: 50px; border: 1px solid #cce3eb; border-radius: 17px; background: #fff; color: var(--tori-primary-deep); transform: rotate(-6deg); }
+.pest-overview-intro { margin: 12px 0 20px; color: var(--muted); font-size: 13px; line-height: 1.65; }
+.pest-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.pest-overview-target { min-width: 0; min-height: 80px; display: flex; align-items: center; gap: 9px; padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: rgb(255 255 255 / 85%); text-align: left; }
+.pest-overview-target:hover:enabled { background: #fff; border-color: var(--tori-primary-deep); box-shadow: 0 3px 10px rgb(57 126 153 / 9%); }
+.pest-overview-target:disabled { opacity: .7; }
+.pest-kind-symbol { display: grid; place-items: center; flex: 0 0 31px; height: 37px; color: var(--tori-primary-deep); }
+.pest-overview-target.disease .pest-kind-symbol { color: var(--tori-field); }
+.pest-overview-target.unidentified .pest-kind-symbol { color: var(--tori-soil); }
+.pest-target-name { display: grid; min-width: 0; gap: 1px; }
+.pest-target-name small { color: var(--muted); font-size: 10px; }
+.pest-target-name strong { color: var(--tori-ink); font-size: 14px; font-weight: 850; overflow-wrap: anywhere; }
+.pest-target-count { display: grid; justify-items: center; flex: 0 0 auto; margin-left: auto; min-width: 23px; }
+.pest-target-count b { color: var(--tori-primary-deep); font-size: 20px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.pest-target-count small { color: var(--muted); font-size: 10px; }
+.pest-overview-target.needs-review { border-color: var(--tori-strawberry); background: var(--tori-strawberry-soft); }
+.pest-overview-target.needs-review .pest-target-count b { color: var(--tori-strawberry-deep); }
+.pest-overview-note { min-height: 20px; margin: 12px 0 18px; color: var(--muted); font-size: 11px; }
+.pest-overview-note[role="alert"] { color: var(--danger); }
+.pest-overview-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 17px; border-top: 1px solid #dceaf0; }
+.pest-overview-footer>div { display: grid; gap: 1px; }
+.pest-overview-footer>div>span { color: var(--muted); font-size: 11px; }
+.pest-overview-footer strong { color: var(--tori-primary-deep); font-size: 27px; line-height: 1.2; }
+.pest-overview-footer strong small { margin-left: 4px; color: var(--muted); font-size: 12px; font-weight: 500; }
+.pest-overview-footer>button { min-height: 46px; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 10px 15px; border: 0; border-radius: 11px; background: var(--tori-primary-deep); color: white; font-size: 13px; font-weight: 800; }
+.pest-overview-footer>button:disabled { opacity: .5; }
+.pest-overview-card.has-alerts .pest-overview-footer strong { color: var(--tori-strawberry-deep); }
+
+@media (max-width: 1200px) and (min-width: 1001px) {
+  .pest-overview-card { padding: 20px; }
+  .pest-overview-target { padding: 9px; gap: 5px; }
+  .pest-kind-symbol { display: none; }
+}
+@media (max-width: 680px) {
+  .pest-overview-card { padding: 20px; }
+  .pest-overview-heading h2 { font-size: 23px; }
+  .pest-overview-grid { gap: 8px; }
+  .pest-overview-target { min-height: 80px; padding: 10px; gap: 6px; }
+}
+@media (max-width: 390px) {
+  .pest-overview-card { padding: 16px; }
+  .pest-kind-symbol { display: none; }
+  .pest-overview-footer>button { width: 100%; }
+}

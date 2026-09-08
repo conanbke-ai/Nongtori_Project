@@ -106,6 +106,13 @@
       "when": 1788175000000,
       "tag": "0014_backfill_active_member_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1788853855329,
+      "tag": "0015_pest_capture_targets",
+      "breakpoints": true
     }
   ]
 }

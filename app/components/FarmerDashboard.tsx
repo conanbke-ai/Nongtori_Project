@@ -1,7 +1,13 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useMemo, useState } from 'react';
+import { PestOverviewCard, activePestSummary, type OverviewState } from '@/app/features/pests/presentation/PestOverviewCard';
+import '@/app/features/pests/presentation/overview.css';
+import { pestTargets, pestLabel } from '@/app/features/pests/domain/catalog';
+import { recordText } from '@/app/features/records/presentation/text';
+import { pestText } from '@/app/features/pests/presentation/text';
+import '@/app/features/pests/presentation/pests.css';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AccountCenter, type AccountRecord } from './AccountCenter';
 import { AuthGateway } from './AuthGateway';
 import { CameraCapture } from './CameraCapture';
@@ -9,9 +15,9 @@ import { CropGuideLibrary, type CropGuideRecord } from './CropGuideLibrary';
 import { FarmMiniChat } from './FarmMiniChat';
 import { FarmStatus } from './FarmStatus';
 import { HarvestLog } from './HarvestLog';
-import { MiteCaptureForm } from './MiteCaptureForm';
-import { MiteAlertReview, type MiteAlertPagination, type MiteAlertRecord } from './MiteAlertReview';
-import { MiteRecordNotes } from './MiteRecordNotes';
+import { PestCaptureForm } from './PestCaptureForm';
+import { PestAlertReview, type PestAlertPagination, type PestAlertRecord } from './PestAlertReview';
+import { RecordNotes } from './RecordNotes';
 import { PwaInstallButton } from './PwaInstallButton';
 import { RevenueForecast, type ForecastJobRecord, type RevenueForecastRecord } from './RevenueForecast';
 import { VideoUploadForm } from './VideoUploadForm';
@@ -29,19 +35,20 @@ type Session = {
   camera_name: string | null; house_name: string | null; bed_name: string | null; zone_name: string | null;
 };
 type HistoryRecord = Session & {
+  pest_code: string | null; note_count: number;
   item_id: string | null; capture_mode: string; ended_at: string | null; item_name: string | null;
   crop_name: string | null; cultivar_name: string | null;
 };
 type HistoryResponse = { rows: HistoryRecord[]; total: number; page: number; limit: number; pageCount: number };
-type PestBreakdown = { code: string; label: string; openCount: number; capability: 'ACTIVE' | 'COMING_SOON' };
+type PestBreakdown = { code: string; label: string; openCount: number; capability: 'RECORD_ONLY' };
 type DashboardData = {
   farms: Farm[];
   account: AccountRecord;
   selectedFarm: Farm | null;
   summary: { robotCount: number; todayRecordedSessions: number; alertCount: number; pestBreakdown: PestBreakdown[]; harvestCandidates: number; pendingSessions: number };
   cameras: Camera[];
-  alerts: MiteAlertRecord[];
-  alertPagination: MiteAlertPagination;
+  alerts: PestAlertRecord[];
+  alertPagination: PestAlertPagination;
   recentSessions: Session[];
   pendingSessionsByItem: { item_id: string | null; count: number }[];
   items: FarmItem[];
@@ -60,7 +67,7 @@ const emptyData: DashboardData = {
     permissions: { viewRevenue: false, manageMembers: false, manageFarm: false, uploadMedia: false, reviewAlerts: false, viewHistory: false },
     loginManagedExternally: true,
   }, selectedFarm: null,
-  summary: { robotCount: 0, todayRecordedSessions: 0, alertCount: 0, pestBreakdown: [{ code: 'MITE', label: '응애', openCount: 0, capability: 'ACTIVE' }], harvestCandidates: 0, pendingSessions: 0 },
+  summary: { robotCount: 0, todayRecordedSessions: 0, alertCount: 0, pestBreakdown: pestTargets.map((target) => ({ code: target.code, label: target.labels.ko, openCount: 0, capability: target.capability })), harvestCandidates: 0, pendingSessions: 0 },
   cameras: [], alerts: [], alertPagination: { status: 'OPEN', page: 1, limit: 20, total: 0, pageCount: 0, openCount: 0, doneCount: 0 }, recentSessions: [], pendingSessionsByItem: [], items: [], guides: [], setupRequired: true, membershipRequired: false,
 };
 
@@ -117,11 +124,12 @@ function sessionStatus(status: string, language: Language) {
   return labels[status] ? translate(language, labels[status]) : status;
 }
 
-async function requestDashboard(selectedFarmId = '', alertStatus: 'OPEN' | 'DONE' = 'OPEN', alertPage = 1) {
+async function requestDashboard(selectedFarmId = '', alertStatus: 'OPEN' | 'DONE' = 'OPEN', alertPage = 1, pestCode = '') {
   const params = new URLSearchParams({ date: localDateKey() });
   if (selectedFarmId) params.set('farmId', selectedFarmId);
   params.set('alertStatus', alertStatus);
   params.set('alertPage', String(alertPage));
+  if (pestCode) params.set('pestCode', pestCode);
   const response = await fetch(`/api/farmer-dashboard?${params}`, { cache: 'no-store' });
   if (!response.ok) throw new Error('농장 정보를 불러오지 못했습니다.');
   return response.json() as Promise<DashboardData>;
@@ -134,7 +142,9 @@ export function FarmerDashboard() {
   const [itemId, setItemId] = useState('');
   const [fruitTab, setFruitTab] = useState<'video' | 'photo' | 'forecast'>('video');
   const [pestTab, setPestTab] = useState<'status' | 'photo'>('status');
-  const [historyTab, setHistoryTab] = useState<'analysis' | 'harvest'>('analysis');
+  const [managementTab, setManagementTab] = useState<'overview' | 'harvest'>('overview');
+  const [pestCode, setPestCode] = useState('');
+  const dashboardRequestSequence = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -182,10 +192,14 @@ export function FarmerDashboard() {
     setLoading(false);
   }
 
-  function reload(selectedFarmId = farmId, alertStatus: 'OPEN' | 'DONE' = 'OPEN', alertPage = 1) {
+  function reload(selectedFarmId = farmId, alertStatus: 'OPEN' | 'DONE' = 'OPEN', alertPage = 1, selectedPestCode = pestCode) {
     setLoading(true);
     setError('');
-    void requestDashboard(selectedFarmId, alertStatus, alertPage).then(apply).catch((caught) => {
+    const sequence = ++dashboardRequestSequence.current;
+    void requestDashboard(selectedFarmId, alertStatus, alertPage, selectedPestCode).then((next) => {
+      if (sequence === dashboardRequestSequence.current) apply(next);
+    }).catch((caught) => {
+      if (sequence !== dashboardRequestSequence.current) return;
       setError(caught instanceof Error ? caught.message : '화면을 새로고침해 주세요.');
       setLoading(false);
     });
@@ -230,8 +244,9 @@ export function FarmerDashboard() {
     : scoutMode === 'pending'
       ? translate(language, 'scout.pendingTitle', { count: selectedPendingSessions })
       : translate(language, 'scout.readyTitle');
-  const scoutDescription = translate(language, scoutMode === 'alert'
-    ? 'scout.alertDesc' : scoutMode === 'pending' ? 'scout.pendingDesc' : 'scout.readyDesc');
+  const scoutDescription = scoutMode === 'alert' ? pestText(language, 'alertHelp')
+    : translate(language, scoutMode === 'pending' ? 'scout.pendingDesc' : 'scout.readyDesc');
+  const pestOverviewState: OverviewState = loading ? 'loading' : error ? 'error' : !data.selectedFarm ? 'unlinked' : 'ready';
   const scoutAction = translate(language, scoutMode === 'alert'
     ? 'scout.openAlerts' : scoutMode === 'pending' ? 'scout.openHistory' : 'scout.startAnalysis');
   const selectedItemId = selectedItem?.id ?? '';
@@ -289,18 +304,18 @@ export function FarmerDashboard() {
 
   function openScoutTarget() {
     if (scoutMode === 'alert') {
-      setPestTab('status');
-      if (data.alertPagination.status !== 'OPEN' || data.alertPagination.page !== 1) reload(farmId, 'OPEN', 1);
+      openPestManagement();
+      return;
     }
-    if (scoutMode === 'pending') setHistoryTab('analysis');
     if (scoutMode === 'ready') setFruitTab('video');
     open(scoutTarget);
   }
 
-  function openPestManagement() {
+  function openPestManagement(targetCode = '') {
     setPestTab('status');
+    setPestCode(targetCode);
     open('alerts');
-    if (data.alertPagination.status !== 'OPEN' || data.alertPagination.page !== 1) reload(farmId, 'OPEN', 1);
+    reload(farmId, 'OPEN', 1, targetCode);
   }
 
   function changeLanguage(next: Language) {
@@ -383,7 +398,7 @@ export function FarmerDashboard() {
                     <p>{scoutDescription}</p>
                     {scoutMode === 'alert' ? <div className="nongtori-context-row">
                       <span><small>{translate(language, 'home.scopeLabel')}</small><b>{translate(language, 'home.farmWideScope')}</b></span>
-                      <span className="model-ready"><small>{translate(language, 'menu.alerts')}</small><b>{translate(language, 'pest.mite')}</b></span>
+                      <span className="pest-context"><small>{pestText(language, 'reviewNeeded')}</small><b>{activePestSummary(data.summary.pestBreakdown, language)}</b></span>
                     </div> : <div className="nongtori-context-row">
                       <span><small>{translate(language, 'common.crop')}</small><b>{selectedItem?.crop_name ?? '연결 대기'}</b></span>
                       <span><small>{translate(language, 'common.cultivar')}</small><b>{selectedItem?.cultivar_name ?? '미지정'}</b></span>
@@ -397,24 +412,28 @@ export function FarmerDashboard() {
                     <article><span><small>{translate(language, 'home.farmWideScope')}</small>{translate(language, 'home.todaySubmissions')}</span><div><strong>{data.summary.todayRecordedSessions}</strong><small>{translate(language, 'common.cases')}</small></div></article>
                     <article><span><small>{translate(language, 'home.farmWideScope')}</small>{translate(language, 'home.gradeCompleted')}</span><div><strong>{data.summary.harvestCandidates}</strong><small>{translate(language, 'harvest.pieces')}</small></div></article>
                     <article className={`pest-summary-metric ${data.summary.alertCount > 0 ? 'attention' : ''}`}>
-                      <details><summary><span><small>{translate(language, 'home.farmWideScope')}</small>{translate(language, 'home.miteReviewNeeded')}</span><div><strong>{data.summary.alertCount}</strong><small>{translate(language, 'common.cases')}</small></div></summary><div className="pest-breakdown-list"><span>{translate(language, 'home.farmWidePest')}</span>{data.summary.pestBreakdown.map((target) => <button key={target.code} onClick={openPestManagement} type="button"><span>{target.code === 'MITE' ? translate(language, 'pest.mite') : target.label}</span><b>{target.openCount}{translate(language, 'common.cases')}</b><small>{translate(language, target.capability === 'ACTIVE' ? 'home.activeDetector' : 'home.comingSoon')}</small></button>)}</div></details>
+                      <details><summary><span><small>{translate(language, 'home.farmWideScope')}</small>{translate(language, 'home.miteReviewNeeded')}</span><div><strong>{data.summary.alertCount}</strong><small>{translate(language, 'common.cases')}</small></div></summary><div className="pest-breakdown-list"><span>{translate(language, 'home.farmWidePest')}</span>{data.summary.pestBreakdown.map((target) => <button key={target.code} onClick={() => openPestManagement(target.code)} type="button"><span>{pestLabel(target.code, language)}</span><b>{target.openCount}{translate(language, 'common.cases')}</b><small>{pestText(language, 'recordOnly')}</small></button>)}</div></details>
                     </article>
                   </div>
                 </article>
                 <div className="workflow-grid">
-                  <article className="workflow-card fruit-workflow"><header><span>수확 후 품질 관리</span><b>01</b></header><h2>수확 과실 영상 판독</h2><p>촬영한 일반 영상을 장면별로 나누어 딸기의 익은 정도와 품질 등급을 살핍니다. 같은 딸기가 여러 장면에 보여도 한 개로 계산합니다.</p><div className="workflow-tags"><span>일반 영상</span><span>익은 정도</span><span>품질 등급</span></div><footer><div><span>{translate(language, 'home.fruitWorkflowScope')}</span><strong>{data.summary.harvestCandidates}개</strong></div><button onClick={() => open('capture')} type="button">영상 접수</button></footer></article>
-                  <article className={`workflow-card mite-workflow ${data.summary.alertCount > 0 ? 'attention' : ''}`}><header><span>{translate(language, 'home.pestCategory')}</span><b>02</b></header><h2>{translate(language, 'menu.alerts')}</h2><p>{translate(language, 'home.pestWorkflowDesc')}</p><div className="workflow-tags"><span>{translate(language, 'home.miteActive')}</span><span>{translate(language, 'home.fieldReview')}</span></div><footer><div><span>{translate(language, 'home.fieldReview')}</span><strong>{data.summary.alertCount}{translate(language, 'common.cases')}</strong></div><button onClick={openPestManagement} type="button">{translate(language, 'home.openMiteList')}</button></footer></article>
+                  <article className="workflow-card fruit-workflow"><header><span>수확 후 품질 관리</span><b>01</b></header><h2>수확 과실 영상 판독</h2><p>촬영한 일반 영상을 장면별로 나누어 딸기의 익은 정도와 품질 등급을 살핍니다. 같은 딸기가 여러 장면에 보여도 한 개로 계산합니다.</p><div className="workflow-tags"><span>일반 영상</span><span>익은 정도</span><span>품질 등급</span></div><div className="fruit-workflow-illustration" aria-hidden="true"><svg viewBox="0 0 110 100" fill="none"><rect x="8" y="10" width="94" height="78" rx="18" fill="white" stroke="#efc4cb" strokeWidth="1.5"/><path d="M34 38c-7-9-16 1-11 12l15 20c3 4 7 4 10 0l15-20c5-11-4-21-11-12-5-7-13-7-18 0Z" fill="var(--tori-strawberry)"/><path d="m35 30 8 8 9-8m-9 8V24" stroke="var(--tori-field)" strokeWidth="3" strokeLinecap="round"/><path d="m31 47 1 3m12-5v3m10 1-1 3m-14 6 1 3m7-3-1 3" stroke="white" strokeWidth="2" strokeLinecap="round"/><path d="M73 37h14m-14 10h10m-10 10h14" stroke="var(--tori-primary-deep)" strokeWidth="3" strokeLinecap="round"/><circle cx="87" cy="74" r="13" fill="var(--tori-field)"/><path d="m81 74 4 4 8-8" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg></div><footer><div><span>{translate(language, 'home.fruitWorkflowScope')}</span><strong>{data.summary.harvestCandidates}개</strong></div><button onClick={() => open('capture')} type="button">영상 접수</button></footer></article>
+                  <PestOverviewCard targets={data.summary.pestBreakdown} total={data.summary.alertCount} language={language} state={pestOverviewState} onSelect={openPestManagement} />
                 </div>
               </section>
             )}
 
             {screen === 'alerts' && (
               <section className="app-screen pest-screen">
-                <div className="screen-heading"><div><p>{translate(language, 'menu.alerts')}</p><h1>{translate(language, 'screen.alertTitle')}</h1><span>{data.selectedFarm?.name ?? translate(language, 'common.farm')} · {translate(language, 'pest.farmWide')}</span></div><button className="primary-action" onClick={() => open('capture')} type="button">{translate(language, 'upload.submit')}</button></div>
-                <div className="pest-category-overview"><div><span>{translate(language, 'pest.totalOpen')}</span><strong>{data.summary.alertCount}{translate(language, 'common.cases')}</strong><small>{translate(language, 'pest.farmWide')}</small></div><article><span>{translate(language, 'pest.active')}</span><div><h2>{translate(language, 'pest.mite')}</h2><p>{translate(language, 'pest.miteDescription')}</p></div><b>{data.summary.pestBreakdown.find((target) => target.code === 'MITE')?.openCount ?? 0}{translate(language, 'common.cases')}</b></article><p>{translate(language, 'pest.scopeNotice')}</p></div>
+                <div className="screen-heading"><div><p>{translate(language, 'menu.alerts')}</p><h1>{pestText(language, 'managementTitle')}</h1><span>{data.selectedFarm?.name ?? translate(language, 'common.farm')} · {translate(language, 'pest.farmWide')}</span></div><button className="primary-action" onClick={() => open('capture')} type="button">{translate(language, 'upload.submit')}</button></div>
+                <div className="pest-category-overview"><div><span>{translate(language, 'pest.totalOpen')}</span><strong>{data.summary.alertCount}{translate(language, 'common.cases')}</strong><small>{translate(language, 'pest.farmWide')}</small></div><p>{pestText(language, 'scope')}</p></div>
+                <div className="pest-target-filters" role="group" aria-label={pestText(language, 'target')}>
+                  <button aria-pressed={!pestCode} type="button" onClick={() => { setPestCode(''); reload(farmId, 'OPEN', 1, ''); }}>{pestText(language, 'all')}<b>{data.summary.alertCount}</b></button>
+                  {data.summary.pestBreakdown.map((target) => <button key={target.code} aria-pressed={pestCode === target.code} type="button" onClick={() => { setPestCode(target.code); reload(farmId, 'OPEN', 1, target.code); }}><strong>{pestLabel(target.code, language)}</strong><b>{target.openCount}</b><small>{pestText(language, 'recordOnly')}</small></button>)}
+                </div>
                 <div className="module-tabs"><button className={pestTab === 'status' ? 'selected' : ''} onClick={() => setPestTab('status')} type="button">{translate(language, 'alert.open')}</button><button className={pestTab === 'photo' ? 'selected' : ''} onClick={() => setPestTab('photo')} type="button">{translate(language, 'upload.photo')}</button></div>
-                {pestTab === 'status' && <><div className="pest-method-card"><div className="workspace-heading"><span>{translate(language, 'alert.method')}</span><h2>{translate(language, 'alert.methodTitle')}</h2><p>{translate(language, 'alert.methodDesc')}</p></div><div className="analysis-scope-grid"><article><b>{translate(language, 'alert.thermalPrimary')}</b><span>{translate(language, 'alert.leafTemp')}</span><span>{translate(language, 'alert.tempDiff')}</span></article><article><b>{translate(language, 'alert.regularTogether')}</b><span>{translate(language, 'alert.fruitGrade')}</span><span>{translate(language, 'alert.suspiciousLeaf')}</span></article></div></div><MiteAlertReview alerts={data.alerts} canReview={data.account.permissions.reviewAlerts} farmId={farmId} key={farmId} language={language} onPageChange={(status, page) => reload(farmId, status, page)} onReviewed={() => reload(farmId, data.alertPagination.status, 1)} pagination={data.alertPagination} /></>}
-                {pestTab === 'photo' && <div className="module-workspace"><div className="workspace-heading"><span>가지고 있는 사진 사용</span><h2>일반 잎 사진과 열화상 사진 접수</h2><p>같은 잎을 비슷한 위치에서 찍은 일반 사진과 열화상을 한 번에 올립니다. 열화상이 없어도 일반 사진만 올릴 수 있습니다.</p></div>{farmId && selectedItem ? <MiteCaptureForm farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /> : <div className="screen-empty compact"><strong>농장과 품목 연결이 필요합니다.</strong></div>}</div>}
+                {pestTab === 'status' && <PestAlertReview alerts={data.alerts} canReview={data.account.permissions.reviewAlerts} farmId={farmId} key={`${farmId}:${pestCode}`} language={language} onPageChange={(status, page) => reload(farmId, status, page)} onReviewed={() => reload(farmId, data.alertPagination.status, 1)} pagination={data.alertPagination} />}
+                {pestTab === 'photo' && <div className="module-workspace"><div className="workspace-heading"><span>가지고 있는 사진 사용</span><h2>일반 잎 사진과 열화상 사진 접수</h2><p>같은 잎을 비슷한 위치에서 찍은 일반 사진과 열화상을 한 번에 올립니다. 열화상이 없어도 일반 사진만 올릴 수 있습니다.</p></div>{farmId && selectedItem ? <PestCaptureForm defaultPestCode={pestCode || 'OTHER'} key={`${farmId}:${selectedItem.id}:${pestCode}`} farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /> : <div className="screen-empty compact"><strong>농장과 품목 연결이 필요합니다.</strong></div>}</div>}
                 <p className="capture-safety"><strong>{translate(language, 'alert.safetyTitle')}</strong> {translate(language, 'alert.safetyText')}</p>
               </section>
             )}
@@ -426,25 +445,25 @@ export function FarmerDashboard() {
             {screen === 'history' && (
               <section className="app-screen history-screen">
                 <div className="screen-heading"><div><p>날짜별 작업 기록</p><h1>{translate(language, 'screen.historyTitle')}</h1><span>{selectedItem?.display_name ?? '전체 품목'}</span></div></div>
-                <div className="module-tabs"><button className={historyTab === 'analysis' ? 'selected' : ''} onClick={() => setHistoryTab('analysis')} type="button">{translate(language, 'history.analysis')}</button><button className={historyTab === 'harvest' ? 'selected' : ''} onClick={() => setHistoryTab('harvest')} type="button">{translate(language, 'history.harvest')}</button></div>
-                {historyTab === 'analysis' ? <>
+                <p className="data-scope-note">{recordText(language, 'commentsHelp')}</p>
                   <form className="history-filters" onSubmit={(event) => { event.preventDefault(); void loadHistory(1); }}><label><span>{translate(language, 'history.startDate')}</span><input max={historyTo} onChange={(event) => setHistoryFrom(event.target.value)} type="date" value={historyFrom} /></label><label><span>{translate(language, 'history.endDate')}</span><input min={historyFrom} onChange={(event) => setHistoryTo(event.target.value)} type="date" value={historyTo} /></label><label><span>{translate(language, 'history.source')}</span><select onChange={(event) => setHistorySource(event.target.value)} value={historySource}><option value="">{translate(language, 'common.all')}</option><option value="VIDEO_IMPORT">{translate(language, 'history.sourceSavedVideo')}</option><option value="PERSONAL_CAPTURE">{translate(language, 'history.sourceDirectCapture')}</option></select></label><label><span>{translate(language, 'history.status')}</span><select onChange={(event) => setHistoryStatus(event.target.value)} value={historyStatus}><option value="">{translate(language, 'common.all')}</option><option value="REGISTERED">{sessionStatus('REGISTERED', language)}</option><option value="PROCESSING">{sessionStatus('PROCESSING', language)}</option><option value="COMPLETED">{sessionStatus('COMPLETED', language)}</option><option value="FAILED">{sessionStatus('FAILED', language)}</option><option value="UPLOADED_AWAITING_MODEL">{sessionStatus('UPLOADED_AWAITING_MODEL', language)}</option><option value="UPLOADED_AWAITING_FRAME_EXTRACTION">{sessionStatus('UPLOADED_AWAITING_FRAME_EXTRACTION', language)}</option></select></label><button disabled={historyLoading || !farmId || !selectedItem} type="submit">{translate(language, historyLoading ? 'history.searching' : 'history.search')}</button></form>
                   {historyError && <div className="history-error" role="alert">{historyError}</div>}
                   <div className="history-result-heading"><strong>{translate(language, 'history.resultCount', { count: history.total.toLocaleString(localeForLanguage(language)) })}</strong><span>{translate(language, 'history.selectedCultivarBasis')}</span></div>
-                  <div className="history-list">{historyLoading ? <div className="screen-empty"><strong>{translate(language, 'history.loading')}</strong></div> : history.rows.length === 0 ? <div className="screen-empty"><span>≡</span><strong>{translate(language, 'history.empty')}</strong><p>{translate(language, 'history.emptyHelp')}</p></div> : history.rows.map((session) => <article key={session.id}><span>{session.source_type === 'VIDEO_IMPORT' ? '▣' : '◎'}</span><div><strong>{session.source_type === 'VIDEO_IMPORT' ? session.capture_mode === 'COMBINED_VIDEO' ? translate(language, 'history.sourceCombined') : translate(language, 'history.sourceSavedVideo') : translate(language, 'history.sourceDirectCapture')}</strong><p>{[session.item_name, session.house_name, session.bed_name, session.zone_name].filter(Boolean).join(' · ') || data.selectedFarm?.name}</p></div><time>{formatTime(session.started_at, language)}</time><b>{sessionStatus(session.processing_status, language)}</b>{(['SINGLE_CAPTURE', 'COMBINED_VIDEO', 'VIDEO'].includes(session.capture_mode)) && <MiteRecordNotes canWrite={data.account.permissions.reviewAlerts} farmId={farmId} frameMode={session.capture_mode !== 'SINGLE_CAPTURE'} language={language} sessionId={session.id} />}</article>)}</div>
+                  <div className="history-list">{historyLoading ? <div className="screen-empty"><strong>{translate(language, 'history.loading')}</strong></div> : history.rows.length === 0 ? <div className="screen-empty"><span>≡</span><strong>{translate(language, 'history.empty')}</strong><p>{translate(language, 'history.emptyHelp')}</p></div> : history.rows.map((session) => <article key={session.id}><span>{session.source_type === 'VIDEO_IMPORT' ? '▣' : '◎'}</span><div><strong>{session.source_type === 'VIDEO_IMPORT' ? session.capture_mode === 'COMBINED_VIDEO' ? translate(language, 'history.sourceCombined') : translate(language, 'history.sourceSavedVideo') : translate(language, 'history.sourceDirectCapture')}</strong><p>{[session.pest_code ? pestLabel(session.pest_code, language) : null, session.item_name, session.house_name, session.bed_name, session.zone_name].filter(Boolean).join(' · ') || data.selectedFarm?.name}</p></div><time>{formatTime(session.started_at, language)}</time><b>{sessionStatus(session.processing_status, language)}</b><RecordNotes canWrite={data.account.permissions.reviewAlerts} farmId={farmId} language={language} sessionId={session.id} initialCount={session.note_count} />{session.source_type === 'VIDEO_IMPORT' && <RecordNotes canWrite={data.account.permissions.reviewAlerts} farmId={farmId} frameMode language={language} sessionId={session.id} />}</article>)}</div>
                   {history.pageCount > 1 && <div className="history-pagination"><button disabled={history.page <= 1 || historyLoading} onClick={() => void loadHistory(history.page - 1)} type="button">{translate(language, 'common.previous')}</button><span>{history.page} / {history.pageCount}</span><button disabled={history.page >= history.pageCount || historyLoading} onClick={() => void loadHistory(history.page + 1)} type="button">{translate(language, 'common.next')}</button></div>}
-                </> : farmId && selectedItem ? <HarvestLog farmId={farmId} itemId={selectedItem.id} itemName={selectedItem.display_name} key={`${farmId}:${selectedItem.id}`} language={language} /> : <div className="screen-empty"><strong>농장과 품목 연결이 필요합니다.</strong></div>}
+
               </section>
             )}
 
             {screen === 'capture' && (
-              <section className="app-screen capture-screen"><div className="screen-heading"><div><p>{translate(language, 'capture.subtitle')}</p><h1>{translate(language, 'screen.captureTitle')}</h1><span>{selectedItem?.crop_name ?? '작물'} · {selectedItem?.cultivar_name ?? '품종 미지정'}</span></div></div><div className="module-tabs"><button className={effectiveFruitTab === 'video' ? 'selected' : ''} onClick={() => setFruitTab('video')} type="button">{translate(language, 'upload.video')}</button><button className={effectiveFruitTab === 'photo' ? 'selected' : ''} onClick={() => setFruitTab('photo')} type="button">{translate(language, 'upload.photo')}</button>{canViewRevenue && <button className={effectiveFruitTab === 'forecast' ? 'selected' : ''} onClick={() => setFruitTab('forecast')} type="button">예상 수익</button>}</div><div className="module-workspace">{!farmId || !selectedItem ? <div className="screen-empty"><span>!</span><strong>농장과 품목 연결이 필요합니다.</strong><p>계약 정보가 계정에 연결되면 기능을 사용할 수 있습니다.</p></div> : effectiveFruitTab === 'video' ? <><div className="workspace-heading"><span>{translate(language, 'capture.uploadOnce')}</span><h2>{translate(language, 'capture.combinedVideoTitle')}</h2><p>{translate(language, 'capture.combinedVideoDescription')}</p></div><div className="analysis-scope-grid"><article><b>{translate(language, 'capture.rgbRequired')}</b><span>{translate(language, 'capture.findFruitScenes')}</span><span>{translate(language, 'capture.ripenessAndGrade')}</span><span>{translate(language, 'alert.suspiciousLeaf')}</span></article><article><b>{translate(language, 'capture.thermalOptional')}</b><span>{translate(language, 'capture.thermalForMites')}</span><span>{translate(language, 'capture.leafTemperatureDifference')}</span><span>{translate(language, 'capture.matchFrames')}</span></article></div><VideoUploadForm farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /><p className="data-scope-note"><strong>{translate(language, 'capture.afterSubmit')}</strong> {translate(language, 'capture.afterSubmitDescription')}</p></> : effectiveFruitTab === 'photo' ? <div className="photo-analysis-stack"><section><div className="workspace-heading"><span>과실 사진</span><h2>익은 정도·품질 등급 판독</h2><p>현재는 설향 사진을 판독할 수 있습니다. 다른 품종은 충분한 사진과 판독 기준이 준비되면 사용할 수 있습니다.</p></div><CameraCapture enabled={selectedModelReady} farmId={farmId} cultivarCode={selectedItem.cultivar_code ?? ''} cultivarName={selectedItem.display_name} onUploaded={() => reload()} /></section><section><div className="workspace-heading"><span>잎 사진</span><h2>응애 일반·열화상 사진</h2><p>일반 잎 사진은 꼭 필요합니다. 같은 잎의 열화상 사진이 있으면 함께 올릴 수 있습니다.</p></div><MiteCaptureForm farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /></section></div> : <><div className="workspace-heading"><span>영상 판독이 끝나면 자동으로 계산</span><h2>예상 수익 결과</h2><p>영상에 같은 딸기가 여러 번 보여도 한 개로 세고, 등급별 수량과 예상 시세를 합쳐 계산합니다. 농민이 값을 따로 입력할 필요가 없습니다.</p></div><RevenueForecast forecasts={selectedRevenueForecasts} itemName={selectedItem.display_name} jobs={selectedForecastJobs} /></>}</div><p className="capture-safety"><strong>결과 안내</strong> 판독 결과는 농장 운영을 돕기 위한 값입니다.{canViewRevenue && ' 실제 정산 등급·시세·수수료에 따라 예상 수익이 달라질 수 있습니다.'}</p></section>
+              <section className="app-screen capture-screen"><div className="screen-heading"><div><p>{translate(language, 'capture.subtitle')}</p><h1>{translate(language, 'screen.captureTitle')}</h1><span>{selectedItem?.crop_name ?? '작물'} · {selectedItem?.cultivar_name ?? '품종 미지정'}</span></div></div><div className="module-tabs"><button className={effectiveFruitTab === 'video' ? 'selected' : ''} onClick={() => setFruitTab('video')} type="button">{translate(language, 'upload.video')}</button><button className={effectiveFruitTab === 'photo' ? 'selected' : ''} onClick={() => setFruitTab('photo')} type="button">{translate(language, 'upload.photo')}</button>{canViewRevenue && <button className={effectiveFruitTab === 'forecast' ? 'selected' : ''} onClick={() => setFruitTab('forecast')} type="button">예상 수익</button>}</div><div className="module-workspace">{!farmId || !selectedItem ? <div className="screen-empty"><span>!</span><strong>농장과 품목 연결이 필요합니다.</strong><p>계약 정보가 계정에 연결되면 기능을 사용할 수 있습니다.</p></div> : effectiveFruitTab === 'video' ? <><div className="workspace-heading"><span>{translate(language, 'capture.uploadOnce')}</span><h2>{translate(language, 'capture.combinedVideoTitle')}</h2><p>{translate(language, 'capture.combinedVideoDescription')}</p></div><div className="analysis-scope-grid"><article><b>{translate(language, 'capture.rgbRequired')}</b><span>{translate(language, 'capture.findFruitScenes')}</span><span>{translate(language, 'capture.ripenessAndGrade')}</span><span>{translate(language, 'alert.suspiciousLeaf')}</span></article><article><b>{translate(language, 'capture.thermalOptional')}</b><span>{translate(language, 'capture.thermalForMites')}</span><span>{translate(language, 'capture.leafTemperatureDifference')}</span><span>{translate(language, 'capture.matchFrames')}</span></article></div><VideoUploadForm farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /><p className="data-scope-note"><strong>{translate(language, 'capture.afterSubmit')}</strong> {translate(language, 'capture.afterSubmitDescription')}</p></> : effectiveFruitTab === 'photo' ? <div className="photo-analysis-stack"><section><div className="workspace-heading"><span>과실 사진</span><h2>익은 정도·품질 등급 판독</h2><p>현재는 설향 사진을 판독할 수 있습니다. 다른 품종은 충분한 사진과 판독 기준이 준비되면 사용할 수 있습니다.</p></div><CameraCapture enabled={selectedModelReady} farmId={farmId} cultivarCode={selectedItem.cultivar_code ?? ''} cultivarName={selectedItem.display_name} onUploaded={() => reload()} /></section><section><div className="workspace-heading"><span>잎 사진</span><h2>{pestText(language, 'photoTitle')}</h2><p>일반 잎 사진은 꼭 필요합니다. 같은 잎의 열화상 사진이 있으면 함께 올릴 수 있습니다.</p></div><PestCaptureForm defaultPestCode={pestCode || 'OTHER'} key={`${farmId}:${selectedItem.id}:${pestCode}`} farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /></section></div> : <><div className="workspace-heading"><span>영상 판독이 끝나면 자동으로 계산</span><h2>예상 수익 결과</h2><p>영상에 같은 딸기가 여러 번 보여도 한 개로 세고, 등급별 수량과 예상 시세를 합쳐 계산합니다. 농민이 값을 따로 입력할 필요가 없습니다.</p></div><RevenueForecast forecasts={selectedRevenueForecasts} itemName={selectedItem.display_name} jobs={selectedForecastJobs} /></>}</div><p className="capture-safety"><strong>결과 안내</strong> 판독 결과는 농장 운영을 돕기 위한 값입니다.{canViewRevenue && ' 실제 정산 등급·시세·수수료에 따라 예상 수익이 달라질 수 있습니다.'}</p></section>
             )}
 
             {screen === 'management' && (
               <section className="app-screen management-screen">
                 <div className="screen-heading"><div><p>{translate(language, 'management.subtitle')}</p><h1>{translate(language, 'menu.management')}</h1><span>{data.selectedFarm?.name ?? '농장 연결 대기'}</span></div></div>
-                {!farmId ? <div className="module-workspace screen-empty"><strong>농장 연결이 필요합니다.</strong></div> : <>
+                <div className="module-tabs"><button aria-pressed={managementTab === 'overview'} className={managementTab === 'overview' ? 'selected' : ''} onClick={() => setManagementTab('overview')} type="button">{pestText(language, 'overview')}</button><button aria-pressed={managementTab === 'harvest'} className={managementTab === 'harvest' ? 'selected' : ''} onClick={() => setManagementTab('harvest')} type="button">{translate(language, 'history.harvest')}</button></div>
+                {!farmId ? <div className="module-workspace screen-empty"><strong>농장 연결이 필요합니다.</strong></div> : managementTab === 'harvest' ? selectedItem ? <HarvestLog farmId={farmId} itemId={selectedItem.id} itemName={selectedItem.display_name} key={`${farmId}:${selectedItem.id}`} language={language} /> : <div className="screen-empty"><strong>농장과 품목 연결이 필요합니다.</strong></div> : <>
                   <FarmStatus farmId={farmId} items={data.items} language={language} />
                   <div className="management-quick-actions">
                     <button onClick={openChat} type="button"><span aria-hidden="true">•••</span><div><strong>{translate(language, 'chat.open')}</strong><small>{translate(language, 'chat.managementHelp')}</small></div></button>
@@ -453,7 +472,7 @@ export function FarmerDashboard() {
                   {data.account.permissions.manageMembers ? <>
                     <div className="management-section-heading member-heading"><div><span>{translate(language, 'management.members')}</span><h2>{translate(language, 'management.membersTitle')}</h2></div></div>
                     <AccountCenter account={data.account} farmId={farmId} key={`${farmId}:${data.account.displayName ?? ''}`} language={language} mode="members" onChanged={() => reload()} />
-                  </> : <div className="module-workspace management-readonly"><div className="workspace-heading"><span>{translate(language, 'management.workerLabel')}</span><h2>{translate(language, 'management.workerTitle')}</h2><p>{translate(language, 'management.workerDesc')}</p></div><p className="data-scope-note"><strong>{translate(language, 'alert.sharedNotes')}</strong> {translate(language, 'management.notesLocation')}</p></div>}
+                  </> : <div className="module-workspace management-readonly"><div className="workspace-heading"><span>{translate(language, 'management.workerLabel')}</span><h2>{translate(language, 'management.workerTitle')}</h2><p>{translate(language, 'management.workerDesc')}</p></div><p className="data-scope-note"><strong>{translate(language, 'alert.sharedNotes')}</strong> {recordText(language, 'commentsHelp')}</p></div>}
                 </>}
               </section>
             )}

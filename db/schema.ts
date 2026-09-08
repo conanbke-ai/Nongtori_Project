@@ -431,6 +431,7 @@ export const captureSessions = sqliteTable(
     houseId: text('house_id').references(() => houses.id, { onDelete: 'set null' }),
     bedId: text('bed_id').references(() => beds.id, { onDelete: 'set null' }),
     zoneId: text('zone_id').references(() => zones.id, { onDelete: 'set null' }),
+    pestCode: text('pest_code'),
     captureMode: text('capture_mode').notNull(),
     sourceType: text('source_type').notNull(),
     processingStatus: text('processing_status').notNull(),

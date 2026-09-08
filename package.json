@@ -10,7 +10,10 @@
     "build": "vinext build",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "test:workflows": "node --import ./tests/register.mjs --test tests/pest-records.test.ts",
+    "test:overview": "node --import ./tests/register.mjs --test tests/overview.test.tsx",
+    "verify:cursor": "node scripts/verify-tori-cursor.mjs"
   },
   "dependencies": {
     "next": "16.2.6",

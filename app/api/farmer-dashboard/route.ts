@@ -7,34 +7,14 @@ import {
   publicMemberName,
   publicSnapshotName,
 } from '@/app/lib/farm-auth';
+import { pestTargets, findPestTarget } from '@/app/features/pests/domain/catalog';
+import { PestRepository } from '@/app/features/pests/infrastructure/pest-repository';
+import { loadPestDashboard } from '@/app/features/pests/application/pest-service';
 import type { FarmPermissions } from '@/app/lib/farm-permissions';
 
 export const runtime = 'edge';
 
 type FarmRow = { id: string; name: string; timezone: string };
-type AlertRow = {
-  id: string;
-  item_id: string | null;
-  item_name: string | null;
-  crop_name: string | null;
-  cultivar_name: string | null;
-  class_label: string;
-  confidence: number | null;
-  decision_status: string;
-  created_at: string;
-  house_name: string | null;
-  bed_name: string | null;
-  zone_name: string | null;
-  review_verdict: string | null;
-  review_quick_note_code: string | null;
-  review_note: string | null;
-  review_note_language: string | null;
-  reviewer_member_id: string | null;
-  reviewer_name: string | null;
-  reviewer_role: string | null;
-  reviewed_at: string | null;
-};
-
 const noPermissions: FarmPermissions = {
   viewRevenue: false,
   manageMembers: false,
@@ -64,7 +44,8 @@ export async function GET(request: Request) {
   const requestedAlertPage = Number(url.searchParams.get('alertPage') ?? '1');
   const alertPage = Number.isFinite(requestedAlertPage) ? Math.max(1, Math.floor(requestedAlertPage)) : 1;
   const alertLimit = 20;
-  const alertOffset = (alertPage - 1) * alertLimit;
+  const pestCode = url.searchParams.get('pestCode')?.trim() ?? '';
+  if (pestCode && !findPestTarget(pestCode)) return NextResponse.json({ error: '병해충 종류를 확인해 주세요.' }, { status: 422 });
 
   const farms = isLocal
     ? await env.DB.prepare(`SELECT id, name, timezone FROM farms WHERE status = 'ACTIVE' ORDER BY name`).all<FarmRow>()
@@ -106,7 +87,7 @@ export async function GET(request: Request) {
         robotCount: 0,
         todayRecordedSessions: 0,
         alertCount: 0,
-        pestBreakdown: [{ code: 'MITE', label: '응애', openCount: 0, capability: 'ACTIVE' }],
+        pestBreakdown: pestTargets.map((target) => ({ code: target.code, label: target.labels.ko, openCount: 0, capability: target.capability })),
         harvestCandidates: 0,
         pendingSessions: 0,
       },
@@ -127,7 +108,7 @@ export async function GET(request: Request) {
       notifications_enabled: number | null;
     }>() : null;
   const dateFilter = /^\d{4}-\d{2}-\d{2}$/.test(localDate) ? localDate : new Date().toISOString().slice(0, 10);
-  const [cameras, sessions, alerts, items, guides, todayCount, harvestCount, pendingCount, pendingByItem, alertCounts] = await Promise.all([
+  const [cameras, sessions, items, guides, todayCount, harvestCount, pendingCount, pendingByItem] = await Promise.all([
     env.DB.prepare(`SELECT id, name, camera_type, source_type, status, house_id, bed_id, zone_id,
         connection_status, last_seen_at
       FROM cameras WHERE farm_id = ? AND status != 'ARCHIVED' ORDER BY name`)
@@ -141,51 +122,6 @@ export async function GET(request: Request) {
       LEFT JOIN zones z ON z.id = cs.zone_id AND z.bed_id = b.id
       WHERE cs.farm_id = ? AND cs.source_type != 'ROBOT' ORDER BY cs.started_at DESC LIMIT 10`)
       .bind(selectedFarm.id).all(),
-    env.DB.prepare(`SELECT fp.id, cs.item_id, fi.display_name AS item_name,
-        ct.display_name_ko AS crop_name, cv.display_name_ko AS cultivar_name,
-        fp.class_label, fp.confidence, fp.decision_status, fp.created_at,
-        h.name AS house_name, b.name AS bed_name, z.name AS zone_name,
-        pre.verdict AS review_verdict, pre.quick_note_code AS review_quick_note_code,
-        pre.note AS review_note, pre.note_language AS review_note_language,
-        pre.reviewer_member_id,
-        pre.reviewer_name_snapshot AS reviewer_name,
-        pre.reviewer_role_snapshot AS reviewer_role, pre.created_at AS reviewed_at
-      FROM frame_predictions fp
-      JOIN inference_runs ir ON ir.id = fp.inference_run_id
-      JOIN frames fr ON fr.id = fp.frame_id
-      JOIN capture_sessions cs ON cs.id = fr.capture_session_id
-      LEFT JOIN farm_items fi ON fi.id = cs.item_id AND fi.farm_id = cs.farm_id
-      LEFT JOIN crop_types ct ON ct.code = fi.crop_code
-      LEFT JOIN cultivars cv ON cv.code = fi.cultivar_code
-      LEFT JOIN houses h ON h.id = cs.house_id AND h.farm_id = cs.farm_id
-      LEFT JOIN beds b ON b.id = cs.bed_id AND b.house_id = h.id
-      LEFT JOIN zones z ON z.id = cs.zone_id AND z.bed_id = b.id
-      LEFT JOIN prediction_review_events pre ON pre.id = (
-        SELECT pre2.id FROM prediction_review_events pre2
-        JOIN frame_predictions reviewed_fp ON reviewed_fp.id = pre2.frame_prediction_id
-        WHERE reviewed_fp.inference_run_id = fp.inference_run_id
-          AND ((fp.track_id IS NOT NULL AND reviewed_fp.track_id = fp.track_id)
-            OR (fp.track_id IS NULL AND reviewed_fp.id = fp.id))
-        ORDER BY pre2.created_at DESC, pre2.id DESC LIMIT 1
-      )
-      WHERE cs.farm_id = ? AND cs.source_type != 'ROBOT'
-        AND fp.decision_status IN ('ALERT', 'REVIEW_REQUIRED', 'MITE_REVIEW_REQUIRED')
-        AND (upper(ir.task) LIKE '%MITE%' OR upper(fp.class_label) LIKE '%MITE%' OR fp.class_label LIKE '%응애%')
-        AND fp.id = (
-          SELECT fp2.id FROM frame_predictions fp2
-          JOIN inference_runs ir2 ON ir2.id = fp2.inference_run_id
-          WHERE fp2.inference_run_id = fp.inference_run_id
-            AND ((fp.track_id IS NOT NULL AND fp2.track_id = fp.track_id)
-              OR (fp.track_id IS NULL AND fp2.id = fp.id))
-            AND fp2.decision_status IN ('ALERT', 'REVIEW_REQUIRED', 'MITE_REVIEW_REQUIRED')
-            AND (upper(ir2.task) LIKE '%MITE%' OR upper(fp2.class_label) LIKE '%MITE%' OR fp2.class_label LIKE '%응애%')
-          ORDER BY COALESCE(fp2.confidence, 0) DESC, fp2.created_at, fp2.id LIMIT 1
-        )
-        AND ((? = 'OPEN' AND (pre.verdict IS NULL OR pre.verdict = 'RECHECK'))
-          OR (? = 'DONE' AND pre.verdict IN ('MITE_CONFIRMED', 'NOT_MITE')))
-      ORDER BY CASE WHEN pre.verdict IS NULL OR pre.verdict = 'RECHECK' THEN 0 ELSE 1 END,
-        fp.created_at DESC, fp.id DESC LIMIT ? OFFSET ?`)
-      .bind(selectedFarm.id, alertStatus, alertStatus, alertLimit, alertOffset).all<AlertRow>(),
     env.DB.prepare(`SELECT fi.id, fi.crop_code, ct.display_name_ko AS crop_name,
         fi.cultivar_code, c.display_name_ko AS cultivar_name, fi.display_name,
         cp.image_uri AS crop_image_uri, cp.description_ko AS crop_description
@@ -222,35 +158,7 @@ export async function GET(request: Request) {
         AND date(datetime(started_at, '+9 hours')) BETWEEN date(?, '-30 days') AND ?
       GROUP BY item_id`)
       .bind(selectedFarm.id, dateFilter, dateFilter).all<{ item_id: string | null; count: number }>(),
-    env.DB.prepare(`SELECT
-        SUM(CASE WHEN pre.verdict IS NULL OR pre.verdict = 'RECHECK' THEN 1 ELSE 0 END) AS open_count,
-        SUM(CASE WHEN pre.verdict IN ('MITE_CONFIRMED', 'NOT_MITE') THEN 1 ELSE 0 END) AS done_count
-      FROM frame_predictions fp
-      JOIN inference_runs ir ON ir.id = fp.inference_run_id
-      JOIN frames fr ON fr.id = fp.frame_id
-      JOIN capture_sessions cs ON cs.id = fr.capture_session_id
-      LEFT JOIN prediction_review_events pre ON pre.id = (
-        SELECT pre2.id FROM prediction_review_events pre2
-        JOIN frame_predictions reviewed_fp ON reviewed_fp.id = pre2.frame_prediction_id
-        WHERE reviewed_fp.inference_run_id = fp.inference_run_id
-          AND ((fp.track_id IS NOT NULL AND reviewed_fp.track_id = fp.track_id)
-            OR (fp.track_id IS NULL AND reviewed_fp.id = fp.id))
-        ORDER BY pre2.created_at DESC, pre2.id DESC LIMIT 1
-      )
-      WHERE cs.farm_id = ? AND cs.source_type != 'ROBOT'
-        AND fp.decision_status IN ('ALERT', 'REVIEW_REQUIRED', 'MITE_REVIEW_REQUIRED')
-        AND (upper(ir.task) LIKE '%MITE%' OR upper(fp.class_label) LIKE '%MITE%' OR fp.class_label LIKE '%응애%')
-        AND fp.id = (
-          SELECT fp2.id FROM frame_predictions fp2
-          JOIN inference_runs ir2 ON ir2.id = fp2.inference_run_id
-          WHERE fp2.inference_run_id = fp.inference_run_id
-            AND ((fp.track_id IS NOT NULL AND fp2.track_id = fp.track_id)
-              OR (fp.track_id IS NULL AND fp2.id = fp.id))
-            AND fp2.decision_status IN ('ALERT', 'REVIEW_REQUIRED', 'MITE_REVIEW_REQUIRED')
-            AND (upper(ir2.task) LIKE '%MITE%' OR upper(fp2.class_label) LIKE '%MITE%' OR fp2.class_label LIKE '%응애%')
-          ORDER BY COALESCE(fp2.confidence, 0) DESC, fp2.created_at, fp2.id LIMIT 1
-        )`)
-      .bind(selectedFarm.id).first<{ open_count: number | null; done_count: number | null }>(),
+
   ]);
 
   let revenueForecasts: unknown[] | undefined;
@@ -275,7 +183,8 @@ export async function GET(request: Request) {
     forecastJobs = jobResult.results;
   }
 
-  const safeAlerts = alerts.results.map((alert) => {
+  const pests = await loadPestDashboard(new PestRepository(env.DB), selectedFarm.id, pestCode, alertStatus, alertPage, alertLimit);
+  const safeAlerts = pests.rows.map((alert) => {
     const { reviewer_member_id: reviewerMemberId, ...publicAlert } = alert;
     return {
       ...publicAlert,
@@ -289,9 +198,6 @@ export async function GET(request: Request) {
     };
   });
 
-  const openAlertCount = Number(alertCounts?.open_count ?? 0);
-  const doneAlertCount = Number(alertCounts?.done_count ?? 0);
-  const selectedAlertTotal = alertStatus === 'OPEN' ? openAlertCount : doneAlertCount;
   const response: Record<string, unknown> = {
     farms: farms.results,
     account: {
@@ -314,25 +220,12 @@ export async function GET(request: Request) {
     summary: {
       robotCount: cameras.results.filter((camera) => camera.source_type === 'ROBOT').length,
       todayRecordedSessions: Number(todayCount?.count ?? 0),
-      alertCount: openAlertCount,
-      pestBreakdown: [{
-        code: 'MITE',
-        label: '응애',
-        openCount: openAlertCount,
-        capability: 'ACTIVE',
-      }],
+      alertCount: pests.totalOpen,
+      pestBreakdown: pests.breakdown,
       harvestCandidates: Number(harvestCount?.count ?? 0),
       pendingSessions: Number(pendingCount?.count ?? 0),
     },
-    alertPagination: {
-      status: alertStatus,
-      page: alertPage,
-      limit: alertLimit,
-      total: selectedAlertTotal,
-      pageCount: Math.ceil(selectedAlertTotal / alertLimit),
-      openCount: openAlertCount,
-      doneCount: doneAlertCount,
-    },
+    alertPagination: pests.pagination,
     cameras: cameras.results,
     alerts: safeAlerts,
     recentSessions: sessions.results,

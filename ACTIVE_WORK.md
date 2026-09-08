@@ -12,7 +12,7 @@
 | Workstream | Canonical branch / PR | 상태 | Lease 경로 | 시작/최근 활동 | Acceptance Criteria / 다음 단계 |
 |---|---|---|---|---|---|
 | TORI UI System v1 | `main` / merged PR #1 | MERGED_BASELINE | 없음 | 2026-09-08 | theme/token, 모바일 접근성, cat jelly paw cursor contract를 baseline으로 유지. 동일 foundation 재구현 금지. |
-| Canonical application source 편입 | `feat/application-source-integration` / [Draft PR #2](https://github.com/conanbke-ai/Nongtori_Project/pull/2) | ACTIVE | `app/`, `db/`, `drizzle/`, `public/`, `configs/`, `ml/`, application build config, `README.md`, `ACTIVE_WORK.md`, 편입 문서 | 2026-09-08 / 2026-09-08 | Site 소스 편입, dependency 설치, lint/build, 제한된 secret 패턴 검사 완료. API·권한·모델 regression·모바일/E2E 검증은 미실행. 초안 PR 검토 후 동일 branch에서 검증을 이어간다. [편입 기록](docs/APPLICATION_SOURCE_INTEGRATION.md) 참고. |
+| Canonical application source 편입 | `feat/application-source-integration` / [Draft PR #2](https://github.com/conanbke-ai/Nongtori_Project/pull/2) | ACTIVE | `app/`, `db/`, `drizzle/`, `public/`, `configs/`, `ml/`, `tests/`, `vendor/tori-ui/`, `scripts/verify-tori-cursor.mjs`, application build config, `README.md`, `ACTIVE_WORK.md`, 편입 문서 | 2026-09-08 / 2026-09-08 | 병해충 종류 확장·농장관리 수확일지·모든 판독 기록 댓글에 이어 운영 현황 종류별 카드·하늘색/코랄 강조·전역 젤리발 커서를 같은 workstream에서 수정. API/권한/SQL 5개 및 운영 현황 표시 3개 시나리오, type/lint/build 통과. 사용자 요청에 따라 공통 cursor 원본을 고정 재사용하고 농토리는 색상만 변경. 원본 hash/type/lint/build 통과. 기존 운영 Site version 23 배포 성공 및 pest_code 열 확인. GitHub는 기존 PR #2/branch로 동기화. 모바일/E2E·모델 검증은 미실행. [기능 요구사항/검증](docs/PEST_AND_RECORD_WORKFLOWS.md), [운영 현황/커서](docs/OVERVIEW_AND_CURSOR.md), [편입 기록](docs/APPLICATION_SOURCE_INTEGRATION.md) 참고. |
 
 ## 작업 시작 체크
 

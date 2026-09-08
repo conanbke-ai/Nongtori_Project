@@ -50,8 +50,10 @@ export async function GET(request: Request) {
   const totalRow = await env.DB.prepare(`SELECT COUNT(*) AS count FROM capture_sessions cs WHERE ${where}`)
     .bind(...bindings).first<{ count: number }>();
   const offset = (page - 1) * limit;
-  const rows = await env.DB.prepare(`SELECT cs.id, cs.item_id, cs.capture_mode, cs.source_type, cs.processing_status,
-      cs.started_at, cs.ended_at, c.name AS camera_name, h.name AS house_name,
+  const rows = await env.DB.prepare(`SELECT cs.id, cs.item_id, cs.pest_code, cs.capture_mode, cs.source_type, cs.processing_status,
+      cs.started_at, cs.ended_at,
+      (SELECT COUNT(*) FROM mite_record_notes rn WHERE rn.farm_id = cs.farm_id AND rn.capture_session_id = cs.id
+        AND rn.target_frame_id IS NULL AND rn.track_key = '__SESSION__' AND rn.status = 'ACTIVE') AS note_count, c.name AS camera_name, h.name AS house_name,
       b.name AS bed_name, z.name AS zone_name, fi.display_name AS item_name,
       ct.display_name_ko AS crop_name, cv.display_name_ko AS cultivar_name
     FROM capture_sessions cs
