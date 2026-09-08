@@ -2,6 +2,19 @@
 
 이 저장소에서 ChatGPT, Codex 및 기타 개발 보조도구는 아래 규칙을 항상 우선 적용한다.
 
+## 작업 조정 / 중복 개발 방지
+
+1. 코드 수정 전에 반드시 `main`, `ACTIVE_WORK.md`, open PR, 관련 branch, 최근 commit을 먼저 확인한다.
+2. 새 작업은 `ALREADY_DONE / IN_PROGRESS / NEW` 중 하나로 판정한 뒤 시작한다.
+3. 동일 기능의 기존 canonical branch/PR이 있으면 새 branch를 만들지 않고 기존 workstream을 이어간다.
+4. 동일 목적의 `v2`, `v3`, `final`, `actual`, `real` branch 반복 생성을 금지한다.
+5. open PR의 changed files와 수정 예정 파일이 겹치면 별도 branch에서 병렬 수정하지 않는다.
+6. main 또는 active PR에 이미 구현된 기능은 다시 개발하지 않는다. 검수·보완·리팩토링만 한다.
+7. 한 기능/화면/도메인에는 원칙적으로 하나의 active workstream만 둔다.
+8. 작업 시작/종료/병합 시 `ACTIVE_WORK.md`를 갱신한다.
+9. 브랜치 삭제/정리는 사용자 승인 없이 하지 않는다. obsolete/duplicate/superseded 후보를 먼저 식별한다.
+10. 새 branch 생성은 완전히 독립된 신규 기능이고 기존 workstream과 충돌하지 않을 때만 허용한다.
+
 ## 비용/무료 사용량 정책
 
 1. GitHub Actions, Render, 외부 API/AI, DB 등 사용량 기반 리소스는 월간 예산으로 취급한다.
