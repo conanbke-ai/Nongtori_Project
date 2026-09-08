@@ -4,7 +4,7 @@
 
 ## 공통 팀 운영 정책
 
-- BKE 기준 문서 `DEVELOPMENT_TEAM_OPERATING_POLICY.md`를 모든 개발 세션의 상위 운영 정책으로 따른다.
+- 공통 정책은 `conanbke-ai/Tori_Common_Project`의 [DEVELOPMENT_TEAM_OPERATING_POLICY.md](https://github.com/conanbke-ai/Tori_Common_Project/blob/main/DEVELOPMENT_TEAM_OPERATING_POLICY.md)를 고정 진입점으로 사용한다. 해당 저장소의 TORI_POLICY_BOOTSTRAP.md와 POLICY_ROUTER.md를 통해 필요한 상세 기준만 확인한다.
 - 각 대화창/에이전트는 독립 팀원으로 간주하며, 대화 기억보다 저장소의 `main`, `ACTIVE_WORK.md`, open PR, branch, commit 상태를 우선한다.
 - 코드 수정 전 반드시 `main -> ACTIVE_WORK.md -> open PR -> branch budget -> recent commits -> changed files/path lease -> ALREADY_DONE/IN_PROGRESS/NEW/BLOCKED` 순서로 Preflight한다.
 - 전체 branch는 `main` 포함 최대 5개, ACTIVE workstream 최대 3개, validation branch 최대 1개를 기본 한도로 한다.
