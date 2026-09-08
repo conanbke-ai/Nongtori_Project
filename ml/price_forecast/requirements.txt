@@ -1,0 +1,9 @@
+pandas>=2.2,<3
+numpy>=1.26,<3
+scikit-learn>=1.5,<2
+catboost>=1.2.8,<2
+joblib>=1.4,<2
+PyYAML>=6,<7
+torch>=2.3,<3
+lightning>=2.4,<3
+pytorch-forecasting>=1.4,<2

@@ -26,6 +26,19 @@
 
 기존 딸기 프로젝트의 코드 기준본은 현재 연결된 GitHub 및 파일 라이브러리에서 확인되지 않아, 존재하지 않는 소스를 임의로 복원한 것처럼 취급하지 않습니다. 대신 확인 가능한 프로젝트 요구사항·데이터 수집 방향·디자인 산출물·개발 원칙을 이 저장소로 이관하고 이후 구현은 여기서 이어갑니다.
 
+## 현재 애플리케이션 기준본
+
+기존 채팅에서 개발된 `농토리 운영센터` Site의 실행 소스를 이 저장소의 application baseline으로 편입했습니다.
+
+- 애플리케이션: Next.js 16 / React 19 / Vinext
+- 데이터 저장: Cloudflare D1 + Drizzle ORM
+- 미디어 저장: Cloudflare R2
+- 주요 경로: `app/`, `db/`, `drizzle/`, `public/`
+- 실행 및 실제 데이터 모델: [`docs/APPLICATION.md`](docs/APPLICATION.md)
+- 다농가·읽기 전용 가져오기 계약: [`docs/MULTI_FARM_DATA_MODEL.md`](docs/MULTI_FARM_DATA_MODEL.md)
+
+새 scaffold를 만들지 않고 이 소스를 canonical application source로 이어서 개발합니다.
+
 ## Architecture
 
 농토리는 **데이터 입력 계층과 작물 판단 로직을 분리**하는 것을 가장 중요한 구조 원칙으로 둡니다.
@@ -238,3 +251,5 @@ DATA_SCHEMA_VERSION
 - [Design Guide](docs/DESIGN_GUIDE.md)
 - [Development Standard](docs/DEVELOPMENT.md)
 - [Migration Notes](docs/MIGRATION_NOTES.md)
+- [Application](docs/APPLICATION.md)
+- [Multi-farm Data Model](docs/MULTI_FARM_DATA_MODEL.md)
