@@ -1,56 +1,49 @@
 # Development rules for AI/code agents
 
-이 저장소에서 ChatGPT, Codex 및 기타 개발 보조도구는 아래 규칙을 항상 우선 적용한다.
+이 저장소에서 ChatGPT, Codex 및 기타 개발 보조도구는 아래 규칙을 우선 적용한다.
 
-## 공통 팀 운영 정책
+## Common policy entrypoint
 
-- 공통 정책은 `conanbke-ai/Tori_Common_Project`의 [DEVELOPMENT_TEAM_OPERATING_POLICY.md](https://github.com/conanbke-ai/Tori_Common_Project/blob/main/DEVELOPMENT_TEAM_OPERATING_POLICY.md)를 고정 진입점으로 사용한다. 해당 저장소의 TORI_POLICY_BOOTSTRAP.md와 POLICY_ROUTER.md를 통해 필요한 상세 기준만 확인한다.
-- 각 대화창/에이전트는 독립 팀원으로 간주하며, 대화 기억보다 저장소의 `main`, `ACTIVE_WORK.md`, open PR, branch, commit 상태를 우선한다.
-- 코드 수정 전 반드시 `main -> ACTIVE_WORK.md -> open PR -> branch budget -> recent commits -> changed files/path lease -> ALREADY_DONE/IN_PROGRESS/NEW/BLOCKED` 순서로 Preflight한다.
-- 전체 branch는 `main` 포함 최대 5개, ACTIVE workstream 최대 3개, validation branch 최대 1개를 기본 한도로 한다.
-- 같은 기능/화면/도메인과 같은 핵심 파일/경로에는 active workstream/lease를 1개만 둔다.
-- 동일 기능의 기존 canonical branch/PR이 있으면 새 branch를 만들지 않는다.
-- `v2/v3/final/final2/actual/real/implementation/new` 식의 동일 목적 branch 증식을 금지한다.
-- branch budget이 가득 차면 새 branch를 만들지 않고 기존 작업을 먼저 merge/close/supersede/cleanup한다.
-- 규모 있는 작업은 구현 전에 Acceptance Criteria, 보존 contract, dependency, 필요한 test를 정한다.
-- 다른 workstream이 소비하는 API/DB/event/state/shared type 계약을 바꿀 때는 영향받는 PR/call site를 먼저 확인하고 silent breaking change를 금지한다.
-- main이 계속 움직일 때 무한 rebase를 반복하지 않고 Integration Window에서 dependency 순서대로 동기화/검증/merge한다.
-- 작업을 넘길 때 branch/PR/SHA, 완료/미완료, 테스트 여부, known issue, 다음 작업을 명확히 handoff한다.
-- merge 후 `ACTIVE_WORK.md`를 갱신하고 merged/obsolete branch를 cleanup 후보로 분류한다.
-- 브랜치/데이터/서비스 삭제, destructive migration, force push 등 파괴적 작업은 사용자 승인 없이 실행하지 않는다.
+- 공통 정책 canonical은 `conanbke-ai/Tori_Common_Project`다.
+- 시작점: `DEVELOPMENT_TEAM_OPERATING_POLICY.md` → `TORI_POLICY_BOOTSTRAP.md` → `POLICY_ROUTER.md`의 필요한 절만 확인한다.
+- 제품의 실제 구현 상태는 이 저장소의 최신 `main`, `ACTIVE_WORK.md`, open PR, branch, commit, 실제 코드가 우선한다.
 
-## 비용/무료 사용량 정책
+## Fail-safe core
 
-1. GitHub Actions, Render, 외부 API/AI, DB 등 사용량 기반 리소스는 월간 예산으로 취급한다.
-2. 로컬에서 가능한 테스트/검증은 로컬 실행을 우선한다.
-3. hosted CI는 fast gate 중심으로 최소화하고, 브라우저/E2E/대량 데이터 검증은 수동 또는 release gate로 분리한다.
-4. `push + pull_request` 중복 실행을 만들지 않는다. concurrency cancel, path filter, dependency cache를 사용한다.
-5. Render staging/validation은 매 commit 자동 배포하지 않는다. 로컬 검증 후 실제 DB/HTTP/runtime 검증이 필요할 때만 배포한다.
-6. 외부 API/AI/브라우저 자동화/대량 검증은 작은 표본으로 선검증 후 필요할 때만 확대한다.
-7. 무료량이 부족하거나 소진되어도 개발이 멈추지 않도록 local fallback을 유지한다.
-8. 비용 발생, paid overage, 유료 플랜, spend limit 상향, 자동 사용량 증가 설정은 사용자 명시 승인 없이 활성화하지 않는다.
+공통 저장소 접근이 일시적으로 불가능해도 아래는 항상 적용한다.
 
-## Nongtori 적용 원칙
+1. 같은 기능을 다른 branch에서 중복 구현하지 않는다. 먼저 `ALREADY_DONE / IN_PROGRESS / NEW / BLOCKED`를 판정한다.
+2. 원격 branch는 `main` 포함 최대 5개, implementation ACTIVE workstream 최대 3개, validation branch 최대 1개를 기본 상한으로 한다.
+3. 같은 기능/핵심 경로는 active writer/lease 1개만 허용한다. 대화 교체는 새 branch가 아니라 handoff로 처리한다.
+4. 규모 있는 변경은 Acceptance Criteria와 보존할 API/DB/domain contract를 먼저 정한다.
+5. 실행하지 않은 test, browser QA, staging, deploy, security review를 PASS/완료라고 보고하지 않는다.
+6. server-side authorization, secret/PII 보호, 원본 데이터 보호를 유지한다.
+7. branch/data/service 삭제, destructive migration, force/reset, paid overage·유료 설정은 사용자 명시 승인 없이 실행하지 않는다.
+8. 로컬 검증을 우선하되 무료량 절약을 이유로 필요한 검증을 삭제하지 않는다.
 
-- UI/입력/다국어 변경: 관련 로컬 unit/smoke 우선
-- 농장/작업/권한/데이터 변경: 관련 service/repository/authorization 테스트 우선
-- Google Sheets/외부 데이터는 원본 수정 금지, 읽기 전용 검증을 기본으로 한다.
-- 실제 DB/배포환경 차이가 필요한 경우에만 staging 검증을 사용한다.
+## Nongtori product contracts
 
-## Nongtori 추가 보존 계약
+- 아키텍처 기준: `Sensor / Weather / Image / Manual → Adapter → Normalization → Repository → Domain → Analysis Service → Crop/Rule Strategy → API → Farmer UI`.
+- 관리자/농장주/작업자 권한과 farm/zone ownership을 UI 편의를 위해 우회하지 않는다.
+- Google Sheets 및 외부 원본 데이터는 명시적 요청 없이는 read-only다. 테스트를 위해 원본을 임의 수정·삭제하지 않는다.
+- 센서/날씨/이미지/수동 입력은 source, unit, timestamp, missing/outlier 상태와 provenance를 보존한다.
+- 병해충은 응애 단일 하드코딩으로 확장하지 않는다. catalog/Strategy/Adapter를 통해 다종 확장 가능하게 유지한다.
+- 검증된 inference worker가 없는 병해충에 AI 결과/confidence를 임의 생성하지 않는다.
+- 다국어·고령 사용자 UX를 단순화하더라도 실제 기능 의미와 입력 validation을 훼손하지 않는다.
+- 실제 앱 구현은 현재 코드와 관련 설계 문서를 기준으로 하며 과거 딸기 프로젝트를 추정 복원하지 않는다.
 
-- 관리자/농장주/작업자 권한 모델을 UI 편의를 위해 우회하지 않는다.
-- 외부 원본 데이터는 read-only를 기본으로 하고 테스트를 위해 임의 수정하지 않는다.
-- 다국어/고령 사용자 UX 변경은 실제 기능 의미와 입력 validation을 단순화하더라도 훼손하지 않는다.
-- 실제 앱 구현은 기존 설계/데이터 전략 문서를 먼저 확인하고 같은 모델을 새 branch에서 다시 설계하지 않는다.
+## UI / TORI family
 
-## TORI UI 구현 규칙
+- 제품 UI 세부 기준은 이 저장소의 관련 docs와 공통 `policies/TORI_UI_SYSTEM_STANDARD.md`를 따른다.
+- mobile-first, 최소 44px hit area, 짧고 명확한 상태 표현을 우선한다.
+- 표준 농토리 캐릭터와 공통 `고양이 젤리발 + 뾰잉!` 인터랙션 계약을 임의 변경하지 않는다.
+- project theme token을 사용하고 거대한 global CSS/JS monolith 또는 화면별 중복 component를 늘리지 않는다.
 
-- `docs/TORI_UI_REBUILD.md`와 TORI 패밀리 공통 UI 기준을 실제 앱 구현의 출발점으로 사용한다.
-- 모바일 우선, 최소 44px hit area, 고령 농장주 및 외국인 작업자가 빠르게 이해할 수 있는 짧은 문구와 명확한 상태를 우선한다.
-- 표준 농토리 캐릭터 asset을 임의 캐릭터로 바꾸지 않는다.
-- desktop 커서는 TORI 패밀리 공통 `고양이 젤리발 + 뾰잉!`을 사용한다.
-- 하늘색 토리/field green/strawberry coral 중심 theme token을 사용하고 화면별 임의 색상 복붙을 피한다.
-- 거대한 global CSS/JS monolith를 처음부터 만들지 말고 token/primitive/feature module로 분리한다.
+## Validation ownership
 
-새 workflow나 배포 자동화를 추가하기 전에 예상 실행 빈도, runtime, 무료 사용량 영향을 반드시 검토한다.
+- UI/입력/다국어: 관련 local unit/smoke + 필요 시 browser visual QA.
+- 농장/작업/권한/데이터: 관련 service/repository/authorization test.
+- DB/runtime 차이가 실제로 필요할 때만 staging을 사용한다.
+- 새 workflow나 배포 자동화 전 예상 실행 빈도·runtime·무료 사용량 영향을 확인한다.
+
+작업 종료/중단/인계 시 기존 `ACTIVE_WORK.md` 또는 PR에 branch/PR/SHA, 완료·미완료, 실행한 검증, known issue, 다음 단계를 남긴다.
