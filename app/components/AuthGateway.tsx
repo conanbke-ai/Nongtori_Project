@@ -45,7 +45,7 @@ export function AuthGateway({ preview = false }: { preview?: boolean }) {
   return (
     <main className="auth-gateway">
       <section className="auth-shell">
-        <aside className="auth-visual-panel">
+        <aside className="auth-visual-panel nongtori-scene">
           <div className="auth-brand"><span aria-hidden="true" className="auth-brand-icon"><Image alt="" fill priority sizes="38px" src="/nongtori-app-icon-512.png" /></span><strong>{translate(language, 'auth.serviceName')}</strong></div>
           <div className="auth-visual-copy">
             <span>{translate(language, 'auth.eyebrow')}</span>

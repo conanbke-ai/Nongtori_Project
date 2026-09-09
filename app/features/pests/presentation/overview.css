@@ -1,6 +1,6 @@
 .home-screen .overview-heading h1 { color: var(--tori-ink); }
 .home-screen .overview-heading .primary-action { background: var(--tori-primary-deep); box-shadow: 0 6px 16px rgb(57 126 153 / 15%); }
-.home-screen .nongtori-overview { border-color: #d4e7e7; background: linear-gradient(120deg, var(--tori-sky-soft) 0%, var(--tori-cream) 78%); }
+.home-screen .nongtori-overview { border-color: #d4e7e7; }
 .home-screen .nongtori-overview-copy>button { background: var(--tori-primary-deep); }
 .home-screen .nongtori-overview.alert .nongtori-overview-copy>button { background: var(--tori-strawberry-deep); }
 .home-screen .nongtori-context-row .pest-context { flex: 1 1 180px; min-width: 0; max-width: 100%; }

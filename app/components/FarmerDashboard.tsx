@@ -392,7 +392,7 @@ export function FarmerDashboard() {
               <section className="app-screen home-screen">
                 <div className="screen-heading overview-heading"><div><p>{formatDate(language)}</p><h1>{translate(language, 'home.title')}</h1><span>{data.selectedFarm?.name ?? '농장 연결 대기'} · {selectedItem?.display_name ?? '재배 품목 연결 대기'}</span></div><button className="primary-action" onClick={() => open('capture')} type="button">{translate(language, 'upload.savedVideo')}</button></div>
                 {data.setupRequired && <div className="setup-banner"><span>!</span><div><strong>계약 정보 연결 대기</strong><p>업체가 농장·품목 정보를 등록하면 이 계정에 자동으로 연결됩니다.</p></div></div>}
-                <article className={`nongtori-overview ${scoutMode}`}>
+                <article className={`nongtori-overview nongtori-scene ${scoutMode}`}>
                   <div className="nongtori-overview-copy">
                     <span className="nongtori-kicker"><i aria-hidden="true">●</i>{translate(language, 'home.nongtoriBriefing')}</span>
                     <h2>{scoutTitle}</h2>
