@@ -1,0 +1,14 @@
+.nongtori-portrait {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+  object-position: center bottom;
+  transform: translateX(-50%);
+  /* Blend only the empty background margins, leaving the character sharp. */
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}

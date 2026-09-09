@@ -131,8 +131,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { 
 .nongtori-overview.alert .nongtori-overview-copy>button { background:#b34550; }
 .nongtori-overview-copy>button:hover { filter:brightness(.96); }
 .nongtori-overview-art { position:relative; min-height:340px; margin:18px 20px 0 0; overflow:hidden; border-radius:20px 20px 0 0; }
-.nongtori-overview-art::before { content:""; position:absolute; inset:0; z-index:1; background:linear-gradient(90deg,#eef4e7 0%,rgba(238,244,231,.08) 32%,rgba(238,244,231,0) 60%); pointer-events:none; }
-.nongtori-overview-art img { object-fit:cover; object-position:50% 38%; }
 .nongtori-metrics { position:relative; z-index:3; grid-column:1/-1; display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid rgba(74,105,82,.14); background:rgba(255,255,252,.84); backdrop-filter:blur(8px); }
 .nongtori-metrics article { min-height:96px; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; border-right:1px solid rgba(74,105,82,.13); }
 .nongtori-metrics article:last-child { border-right:0; }
@@ -762,7 +760,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { 
 .auth-visual-copy h1 { max-width:330px; margin:11px 0 14px; font-size:38px; line-height:1.15; letter-spacing:-.055em; }
 .auth-visual-copy p { max-width:350px; margin:0; color:#65776b; font-size:15px; line-height:1.7; }
 .auth-nongtori { position:relative; z-index:1; width:100%; height:360px; margin-top:auto; overflow:hidden; border-radius:24px; }
-.auth-nongtori img { object-fit:cover; object-position:50% 38%; }
 .auth-trust-list { position:relative; z-index:2; display:flex; justify-content:center; gap:7px; }
 .auth-trust-list span { padding:6px 9px; border:1px solid #d5e3d1; border-radius:99px; background:rgba(255,255,250,.75); color:#50685a; font-size:10px; font-weight:800; white-space:nowrap; }
 .auth-form-panel { min-width:0; padding:29px 44px 24px; display:flex; flex-direction:column; background:#fffefa; }
@@ -999,7 +996,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { 
   .nongtori-context-row>span { min-width:91px; padding:7px 8px; }
   .nongtori-context-row b { font-size:11px; }
   .nongtori-overview-art { min-height:355px; margin:10px 8px 0 0; border-radius:15px 15px 0 0; }
-  .nongtori-overview-art img { object-position:50% 38%; }
   .nongtori-metrics article { min-height:88px; padding:14px 13px; }
   .nongtori-metrics article>span { font-size:10px; }
   .nongtori-metrics strong { font-size:23px; }

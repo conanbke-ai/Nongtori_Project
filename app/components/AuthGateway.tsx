@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { NongtoriPortrait } from '@/app/ui/tori/NongtoriPortrait';
 import { FormEvent, useState } from 'react';
 import { asLanguage, languageNames, languages, translate, type Language } from '@/app/lib/i18n';
 
@@ -51,7 +52,7 @@ export function AuthGateway({ preview = false }: { preview?: boolean }) {
             <h1>{translate(language, 'auth.welcomeTitle')}</h1>
             <p>{translate(language, 'auth.welcomeDesc')}</p>
           </div>
-          <div className="auth-nongtori"><Image alt={translate(language, 'scout.alt')} fill priority sizes="(max-width: 760px) 240px, 430px" src="/nongtori-tori.webp" /></div>
+          <div className="auth-nongtori"><NongtoriPortrait alt={translate(language, 'scout.alt')} /></div>
           <div className="auth-trust-list"><span>{translate(language, 'auth.trustFarm')}</span><span>{translate(language, 'auth.trustLanguage')}</span><span>{translate(language, 'auth.trustRoles')}</span></div>
         </aside>
 

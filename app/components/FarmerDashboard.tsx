@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { NongtoriPortrait } from '@/app/ui/tori/NongtoriPortrait';
 import { PestOverviewCard, activePestSummary, type OverviewState } from '@/app/features/pests/presentation/PestOverviewCard';
 import '@/app/features/pests/presentation/overview.css';
 import { pestTargets, pestLabel } from '@/app/features/pests/domain/catalog';
@@ -407,7 +408,7 @@ export function FarmerDashboard() {
                     <div className="scout-sensor-tags"><span>{translate(language, 'alert.regularTogether')}</span><span>{translate(language, 'alert.thermalPrimary')}</span></div>
                     <button onClick={openScoutTarget} type="button">{scoutAction}</button>
                   </div>
-                  <div className="nongtori-overview-art"><Image alt={translate(language, 'scout.alt')} fill priority sizes="(max-width: 680px) 180px, 360px" src="/nongtori-tori.webp" /></div>
+                  <div className="nongtori-overview-art"><NongtoriPortrait alt={translate(language, 'scout.alt')} /></div>
                   <div className="nongtori-metrics">
                     <article><span><small>{translate(language, 'home.farmWideScope')}</small>{translate(language, 'home.todaySubmissions')}</span><div><strong>{data.summary.todayRecordedSessions}</strong><small>{translate(language, 'common.cases')}</small></div></article>
                     <article><span><small>{translate(language, 'home.farmWideScope')}</small>{translate(language, 'home.gradeCompleted')}</span><div><strong>{data.summary.harvestCandidates}</strong><small>{translate(language, 'harvest.pieces')}</small></div></article>
