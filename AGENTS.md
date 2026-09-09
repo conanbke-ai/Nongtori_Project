@@ -8,6 +8,15 @@
 - 시작점: `DEVELOPMENT_TEAM_OPERATING_POLICY.md` → `TORI_POLICY_BOOTSTRAP.md` → `POLICY_ROUTER.md`의 필요한 절만 확인한다.
 - 제품의 실제 구현 상태는 이 저장소의 최신 `main`, `ACTIVE_WORK.md`, open PR, branch, commit, 실제 코드가 우선한다.
 
+## AI development routing / usage guard
+
+- 사용자가 매 요청마다 Chat/Work/Codex/모델을 선택하게 하지 않는다. 먼저 일반 Chat에서 요구사항·설계·로그/diff/screenshot 분석·Acceptance Criteria·최소 실행 prompt를 가능한 한 끝낸다.
+- 실제 repo 수정/빌드/test/git 실행이 필요할 때만 Codex, 실제 browser rendering/route/hover/modal/responsive/interaction 검수가 필요할 때만 Work를 사용한다.
+- 공통 라우팅은 `conanbke-ai/Tori_Common_Project`의 `policies/TORI_AI_DEVELOPMENT_ROUTER.md`, 사용량 보호는 `policies/TORI_AGENT_CREDIT_GUARD.md`, UI 최종 검수는 `policies/TORI_UI_VISUAL_QA_STANDARD.md`를 따른다.
+- Agent allowance가 없으면 `DEFER_AGENT`로 두고 Chat에서 설계·patch plan·test·실행 prompt를 준비한다.
+- 실패 후 동일 prompt를 상위 모델로 반복하지 않는다. 일반 Chat에서 원인을 먼저 분석하고 lowest adequate tier부터 재실행한다.
+- UI/디자인은 코드 반영만으로 PASS하지 않는다. 필요한 작업은 실제 렌더링/interaction visual acceptance까지 완료해야 한다.
+
 ## Fail-safe core
 
 공통 저장소 접근이 일시적으로 불가능해도 아래는 항상 적용한다.
