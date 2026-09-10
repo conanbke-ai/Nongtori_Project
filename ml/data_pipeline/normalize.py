@@ -41,38 +41,58 @@ def normalize_field_row(row: dict[str, Any], *, source_id: str = "DATA-FIELD-001
     sample_id = _text(row.get("ID"))
     if not sample_id:
         raise LabelContractError("field row requires ID")
-    maturity = _optional_int(row.get("Maturity"))
-    if maturity not in FIELD_STAGE_BY_MATURITY:
-        raise LabelContractError(f"field row {sample_id}: Maturity must be 0..4")
-    grade = _text(row.get("Grade")).upper()
-    if grade not in ALLOWED_GRADES:
-        raise LabelContractError(f"field row {sample_id}: unsupported Grade {grade!r}")
+    object_class = _text(row.get("Class")).upper()
     health = _text(row.get("Health")).upper()
     if health and health not in ALLOWED_HEALTH:
         raise LabelContractError(f"field row {sample_id}: unsupported Health {health!r}")
-    if health == "MAL" and grade != "JM":
-        raise LabelContractError(f"field row {sample_id}: Health=MAL requires Grade=JM by field contract")
 
-    return {
+    base = {
         "sample_id": sample_id,
         "source_id": source_id,
         "source_type": "FIELD",
         "asset_path": _text(row.get("Final_Name")) or _text(row.get("Original_No")),
         "content_sha256": _text(row.get("content_sha256")).lower(),
         "atomic_group": _text(row.get("Group_ID")) or sample_id,
+        "health": health,
+        "mapping_version": mapping_version,
+        "mapping_basis": "FIELD_POLICY",
+        "source_payload_json": json.dumps(row, ensure_ascii=False, sort_keys=True),
+    }
+
+    if object_class and object_class != "STR":
+        return {
+            **base,
+            "source_label": "",
+            "canonical_stage": "",
+            "nongtori_maturity": "",
+            "nongtori_grade": "",
+            "observed_harvest": "",
+            "grade_reason": "",
+            "mapping_confidence": "HIGH",
+            "task_eligible": "false",
+            "exclusion_reason": "NON_FRUIT_RIPENESS_TARGET",
+        }
+
+    maturity = _optional_int(row.get("Maturity"))
+    if maturity not in FIELD_STAGE_BY_MATURITY:
+        raise LabelContractError(f"field row {sample_id}: Maturity must be 0..4")
+    grade = _text(row.get("Grade")).upper()
+    if grade not in ALLOWED_GRADES:
+        raise LabelContractError(f"field row {sample_id}: unsupported Grade {grade!r}")
+    if health == "MAL" and grade != "JM":
+        raise LabelContractError(f"field row {sample_id}: Health=MAL requires Grade=JM by field contract")
+
+    return {
+        **base,
         "source_label": _text(row.get("Maturity")),
         "canonical_stage": FIELD_STAGE_BY_MATURITY[maturity],
         "nongtori_maturity": str(maturity),
         "nongtori_grade": grade,
-        "health": health,
         "observed_harvest": "true" if grade != "NA" else "false",
         "grade_reason": "MALFORMED" if health == "MAL" else "",
-        "mapping_version": mapping_version,
         "mapping_confidence": "HIGH",
-        "mapping_basis": "FIELD_POLICY",
         "task_eligible": "true",
         "exclusion_reason": "",
-        "source_payload_json": json.dumps(row, ensure_ascii=False, sort_keys=True),
     }
 
 
@@ -97,30 +117,20 @@ def normalize_external_row(row: dict[str, Any], mapping: ExternalMapping, *, lab
     sample_id = _text(row.get(sample_id_column)) or _text(row.get(asset_column))
     if not sample_id:
         raise LabelContractError("external row requires sample_id or asset_path")
-
     canonical_stage = _text(spec.get("canonical_stage"))
     maturity = spec.get("maturity")
     grade = _text(spec.get("grade")).upper()
     if canonical_stage == "OVERRIPE":
         maturity = 4
         grade = "JM"
-
     return {
-        "sample_id": sample_id,
-        "source_id": mapping.source_id,
-        "source_type": "EXTERNAL",
-        "asset_path": _text(row.get(asset_column)),
-        "content_sha256": _text(row.get(hash_column)).lower(),
-        "atomic_group": _text(row.get(group_column)) or sample_id,
-        "source_label": source_label,
-        "canonical_stage": canonical_stage,
-        "nongtori_maturity": "" if maturity is None else str(int(maturity)),
-        "nongtori_grade": grade,
-        "health": "",
-        "observed_harvest": "",
+        "sample_id": sample_id, "source_id": mapping.source_id, "source_type": "EXTERNAL",
+        "asset_path": _text(row.get(asset_column)), "content_sha256": _text(row.get(hash_column)).lower(),
+        "atomic_group": _text(row.get(group_column)) or sample_id, "source_label": source_label,
+        "canonical_stage": canonical_stage, "nongtori_maturity": "" if maturity is None else str(int(maturity)),
+        "nongtori_grade": grade, "health": "", "observed_harvest": "",
         "grade_reason": _text(spec.get("grade_reason")) or ("OVERRIPE" if canonical_stage == "OVERRIPE" else ""),
-        "mapping_version": mapping.mapping_version,
-        "mapping_confidence": _text(spec.get("confidence")) or "MEDIUM",
+        "mapping_version": mapping.mapping_version, "mapping_confidence": _text(spec.get("confidence")) or "MEDIUM",
         "mapping_basis": _text(spec.get("basis")) or "SOURCE_DEFINITION",
         "task_eligible": "true" if bool(spec.get("task_eligible", maturity is not None)) else "false",
         "exclusion_reason": _text(spec.get("exclusion_reason")),
@@ -141,7 +151,7 @@ def write_normalized(rows: Iterable[dict[str, str]], output_path: Path) -> Path:
 
 def normalize_field_csv(input_path: Path, output_path: Path, *, source_id: str = "DATA-FIELD-001") -> Path:
     with Path(input_path).open(encoding="utf-8-sig", newline="") as f:
-        rows = [normalize_field_row(row, source_id=source_id) for row in csv.DictReader(f)]
+        rows = [normalize_field_row(row, source_id=source_id) for row in csv.DictReader(f) if _text(row.get("ID"))]
     return write_normalized(rows, output_path)
 
 
