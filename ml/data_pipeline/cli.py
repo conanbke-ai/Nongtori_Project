@@ -5,6 +5,7 @@ import csv
 import json
 from pathlib import Path
 
+from .annotation_audit import audit_kgcv_json, audit_strawberry_ds_yolo, write_audit_report
 from .archive import extract_archive
 from .audit import audit_directory
 from .dedup import deduplicate_manifest
@@ -30,6 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("download"); p.add_argument("source_id"); p.add_argument("--raw-root", type=Path, required=True)
     p = sub.add_parser("extract"); p.add_argument("--archive", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("audit"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
+    p = sub.add_parser("audit-strawberry-ds"); p.add_argument("--labels-dir", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
+    p = sub.add_parser("audit-kgcv"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("snapshot"); p.add_argument("source_id"); p.add_argument("--audit-dir", type=Path, required=True); p.add_argument("--snapshot-root", type=Path, required=True); p.add_argument("--snapshot-id", required=True)
     p = sub.add_parser("incremental-scan"); p.add_argument("--input", type=Path, required=True); p.add_argument("--ledger", type=Path, required=True); p.add_argument("--output-ledger", type=Path, required=True); p.add_argument("--key-field", action="append", default=[]); p.add_argument("--ignore-field", action="append", default=[])
     p = sub.add_parser("field-audit"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path)
@@ -54,6 +57,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "extract":
         files = extract_archive(args.archive, args.output); print(json.dumps({"output_dir": str(args.output), "files": len(files)}, ensure_ascii=False, indent=2)); return 0
     if args.command == "audit": print(json.dumps(audit_directory(args.input, args.output), ensure_ascii=False, indent=2)); return 0
+    if args.command == "audit-strawberry-ds":
+        report = audit_strawberry_ds_yolo(args.labels_dir); write_audit_report(report, args.output); print(json.dumps(report, ensure_ascii=False, indent=2)); return 0
+    if args.command == "audit-kgcv":
+        report = audit_kgcv_json(args.input); write_audit_report(report, args.output); print(json.dumps(report, ensure_ascii=False, indent=2)); return 0
     if args.command == "snapshot":
         source = registry.get(args.source_id); print(create_snapshot(args.snapshot_id, source.source_id, source.version_or_revision or "unversioned", args.audit_dir, args.snapshot_root)); return 0
     if args.command == "incremental-scan":
