@@ -1,0 +1,44 @@
+.nongtori-scene {
+  --scene-ground-x: 81%;
+  --scene-ground-y: 72%;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse at var(--scene-ground-x) var(--scene-ground-y), var(--tori-scene-shadow), transparent 40%),
+    radial-gradient(ellipse at 85% 100%, var(--tori-field-soft), transparent 70%),
+    linear-gradient(115deg, var(--tori-sky-soft), var(--tori-scene-light) 55%, var(--tori-cream));
+}
+
+.auth-visual-panel.nongtori-scene {
+  --scene-ground-x: 50%;
+  --scene-ground-y: 88%;
+}
+
+/* The artwork shares the panel's backdrop instead of forming a separate tile. */
+.nongtori-scene .nongtori-overview-art,
+.nongtori-scene .auth-nongtori {
+  z-index: auto;
+  overflow: visible;
+  border-radius: 0;
+  pointer-events: none;
+}
+
+.nongtori-portrait {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(100%, 480px);
+  object-fit: contain;
+  object-position: center bottom;
+  transform: translateX(-50%);
+  /* Blend the original pale backdrop with the panel without redrawing the mascot. */
+  mix-blend-mode: multiply;
+  /* All fades stay in the source's empty margins; ears, face and feet stay opaque. */
+  mask-image:
+    linear-gradient(to right, transparent, #000 18%, #000 82%, transparent),
+    linear-gradient(to bottom, transparent, #000 4%, #000 91%, transparent);
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+}

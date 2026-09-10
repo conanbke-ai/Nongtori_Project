@@ -1,0 +1,9 @@
+/* Nongtori changes only the palette of the shared TORI cursor. */
+html .tori-cat-cursor__pad { fill: var(--tori-jelly); }
+html .tori-cat-cursor.is-interactive .tori-cat-cursor__bean { fill: var(--tori-jelly-highlight); }
+html .tori-cat-cursor.is-interactive .tori-cat-cursor__pad { fill: var(--tori-strawberry); }
+html .tori-cat-cursor__pop {
+  color: var(--tori-strawberry-deep);
+  background: var(--tori-cream);
+  border-color: var(--tori-jelly);
+}

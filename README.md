@@ -13,7 +13,6 @@
 - 작물 생육·품질 상태 분석
 - 딸기 숙도 및 상품 등급 분류
 - 병해충 이상 징후 예찰과 모니터링
-- 농가 의견을 반영한 흰가루병 우선 대응 및 응애 조기 예찰
 - RGB 이미지와 IR/열화상 데이터 활용 가능성 검토
 - 환경 수치와 이미지의 멀티모달 분석
 - 이상 징후 알림 및 분석 기록 관리
@@ -25,6 +24,20 @@
 앞으로 농토리의 기능 개발, 리팩토링, 테스트, 문서화는 이 저장소 `Nongtori_Project`를 기준본으로 사용합니다.
 
 구현 전에는 [`docs/DESIGN_FREEZE_V1.md`](docs/DESIGN_FREEZE_V1.md)의 상태와 Implementation Gate를 먼저 확인합니다. 2026-09-10 기준 V1 설계는 `DESIGN_FROZEN / DATA_WIP` 상태이며, Google Sheet 원본 데이터는 계속 정리될 수 있습니다.
+
+## 현재 애플리케이션 기준본
+
+기존 농토리 운영센터의 실행 소스를 이 저장소의 application baseline으로 편입합니다.
+
+- 애플리케이션: Next.js / React 기반 운영센터
+- 데이터 저장: Cloudflare D1 + Drizzle ORM
+- 미디어 저장: Cloudflare R2
+- 주요 경로: `app/`, `db/`, `drizzle/`, `public/`
+- 실행/데이터 모델: [`docs/APPLICATION.md`](docs/APPLICATION.md)
+- 다농가 데이터 계약: [`docs/MULTI_FARM_DATA_MODEL.md`](docs/MULTI_FARM_DATA_MODEL.md)
+- 병해충·판독 협업: [`docs/PEST_AND_RECORD_WORKFLOWS.md`](docs/PEST_AND_RECORD_WORKFLOWS.md)
+
+새 scaffold를 다시 만들지 않고 이 application source를 canonical baseline으로 이어서 개발합니다.
 
 ## Architecture
 
@@ -55,39 +68,12 @@ Sensor / Weather / Image / Manual Input
 - UI는 DB나 모델을 직접 호출하지 않습니다.
 - Controller/API는 요청 검증과 응답 변환을 담당하며 분석 규칙을 직접 구현하지 않습니다.
 - Service는 분석 흐름을 조정하되 UI 코드에 의존하지 않습니다.
-- Domain은 Flask/FastAPI, DB, 외부 API와 같은 기술 세부사항을 알지 않습니다.
+- Domain은 framework, DB, 외부 API 세부사항을 알지 않습니다.
 - Repository는 저장/조회만 담당하며 작물 상태 판정을 하지 않습니다.
 - 외부 센서·기상 API·파일·수기 입력은 Adapter에서 통일된 내부 데이터 구조로 변환합니다.
 - 작물별 판단 차이는 조건문을 서비스 곳곳에 퍼뜨리지 않고 Strategy로 분리합니다.
 
 상세 설계는 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)를 기준으로 합니다.
-
-## 우선 적용 디자인 패턴
-
-### Strategy — 최우선
-
-작물이나 분석 목적별로 변경될 수 있는 판단 로직을 분리합니다.
-
-### Adapter
-
-입력 출처가 달라도 Domain은 동일한 데이터 계약만 보도록 합니다.
-
-### Repository
-
-분석 이력, 환경 관측값, 이미지 메타데이터, 모델 결과 등의 저장 기술을 비즈니스 로직과 분리합니다.
-
-### Factory
-
-작물 또는 분석 유형별 Strategy/Analyzer 생성 분기가 증가할 때 사용합니다. 단순 생성 한두 건에는 억지로 적용하지 않습니다.
-
-## 리팩토링 기준
-
-- 동일 조건문 3곳 이상 → Strategy 검토
-- 동일 DB Query 2곳 이상 → Repository 이동 검토
-- Service 약 300~500 lines 초과 → 책임 분리 검토
-- 외부 API/센서 처리와 판단 로직이 섞임 → Adapter 분리
-- 작물별 `if crop == ...` 분기가 반복됨 → Crop Strategy로 이동
-- UI에서 백엔드 판단 규칙을 복제함 → 서버 규칙을 단일 기준으로 통합
 
 ## 데이터 원칙
 
@@ -139,6 +125,11 @@ lint / format
 - [Market Price & Settlement Policy](docs/MARKET_PRICE_SETTLEMENT_POLICY.md)
 - [AI / Data / Model Sources](docs/AI_DATA_MODEL_SOURCES.md)
 - [AI Data Pipeline Design](docs/AI_DATA_PIPELINE_DESIGN.md)
+- [Application](docs/APPLICATION.md)
+- [Application Source Integration](docs/APPLICATION_SOURCE_INTEGRATION.md)
+- [Multi-farm Data Model](docs/MULTI_FARM_DATA_MODEL.md)
+- [Pest & Record Workflows](docs/PEST_AND_RECORD_WORKFLOWS.md)
+- [Overview & Cursor](docs/OVERVIEW_AND_CURSOR.md)
 - [Design Guide](docs/DESIGN_GUIDE.md)
 - [Development Standard](docs/DEVELOPMENT.md)
 - [Migration Notes](docs/MIGRATION_NOTES.md)

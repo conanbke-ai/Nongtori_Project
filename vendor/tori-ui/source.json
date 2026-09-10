@@ -1,0 +1,16 @@
+{
+  "repository": "conanbke-ai/Mystori_Project",
+  "ref": "cc73e8ef14ec15804ce0b484ef76ac73e3345223",
+  "files": [
+    {
+      "path": "ToriCatPawCursor.tsx",
+      "sourcePath": "src/web/components/ToriCatPawCursor.tsx",
+      "gitBlobSha": "ff6b77fdaa3f2f5946936b0e57fe897e61ff9014"
+    },
+    {
+      "path": "tori-cursor.css",
+      "sourcePath": "src/web/styles/tori-cursor.css",
+      "gitBlobSha": "e5b9039cbf0fce8474d31ec0d3df2b7e697cc0eb"
+    }
+  ]
+}

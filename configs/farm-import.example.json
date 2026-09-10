@@ -1,0 +1,69 @@
+{
+  "source": {
+    "type": "GOOGLE_SHEET_SNAPSHOT",
+    "spreadsheetId": "<spreadsheet-id>",
+    "sheetGid": "<sheet-gid>",
+    "checksum": "<snapshot-checksum>",
+    "mapping": {
+      "farm": "농가",
+      "house": "하우스",
+      "bed": "베드",
+      "zone": "구역"
+    }
+  },
+  "farm": {
+    "code": "FARM_001",
+    "name": "예시 농장",
+    "timezone": "Asia/Seoul"
+  },
+  "cultivars": [
+    { "code": "SEOLHYANG", "name": "설향" }
+  ],
+  "items": [
+    {
+      "cropCode": "STRAWBERRY",
+      "cropName": "딸기",
+      "cultivarCode": "SEOLHYANG",
+      "cultivarName": "설향",
+      "displayName": "설향 딸기"
+    }
+  ],
+  "members": [
+    {
+      "loginId": "farm-owner-001",
+      "identityProvider": "SITES",
+      "identitySubject": "<authenticated-user-id>",
+      "email": "owner@example.com",
+      "role": "OWNER"
+    }
+  ],
+  "houses": [
+    {
+      "code": "H01",
+      "name": "1동",
+      "displayOrder": 1,
+      "beds": [
+        {
+          "code": "B01",
+          "name": "1번 베드",
+          "displayOrder": 1,
+          "zones": [
+            { "code": "Z01", "name": "앞 구역", "displayOrder": 1 }
+          ]
+        }
+      ]
+    }
+  ],
+  "cameras": [
+    {
+      "code": "ROBOT_CAM_01",
+      "name": "자동수확로봇 카메라",
+      "cameraType": "DUAL_SENSOR",
+      "sourceType": "ROBOT",
+      "streamUrl": "<https-live-stream-url>",
+      "houseCode": "H01",
+      "bedCode": "B01",
+      "zoneCode": "Z01"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+:root {
+  --tori-primary: #78c5e2;
+  --tori-primary-deep: #397e99;
+  --tori-sky-soft: #edf8fc;
+  --tori-field: #5f8e68;
+  --tori-field-soft: #e5f1df;
+  --tori-scene-light: #faf7ed;
+  --tori-scene-shadow: rgb(95 142 104 / 12%);
+  --tori-strawberry: #ea8392;
+  --tori-strawberry-deep: #963f54;
+  --tori-strawberry-soft: #fff0f1;
+  --tori-cream: #fff9ef;
+  --tori-soil: #7a5a46;
+  --tori-jelly: #f29aaa;
+  --tori-jelly-highlight: #ffd0d7;
+  --tori-ink: #293b39;
+}
