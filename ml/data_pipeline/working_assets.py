@@ -31,6 +31,8 @@ def materialize_working_assets(
     object_store_root = Path(object_store_root)
     session_root = Path(session_root)
     rows = [dict(row) for row in manifest_rows]
+    if not rows:
+        raise ValueError("empty rename manifest cannot be materialized")
     if any(row.get("validation_status") == "BLOCKED" for row in rows):
         raise ValueError("blocked rename manifest cannot be materialized")
 
@@ -90,7 +92,7 @@ def write_materialized_manifest(rows: Iterable[dict[str, str]], output_path: Pat
 
 
 def write_rollback_manifest(rows: Iterable[dict[str, str]], output_path: Path) -> Path:
-    fieldnames = ["farm_id", "capture_session_id", "working_session_path", "rollback_source_file", "rollback_target_file", "content_sha256"]
+    fieldnames = ["farm_id", "capture_session_id", "sample_id", "source_asset_key", "working_session_path", "rollback_source_file", "rollback_target_file", "content_sha256"]
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as f:
