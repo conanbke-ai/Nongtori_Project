@@ -36,3 +36,9 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Nongtori raw/audit/snapshot data products
+/data/raw/
+/data/audit/
+/data/snapshots/
+/ml/data_pipeline/data/

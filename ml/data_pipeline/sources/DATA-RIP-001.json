@@ -1,0 +1,17 @@
+{
+  "source_id": "DATA-RIP-001",
+  "source_type": "dataset",
+  "provider": "mendeley",
+  "title": "Strawberry-DS",
+  "original_url": "https://data.mendeley.com/datasets/z6dtfdpzz8/1",
+  "version_or_revision": "1",
+  "license": "CC-BY-4.0",
+  "license_checked_at": "2026-09-10",
+  "redistribution_allowed": "allowed_with_attribution",
+  "commercial_use": "allowed_with_attribution",
+  "status": "REVIEW_REQUIRED",
+  "retrieval": {"dataset_id": "z6dtfdpzz8", "version": 1},
+  "original_labels": ["Green", "White", "Early-Turning", "Turning", "Late-Turning", "Red"],
+  "nongtori_mapping": {"status": "UNMAPPED_REVIEW_REQUIRED"},
+  "notes": "247 RGB images with YOLO annotations. Downloaded data must pass audit before APPROVED."
+}

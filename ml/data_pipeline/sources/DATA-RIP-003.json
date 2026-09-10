@@ -1,0 +1,17 @@
+{
+  "source_id": "DATA-RIP-003",
+  "source_type": "dataset",
+  "provider": "aihub",
+  "title": "지능형 수직농장 통합 데이터(딸기)",
+  "original_url": "https://www.aihub.or.kr/",
+  "version_or_revision": "1.2",
+  "license": "AI-Hub 이용조건",
+  "license_checked_at": "2026-09-10",
+  "redistribution_allowed": "review_required",
+  "commercial_use": "review_required",
+  "status": "AUTH_REQUIRED",
+  "retrieval": {"dataset_key": 596},
+  "original_labels": [],
+  "nongtori_mapping": {"status": "UNMAPPED_REVIEW_REQUIRED"},
+  "notes": "Requires dataset download approval and AIHUB_API_KEY. aihubshell is the official downloader."
+}
