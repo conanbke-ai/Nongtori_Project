@@ -7,7 +7,7 @@
 - Branch budget: `main` 포함 최대 5개
 - Active workstream: 최대 3개
 - Validation branch: 최대 1개
-- 현재 remote branch: `main` = 1/5
+- 현재 remote branch 기준: `main`, `feat/farm-rename-manifest-v1` = 2/5
 - GitHub `delete_branch_on_merge=true` 적용 확인: 병합된 feature branch는 자동 삭제
 
 | Workstream | Canonical branch / PR | 상태 | Owner / Lease 경로 | 시작/최근 활동 | Acceptance Criteria / 다음 단계 |
@@ -19,12 +19,13 @@
 | Normalize / Dedup / Split / Training Snapshot v1 | `main` / merged PR #4 | MERGED_BASELINE | owner 없음 | 2026-09-10 | label normalize, exact dedup, atomic split, immutable snapshot 유지 |
 | Farm-scoped Data Ingestion Design | `main` / merged PR #5 + follow-up docs | DESIGN_FROZEN | owner 없음 | 2026-09-10 | baseline 1회 + incremental scan/change detection + append-only revision + content-hash asset reuse |
 | Incremental Ingestion + Field Task Audit v1 | `main` / merged PR #6 | MERGED_BASELINE | owner 없음 | 2026-09-10 | `NEW/UPDATED/REMOVED/UNCHANGED`, revision ledger, field-level diff, STR/LEF task 분리, blank template row skip, CLI/CI 완료 |
+| Farm-scoped Rename Manifest + Working Asset Reuse v1 | `feat/farm-rename-manifest-v1` / PR TBD | ACTIVE / CANONICAL | 현재 세션 / `ml/data_pipeline/`, tests, ingestion docs | 2026-09-10 | Original_No exact 우선 매칭, EXIF/natural-order fallback, blocking preflight, SHA-256 content store reuse, session Final_Name working view, rename/rollback manifest, CLI/tests/CI. 원본 파일 직접 변경 금지. |
 
 ## 다음 canonical workstream
 
 ```text
 Farm-scoped Rename Manifest + Working Asset Reuse
-+ DATA-RIP-001 / DATA-RIP-002 Annotation Audit
+→ DATA-RIP-001 / DATA-RIP-002 Annotation Audit
 → Actual Normalized Manifest
 → Actual Dedup / Split
 → Training Snapshot v001
@@ -46,15 +47,15 @@ Farm-scoped Rename Manifest + Working Asset Reuse
 - 최소 데이터 경계는 `farm_id + capture_session_id`
 - Training Snapshot은 physical full copy가 아니라 revision/hash 집합 manifest
 
-### 다음 구현 핵심
+### 현재 구현 핵심
 
 1. `Original_No` exact 기반 photo matching
 2. EXIF 보조 / natural-order fallback
-3. blocking mismatch 시 rename 중단
-4. content SHA-256 기준 Working Asset 재사용
-5. rename manifest + rollback metadata
-6. 외부 DATA-RIP-001/002 실제 annotation audit
-7. AgML `turning red` decimal-stage calibration
+3. blocking mismatch 시 세션 작업 전체 중단
+4. content SHA-256 기준 Working Asset Object Store 재사용
+5. 세션별 `Final_Name` working view 생성
+6. rename manifest + rollback manifest
+7. 원본 파일 직접 rename/overwrite 금지
 
 새 AI/data 구현은 `docs/DESIGN_FREEZE_V1.md`, `docs/LABEL_MAPPING_POLICY.md`, `docs/DATA_INGESTION_MANAGEMENT.md`, `docs/MULTI_FARM_DATA_MODEL.md`를 기준으로 한다.
 
