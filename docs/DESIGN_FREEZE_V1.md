@@ -1,8 +1,8 @@
 # Nongtori DESIGN FREEZE v1
 
-Status: **READY_FOR_FREEZE / DATA_WIP**
+Status: **DESIGN_FROZEN / DATA_WIP**
 
-이 문서는 V1 구현 전에 구조적 결정을 잠그기 위한 canonical freeze 문서다. 이 문서가 `main`에 반영되고 재조회 검증되기 전에는 신규 AI/data pipeline 구현을 시작하지 않는다.
+이 문서는 V1 구현 전에 구조적 결정을 잠그기 위한 canonical freeze 문서다. 2026-09-10 기준 `main` 반영 및 재조회 검증을 완료했다. 이후 신규 AI/data pipeline 구현은 이 문서와 연결 정책을 기준으로 진행한다.
 
 ## 1. Freeze 원칙
 
@@ -172,17 +172,19 @@ raw external/private field data는 Git에 넣지 않는다.
 
 ## 15. Implementation Gate
 
-- [ ] PROJECT_SCOPE 일치
-- [ ] ARCHITECTURE 일치
-- [ ] DATA_STRATEGY 일치
-- [ ] FIELD_DATA_CONTRACT 일치
-- [ ] AI_DECISION_POLICY 일치
-- [ ] DATA_SPLIT_POLICY 일치
-- [ ] FAILURE_EXCEPTION_POLICY 일치
-- [ ] MODEL_ACCEPTANCE_POLICY 일치
-- [ ] MARKET_PRICE_SETTLEMENT_POLICY 일치
-- [ ] AI_DATA_MODEL_SOURCES registry 준비
-- [ ] AI_DATA_PIPELINE_DESIGN 일치
-- [ ] ACTIVE_WORK / open PR / branch budget 확인
+- [x] PROJECT_SCOPE 일치
+- [x] ARCHITECTURE 일치
+- [x] DATA_STRATEGY 일치
+- [x] FIELD_DATA_CONTRACT 일치
+- [x] AI_DECISION_POLICY 일치
+- [x] DATA_SPLIT_POLICY 일치
+- [x] FAILURE_EXCEPTION_POLICY 일치
+- [x] MODEL_ACCEPTANCE_POLICY 일치
+- [x] MARKET_PRICE_SETTLEMENT_POLICY 일치
+- [x] AI_DATA_MODEL_SOURCES registry 준비
+- [x] AI_DATA_PIPELINE_DESIGN 일치
+- [x] ACTIVE_WORK / open PR / branch budget 확인
 
-이 gate를 통과한 뒤에만 구현한다.
+Implementation Gate: **PASS**
+
+다음 canonical workstream은 `Dataset Registry → 외부 표본 자동수집 → Audit → Normalize → Snapshot → Baseline Model → Optuna` 순서다.
