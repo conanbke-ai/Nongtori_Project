@@ -1,0 +1,73 @@
+{
+  "snapshot_id": "KGCV-RIPENESS-V001",
+  "status": "FROZEN",
+  "frozen_at": "2026-09-10T22:36:00+09:00",
+  "source_id": "DATA-RIP-002",
+  "source_dataset": "Project-AgML/strawberry_growth_detection",
+  "mapping_version": "MAP-RIP-002-v2",
+  "manifest_artifact_name": "kgcv_snapshot_candidate.csv",
+  "manifest_sha256": "4a99618d7024a960f4f2431b17feaca2088415c2d14149be859df758f8985b9f",
+  "physical_image_rows": 1477,
+  "unique_content_sha256": 1477,
+  "duplicate_content_hash_groups": 0,
+  "all_object_rows": 3997,
+  "snapshot_eligible_rows": 3162,
+  "excluded_rows": 835,
+  "excluded_reasons": {
+    "NON_FRUIT_RIPENESS_TARGET": 539,
+    "UNRESOLVED_TURNING_BOUNDARY": 296
+  },
+  "maturity_counts": {
+    "0": 1571,
+    "1": 731,
+    "4": 860
+  },
+  "source_label_counts_eligible": {
+    "small g": 673,
+    "green": 898,
+    "white": 731,
+    "red": 669,
+    "overripe": 191
+  },
+  "split_policy": {
+    "strategy": "DETERMINISTIC_CONTENT_SHA256_ATOMIC",
+    "seed": 20260910,
+    "target_ratio": {
+      "train": 0.70,
+      "valid": 0.15,
+      "test": 0.15
+    },
+    "actual_sample_counts": {
+      "train": 2243,
+      "valid": 486,
+      "test": 433
+    },
+    "actual_maturity_counts": {
+      "train": {"0": 1125, "1": 517, "4": 601},
+      "valid": {"0": 250, "1": 111, "4": 125},
+      "test": {"0": 196, "1": 103, "4": 134}
+    },
+    "constraints": [
+      "all objects from the same physical image stay in one split",
+      "byte-identical assets stay in one split",
+      "test split is never used for tuning"
+    ]
+  },
+  "label_policy": {
+    "small g": 0,
+    "green": 0,
+    "white": 1,
+    "red": 4,
+    "overripe": 4,
+    "overripe_grade": "JM",
+    "turning red": "EXCLUDED_UNTIL_FIELD_CALIBRATION",
+    "flower": "EXCLUDED_NON_FRUIT"
+  },
+  "asset_policy": {
+    "identity": "SHA-256",
+    "images_committed_to_git": false,
+    "hash_verification": "REMOTE_STREAM_VERIFIED",
+    "hash_errors": 0
+  },
+  "scope_note": "This snapshot freezes the external KGCV ripeness subset only. Nongtori field data is not included and remains a separate future FIELD_TEST / field-training stream."
+}

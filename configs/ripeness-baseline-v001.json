@@ -1,0 +1,51 @@
+{
+  "experiment_id": "RIPENESS-BASELINE-V001",
+  "snapshot_id": "KGCV-RIPENESS-V001",
+  "model_status_on_creation": "REFERENCE",
+  "task": "ordinal_ripeness_classification",
+  "input_unit": "object crop from KGCV annotated bbox",
+  "target": "nongtori_maturity",
+  "classes": [0, 1, 4],
+  "class_semantics": {
+    "0": "GREEN / GREEN_SMALL",
+    "1": "WHITE",
+    "4": "RED_RIPE / OVERRIPE"
+  },
+  "baseline_family": "transfer_learning_image_classifier",
+  "reference_backbone": "resnet18",
+  "pretrained": "ImageNet",
+  "image_size": 224,
+  "seed": 20260910,
+  "training": {
+    "optimizer": "AdamW",
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "batch_size": 32,
+    "max_epochs": 30,
+    "early_stopping_metric": "valid_macro_f1",
+    "early_stopping_patience": 5,
+    "class_weighting": "inverse_frequency_train_only"
+  },
+  "augmentation": {
+    "train_only": ["random_resized_crop", "horizontal_flip", "mild_color_jitter"],
+    "valid_test": ["resize", "center_crop"]
+  },
+  "primary_metrics": ["macro_f1", "ordinal_mae", "weighted_kappa"],
+  "secondary_metrics": ["accuracy", "per_class_precision", "per_class_recall", "per_class_f1", "confusion_matrix"],
+  "evaluation_policy": {
+    "valid": "model selection and early stopping only",
+    "test": "single final evaluation after configuration freeze",
+    "field": "separate; no FIELD_VALIDATED claim from KGCV"
+  },
+  "promotion_policy": {
+    "REFERENCE_to_REPRODUCED": "training run completes reproducibly on frozen snapshot with metric artifacts and config/seed recorded",
+    "REPRODUCED_to_CANDIDATE": "future candidate improves baseline on primary metrics without degrading critical class behavior",
+    "VALIDATED": "requires fixed test evaluation under MODEL_ACCEPTANCE_POLICY",
+    "FIELD_VALIDATED": "requires independent Nongtori field holdout"
+  },
+  "known_limitations": [
+    "Maturity 2 and 3 are absent from snapshot v001 because KGCV turning-red boundary is unresolved",
+    "external KGCV domain only; no Nongtori field images included",
+    "overripe is mapped to maturity 4 and Grade JM but grade is not the target of this baseline"
+  ]
+}
