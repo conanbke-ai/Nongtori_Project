@@ -39,6 +39,8 @@
 
 ### 현재 구현 완료 핵심
 
+- canonical Farm code는 `M / C1 / C2 / U`
+- Drive 상위 분류명 `응애피해농가(C)`의 `C`는 canonical Farm code가 아니며, `C1/C2` source를 묶는 폴더 분류로 취급
 - 원본 Google Sheet/사진/영상 read-only
 - incremental ingestion + revision ledger
 - STR/LEF task eligibility 분리
@@ -59,23 +61,24 @@
 
 - live Sheet `농가_딸기데이터`에서 ID가 있는 active metadata row 110개 확인
 - STR 98 / LEF 12
-- 같은 `Original_No`가 여러 sample row에 사용되는 shared-source 사례 확인
-- 같은 `Original_No`가 서로 다른 Zone에 재사용된 context-conflict 사례 확인
-- M/C/U 촬영 폴더를 Drive에서 직접 열람했으나 현재 모두 비어 있음
+- same `Original_No` shared-source 사례 확인
+- same `Original_No`가 서로 다른 Zone에 재사용된 context-conflict 사례 확인
+- Drive 상위 분류 폴더 `남자친구농가(M)`, `응애피해농가(C)`, `외부플랫폼(U)`를 직접 열람했으나 현재 physical 촬영 파일은 없음
+- `응애피해농가(C)`를 `Farm=C`로 해석하지 않음; C1/C2는 Sheet/manifest의 canonical farm_id로 별도 유지
 - 따라서 field image SHA-256과 실제 materialized Working Asset은 아직 생성할 수 없음
 
 ### 현재 외부 입력 blocker
 
 1. DATA-RIP-002 full raw annotation archive가 현재 실행 환경에 없음
 2. Zenodo KGCV 원본 ZIP은 대용량(약 2.4GB / 4.3GB)이라 현재 세션에서 metadata-only 추출이 불가
-3. Drive의 농가별 촬영 폴더가 현재 비어 있어 actual field image asset이 없음
+3. Drive 상위 농가/source 분류 폴더에 actual field image asset이 없음
 4. 따라서 KGCV per-class/turning-red 실제 분포와 field image SHA-256을 포함한 Training Snapshot v001은 아직 생성 불가
 
 ### 다음 실행 핵심
 
 1. KGCV raw tagged/random annotation 확보 후 `audit-kgcv` + expectation gate
 2. class/decimal-stage distribution 검토 후 turning-red empirical calibration
-3. field 사진이 `촬영/<농가>` 폴더에 연결되면 shared-source-aware rename-preflight/materialize-working-assets 실행
+3. field 사진이 연결되면 canonical `farm_id=M/C1/C2/U`를 기준으로 shared-source-aware rename-preflight/materialize-working-assets 실행
 4. Field + External actual normalized manifest 생성
 5. actual dedup/split manifest 및 Training Snapshot v001 생성
 
