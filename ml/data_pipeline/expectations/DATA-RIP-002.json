@@ -1,0 +1,16 @@
+{
+  "expectation_id": "EXPECT-DATA-RIP-002-v1",
+  "source_id": "DATA-RIP-002",
+  "provenance": {
+    "canonical_origin": "KGCV Strawberry / Zenodo 10957909",
+    "huggingface_repo": "Project-AgML/strawberry_growth_detection",
+    "revision": "70f6277a609fb80fa18b431dccd04b9f09c876e0",
+    "evidence_checked_at": "2026-09-10"
+  },
+  "raw_audit_expectation": {
+    "file_count_field": "json_files",
+    "file_count": 1477,
+    "annotation_count": 3997
+  },
+  "notes": "Only total rows/boxes and schema semantics are currently evidence-locked. Per-class and turning-red decimal-stage distributions must be produced by the raw annotation audit; no threshold is precommitted."
+}
