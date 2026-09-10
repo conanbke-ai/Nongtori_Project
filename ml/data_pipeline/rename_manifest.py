@@ -9,22 +9,23 @@ from typing import Any, Iterable
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"}
 BLOCKING_STATUSES = {
-    "FILE_COUNT_MISMATCH",
-    "SHEET_ROW_COUNT_MISMATCH",
+    "SOURCE_ASSET_CONTEXT_CONFLICT",
+    "AMBIGUOUS_SOURCE_FILE",
+    "SOURCE_ASSET_COUNT_MISMATCH",
     "MISSING_SOURCE_FILE",
     "EXTRA_SOURCE_FILE",
     "EMPTY_FINAL_NAME",
     "DUPLICATE_FINAL_NAME",
-    "DUPLICATE_ORIGINAL_NO",
     "UNMATCHED_ORIGINAL_NO",
     "UNSUPPORTED_EXTENSION",
     "TARGET_FILE_ALREADY_EXISTS",
     "INVALID_METADATA",
 }
 MANIFEST_COLUMNS = [
-    "farm_id", "capture_session_id", "source_file", "source_original_no", "target_final_name",
-    "match_strategy", "validation_status", "content_sha256", "working_object_path",
-    "working_session_path", "rollback_source_file", "rollback_target_file",
+    "farm_id", "capture_session_id", "sample_id", "source_asset_key", "source_file",
+    "source_original_no", "target_final_name", "asset_relation", "match_strategy",
+    "validation_status", "content_sha256", "working_object_path", "working_session_path",
+    "rollback_source_file", "rollback_target_file",
 ]
 
 
@@ -72,12 +73,20 @@ def _active_metadata_rows(rows: Iterable[dict[str, Any]], *, farm_id: str) -> li
     return active
 
 
+def _source_asset_key(*, farm_id: str, capture_session_id: str, original_no: str) -> str:
+    return f"{farm_id}:{capture_session_id}:{original_no}"
+
+
+def _context_signature(row: dict[str, Any]) -> tuple[str, str, str]:
+    return (_text(row.get("Date")), _text(row.get("Zone")), _text(row.get("DataType")))
+
+
 def preflight_rename(metadata_rows: Iterable[dict[str, Any]], source_dir: Path, *, farm_id: str, capture_session_id: str) -> tuple[list[dict[str, str]], dict[str, Any]]:
     rows = _active_metadata_rows(metadata_rows, farm_id=farm_id)
     assets = list_assets(source_dir)
     statuses: list[str] = []
 
-    original_counts: dict[str, int] = {}
+    rows_by_original: dict[str, list[dict[str, Any]]] = {}
     final_counts: dict[str, int] = {}
     for row in rows:
         original = normalize_original_no(row.get("Original_No"))
@@ -85,77 +94,105 @@ def preflight_rename(metadata_rows: Iterable[dict[str, Any]], source_dir: Path, 
         if not original:
             statuses.append("INVALID_METADATA")
         else:
-            original_counts[original] = original_counts.get(original, 0) + 1
+            rows_by_original.setdefault(original, []).append(row)
         if not final_name:
             statuses.append("EMPTY_FINAL_NAME")
         else:
             final_counts[final_name.lower()] = final_counts.get(final_name.lower(), 0) + 1
-    if any(v > 1 for v in original_counts.values()):
-        statuses.append("DUPLICATE_ORIGINAL_NO")
     if any(v > 1 for v in final_counts.values()):
         statuses.append("DUPLICATE_FINAL_NAME")
+
+    conflicting_originals: set[str] = set()
+    for original, group in rows_by_original.items():
+        contexts = {_context_signature(row) for row in group}
+        if len(contexts) > 1:
+            conflicting_originals.add(original)
+            statuses.append("SOURCE_ASSET_CONTEXT_CONFLICT")
 
     asset_by_original: dict[str, list[Path]] = {}
     for asset in assets:
         asset_by_original.setdefault(asset.original_no, []).append(asset.path)
         if asset.path.suffix.lower() not in SUPPORTED_EXTENSIONS:
             statuses.append("UNSUPPORTED_EXTENSION")
+    if any(len(paths) > 1 for paths in asset_by_original.values()):
+        statuses.append("AMBIGUOUS_SOURCE_FILE")
 
     manifests: list[dict[str, str]] = []
     matched_paths: set[Path] = set()
-    unmatched_rows: list[dict[str, Any]] = []
+    unmatched_originals: list[str] = []
 
-    for row in rows:
-        original = normalize_original_no(row.get("Original_No"))
-        final_name = _text(row.get("Final_Name"))
+    for original, group in rows_by_original.items():
+        if original in conflicting_originals:
+            continue
         options = asset_by_original.get(original, [])
         if len(options) == 1:
             path = options[0]
             matched_paths.add(path)
-            manifests.append({
-                "farm_id": farm_id,
-                "capture_session_id": capture_session_id,
-                "source_file": path.name,
-                "source_original_no": original,
-                "target_final_name": final_name,
-                "match_strategy": "ORIGINAL_NO_EXACT",
-                "validation_status": "READY_TO_RENAME",
-                "content_sha256": sha256_file(path),
-                "working_object_path": "",
-                "working_session_path": "",
-                "rollback_source_file": final_name,
-                "rollback_target_file": path.name,
-            })
-        else:
-            unmatched_rows.append(row)
-
-    remaining_assets = [a.path for a in assets if a.path not in matched_paths]
-    if unmatched_rows:
-        if len(unmatched_rows) == len(remaining_assets) and remaining_assets:
-            for row, path in zip(unmatched_rows, sorted(remaining_assets, key=lambda p: p.name.lower())):
+            digest = sha256_file(path)
+            relation = "SHARED_SOURCE_ASSET" if len(group) > 1 else "ONE_TO_ONE_SOURCE_ASSET"
+            asset_key = _source_asset_key(farm_id=farm_id, capture_session_id=capture_session_id, original_no=original)
+            for row in group:
+                final_name = _text(row.get("Final_Name"))
                 manifests.append({
                     "farm_id": farm_id,
                     "capture_session_id": capture_session_id,
+                    "sample_id": _text(row.get("ID")),
+                    "source_asset_key": asset_key,
                     "source_file": path.name,
-                    "source_original_no": normalize_original_no(row.get("Original_No")),
-                    "target_final_name": _text(row.get("Final_Name")),
-                    "match_strategy": "NATURAL_ORDER_FALLBACK",
-                    "validation_status": "READY_WITH_WARNING",
-                    "content_sha256": sha256_file(path),
+                    "source_original_no": original,
+                    "target_final_name": final_name,
+                    "asset_relation": relation,
+                    "match_strategy": "ORIGINAL_NO_EXACT",
+                    "validation_status": "READY_TO_RENAME",
+                    "content_sha256": digest,
                     "working_object_path": "",
                     "working_session_path": "",
-                    "rollback_source_file": _text(row.get("Final_Name")),
+                    "rollback_source_file": final_name,
                     "rollback_target_file": path.name,
                 })
+        else:
+            unmatched_originals.append(original)
+
+    remaining_assets = [a.path for a in assets if a.path not in matched_paths]
+    if unmatched_originals:
+        fallback_groups = [rows_by_original[o] for o in unmatched_originals if o not in conflicting_originals]
+        if len(fallback_groups) == len(remaining_assets) and remaining_assets:
+            for group, path in zip(fallback_groups, sorted(remaining_assets, key=lambda p: p.name.lower())):
+                digest = sha256_file(path)
+                relation = "SHARED_SOURCE_ASSET" if len(group) > 1 else "ONE_TO_ONE_SOURCE_ASSET"
+                original = normalize_original_no(group[0].get("Original_No"))
+                asset_key = _source_asset_key(farm_id=farm_id, capture_session_id=capture_session_id, original_no=original)
+                for row in group:
+                    manifests.append({
+                        "farm_id": farm_id,
+                        "capture_session_id": capture_session_id,
+                        "sample_id": _text(row.get("ID")),
+                        "source_asset_key": asset_key,
+                        "source_file": path.name,
+                        "source_original_no": original,
+                        "target_final_name": _text(row.get("Final_Name")),
+                        "asset_relation": relation,
+                        "match_strategy": "NATURAL_ORDER_FALLBACK",
+                        "validation_status": "READY_WITH_WARNING",
+                        "content_sha256": digest,
+                        "working_object_path": "",
+                        "working_session_path": "",
+                        "rollback_source_file": _text(row.get("Final_Name")),
+                        "rollback_target_file": path.name,
+                    })
+                matched_paths.add(path)
             remaining_assets = []
         else:
             statuses.append("UNMATCHED_ORIGINAL_NO")
 
-    if len(rows) != len(assets):
-        statuses.extend(["FILE_COUNT_MISMATCH", "SHEET_ROW_COUNT_MISMATCH"])
+    expected_source_assets = len(rows_by_original)
+    if expected_source_assets != len(assets):
+        statuses.append("SOURCE_ASSET_COUNT_MISMATCH")
     if remaining_assets:
         statuses.append("EXTRA_SOURCE_FILE")
-    if any(m["source_file"] == "" for m in manifests) or len(manifests) < len(rows):
+
+    represented_samples = {m["sample_id"] for m in manifests}
+    if len(represented_samples) < len(rows):
         statuses.append("MISSING_SOURCE_FILE")
 
     blocking = sorted(set(statuses) & BLOCKING_STATUSES)
@@ -163,8 +200,10 @@ def preflight_rename(metadata_rows: Iterable[dict[str, Any]], source_dir: Path, 
         "farm_id": farm_id,
         "capture_session_id": capture_session_id,
         "sheet_rows": len(rows),
+        "expected_source_assets": expected_source_assets,
         "source_files": len(assets),
-        "matched": len(manifests),
+        "manifest_rows": len(manifests),
+        "shared_asset_groups": sum(1 for group in rows_by_original.values() if len(group) > 1),
         "blocking_errors": blocking,
         "status": "PREFLIGHT_BLOCKED" if blocking else "PREFLIGHT_PASSED",
     }
