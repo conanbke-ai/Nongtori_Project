@@ -18,15 +18,16 @@
 | AI Data Pipeline v1 Core | `main` / merged PR #3 | MERGED_BASELINE | owner 없음 | 2026-09-10 | Dataset Registry/provider/audit baseline 유지 |
 | Normalize / Dedup / Split / Training Snapshot v1 | `main` / merged PR #4 | MERGED_BASELINE | owner 없음 | 2026-09-10 | label normalize, exact dedup, atomic split, immutable snapshot 유지 |
 | Farm-scoped Data Ingestion Design | `main` / merged PR #5 + follow-up docs | DESIGN_FROZEN | owner 없음 | 2026-09-10 | baseline 1회 + incremental scan/change detection + append-only revision + content-hash asset reuse |
-| Incremental Ingestion + Field Task Audit v1 | `main` / merged PR #6 | MERGED_BASELINE | owner 없음 | 2026-09-10 | `NEW/UPDATED/REMOVED/UNCHANGED`, revision ledger, field-level diff, STR/LEF task 분리, blank template row skip, CLI/CI 완료 |
-| Farm-scoped Rename Manifest + Working Asset Reuse v1 | `main` / merged PR #7 | MERGED_BASELINE | owner 없음 | 2026-09-10 | Original_No exact 우선 매칭, natural-order fallback, blocking preflight, SHA-256 content store reuse, session Final_Name working view, rename/rollback manifest, CLI/tests/CI 완료. 원본 파일 직접 변경 금지. |
+| Incremental Ingestion + Field Task Audit v1 | `main` / merged PR #6 | MERGED_BASELINE | owner 없음 | 2026-09-10 | `NEW/UPDATED/REMOVED/UNCHANGED`, revision ledger, field-level diff, STR/LEF task 분리 완료 |
+| Farm-scoped Rename Manifest + Working Asset Reuse v1 | `main` / merged PR #7 | MERGED_BASELINE | owner 없음 | 2026-09-10 | Original_No exact, blocking preflight, SHA-256 object store reuse, Final_Name working view, rollback manifest 완료 |
+| External Annotation Audit v1 | `main` / merged PR #8 | MERGED_BASELINE | owner 없음 | 2026-09-10 | Strawberry-DS YOLO audit, KGCV LabelMe/decimal-stage audit, source-specific CLI/tests/CI 완료. `turning red` threshold는 실제 분포+field calibration 전까지 발명 금지. |
 
 ## 다음 canonical workstream
 
 ```text
-DATA-RIP-001 / DATA-RIP-002 Annotation Audit
-→ AgML decimal-stage / turning red calibration
-→ Actual Normalized Manifest
+실제 DATA-RIP-001 / DATA-RIP-002 raw annotation audit 실행
+→ AgML turning-red empirical calibration
+→ Actual Field + External Normalized Manifest
 → Actual Dedup / Split
 → Training Snapshot v001
 → Baseline Model
@@ -35,51 +36,30 @@ DATA-RIP-001 / DATA-RIP-002 Annotation Audit
 
 ### 현재 구현 완료 핵심
 
-- Google Sheet/원본 사진·영상은 read-only canonical source
-- 최초 1회 baseline 이후 전체 재복사 금지
-- 이후 source는 전체를 비교하되 `NEW/UPDATED/REMOVED/UNCHANGED` 판정
-- unchanged는 새 revision 생성 안 함
-- updated는 새 revision append + changed fields diff
-- removed는 물리 삭제 없이 `REMOVED_FROM_SOURCE`
-- Field ripeness task는 `STR`만 eligible
-- `LEF`는 `NON_FRUIT_RIPENESS_TARGET`로 명시 제외
-- ID 없는 template/빈 행은 ingestion/normalize 대상에서 제외
-- `Original_No` exact match 우선
-- blocking mismatch 시 working materialization 금지
-- content SHA-256 object store로 동일 asset 재사용
-- 세션별 `Final_Name` working view + rollback manifest 생성
-- 원본 사진/영상 직접 rename/overwrite 금지
-- 최소 데이터 경계는 `farm_id + capture_session_id`
-- Training Snapshot은 physical full copy가 아니라 revision/hash 집합 manifest
+- 원본 Google Sheet/사진/영상 read-only
+- incremental ingestion + revision ledger
+- STR/LEF task eligibility 분리
+- farm/capture-session rename preflight + content-addressed working asset reuse
+- Strawberry-DS 6-class YOLO annotation audit parser
+- KGCV 7 main stage + diameter/length/decimal_stage annotation audit parser
+- KGCV decimal_stage를 global maturity가 아닌 main-stage 내부 진행도(DS-0..DS-10 equivalent)로 취급
+- `turning red` Maturity 2/3 threshold는 관측 분포와 field calibration 전까지 `DO_NOT_INVENT_THRESHOLD`
+- CI는 `tests/test_*.py` 전체 discovery
 
-### 다음 구현 핵심
+### 다음 실행 핵심
 
-1. DATA-RIP-001 실제 annotation/class distribution audit
-2. DATA-RIP-002 실제 annotation/class/decimal-stage audit
-3. AgML `turning red`를 Maturity 2/3로 나누는 calibration 기준 확정
-4. 실제 field/external normalized manifest 생성
-5. 실제 dedup/split manifest 생성
-6. Training Snapshot v001 생성
+1. 실제 추출된 DATA-RIP-001 annotation에 `audit-strawberry-ds` 실행
+2. 실제 추출된 DATA-RIP-002 tagged/random JSON에 `audit-kgcv` 실행
+3. class/decimal-stage distribution 검토 후 turning-red threshold calibration
+4. Field + External actual normalized manifest 생성
+5. actual dedup/split manifest 및 Training Snapshot v001 생성
 
 새 AI/data 구현은 `docs/DESIGN_FREEZE_V1.md`, `docs/LABEL_MAPPING_POLICY.md`, `docs/DATA_INGESTION_MANAGEMENT.md`, `docs/MULTI_FARM_DATA_MODEL.md`를 기준으로 한다.
 
-## 작업 시작 체크
-
-1. `main` 실제 구현 확인
-2. Design Freeze 확인
-3. ACTIVE_WORK 확인
-4. open PR 확인
-5. remote branch budget 확인
-6. docs/설계와 기존 asset 확인
-7. active lease 확인
-8. `ALREADY_DONE / IN_PROGRESS / NEW / BLOCKED` 판정
-9. NEW일 때만 branch/lease 확보
-
 ## Branch hygiene
 
-- 같은 목적의 `v2/v3/final/actual/real` branch 생성 금지
 - feature branch는 실제 독립 구현 workstream에만 생성
-- PR merge 후 GitHub 자동 삭제를 기본값으로 사용
+- PR merge 후 GitHub 자동 삭제
 - 기준 상태 보존은 backup branch보다 tag 우선
 
 ## 데이터 안전
