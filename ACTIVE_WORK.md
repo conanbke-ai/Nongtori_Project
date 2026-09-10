@@ -20,12 +20,13 @@
 | Farm-scoped Data Ingestion Design | `main` / merged PR #5 + follow-up docs | DESIGN_FROZEN | owner 없음 | 2026-09-10 | baseline 1회 + incremental scan/change detection + append-only revision + content-hash asset reuse |
 | Incremental Ingestion + Field Task Audit v1 | `main` / merged PR #6 | MERGED_BASELINE | owner 없음 | 2026-09-10 | `NEW/UPDATED/REMOVED/UNCHANGED`, revision ledger, field-level diff, STR/LEF task 분리 완료 |
 | Farm-scoped Rename Manifest + Working Asset Reuse v1 | `main` / merged PR #7 | MERGED_BASELINE | owner 없음 | 2026-09-10 | Original_No exact, blocking preflight, SHA-256 object store reuse, Final_Name working view, rollback manifest 완료 |
-| External Annotation Audit v1 | `main` / merged PR #8 | MERGED_BASELINE | owner 없음 | 2026-09-10 | Strawberry-DS YOLO audit, KGCV LabelMe/decimal-stage audit, source-specific CLI/tests/CI 완료. `turning red` threshold는 실제 분포+field calibration 전까지 발명 금지. |
+| External Annotation Audit v1 | `main` / merged PR #8 | MERGED_BASELINE | owner 없음 | 2026-09-10 | Strawberry-DS YOLO audit, KGCV LabelMe/decimal-stage audit, source-specific CLI/tests/CI 완료 |
+| Actual Audit Evidence Gate v1 | `main` / merged PR #9 | MERGED_BASELINE | owner 없음 | 2026-09-10 | Strawberry-DS canonical 247/1062/class-count expectation 고정, derivative mismatch 감지, KGCV 1477/3997/schema expectation 고정, raw per-class/turning-red 분포 미확보를 명시적 blocker로 유지 |
 
 ## 다음 canonical workstream
 
 ```text
-실제 DATA-RIP-001 / DATA-RIP-002 raw annotation audit 실행
+실제 raw annotation 확보/실행
 → AgML turning-red empirical calibration
 → Actual Field + External Normalized Manifest
 → Actual Dedup / Split
@@ -42,19 +43,29 @@
 - farm/capture-session rename preflight + content-addressed working asset reuse
 - Strawberry-DS 6-class YOLO annotation audit parser
 - KGCV 7 main stage + diameter/length/decimal_stage annotation audit parser
-- KGCV decimal_stage를 global maturity가 아닌 main-stage 내부 진행도(DS-0..DS-10 equivalent)로 취급
+- KGCV decimal_stage를 global maturity가 아닌 main-stage 내부 진행도로 취급
 - `turning red` Maturity 2/3 threshold는 관측 분포와 field calibration 전까지 `DO_NOT_INVENT_THRESHOLD`
+- Strawberry-DS canonical expectation: 247 label/image pairs, 1,062 boxes; Project-AgML derivative의 1,083-box 표기는 자동 canonical 대체 금지
+- DATA-RIP-002 expectation: 1,477 rows / 3,997 boxes; per-class/decimal-stage 분포는 raw audit 전 미확정
+- actual audit report와 expectation을 비교하는 MATCH/MISMATCH gate 구현
 - CI는 `tests/test_*.py` 전체 discovery
+
+### 현재 외부 입력 blocker
+
+1. DATA-RIP-002 full raw annotation archive가 현재 실행 환경에 없음
+2. 연결된 Drive에는 `딸기_프로젝트` Sheet와 농가별 `촬영` 폴더 구조는 보이나 실제 field image 파일이 enumerable하지 않음
+3. 따라서 KGCV per-class/turning-red 실제 분포와 field image SHA-256을 포함한 Training Snapshot v001은 아직 생성 불가
 
 ### 다음 실행 핵심
 
-1. 실제 추출된 DATA-RIP-001 annotation에 `audit-strawberry-ds` 실행
-2. 실제 추출된 DATA-RIP-002 tagged/random JSON에 `audit-kgcv` 실행
+1. 실제 추출된 DATA-RIP-001 annotation에 `audit-strawberry-ds` 실행 + expectation gate
+2. 실제 추출된 DATA-RIP-002 tagged/random JSON에 `audit-kgcv` 실행 + expectation gate
 3. class/decimal-stage distribution 검토 후 turning-red threshold calibration
-4. Field + External actual normalized manifest 생성
-5. actual dedup/split manifest 및 Training Snapshot v001 생성
+4. field 이미지가 연결되면 rename-preflight/materialize-working-assets 실행
+5. Field + External actual normalized manifest 생성
+6. actual dedup/split manifest 및 Training Snapshot v001 생성
 
-새 AI/data 구현은 `docs/DESIGN_FREEZE_V1.md`, `docs/LABEL_MAPPING_POLICY.md`, `docs/DATA_INGESTION_MANAGEMENT.md`, `docs/MULTI_FARM_DATA_MODEL.md`를 기준으로 한다.
+새 AI/data 구현은 `docs/DESIGN_FREEZE_V1.md`, `docs/LABEL_MAPPING_POLICY.md`, `docs/DATA_INGESTION_MANAGEMENT.md`, `docs/MULTI_FARM_DATA_MODEL.md`, `docs/EXTERNAL_DATA_AUDIT_EVIDENCE.md`를 기준으로 한다.
 
 ## Branch hygiene
 
