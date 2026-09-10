@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlparse
 
 from ..models import DownloadResult, SourceRecord
 from .base import ProviderAdapter
@@ -23,10 +24,11 @@ class MendeleyAdapter(ProviderAdapter):
         output_dir = Path(output_dir)
         downloaded: list[Path] = []
         entries: list[dict[str, object]] = []
-        for item in files:
+        for index, item in enumerate(files, start=1):
             url = item["content_details"]["download_url"]
-            destination = output_dir / item["filename"]
+            filename = item.get("filename") or item.get("name") or Path(urlparse(url).path).name or f"mendeley-file-{index}"
+            destination = output_dir / filename
             meta = stream_download(url, destination)
             downloaded.append(destination)
-            entries.append({"filename": item["filename"], **meta})
+            entries.append({"filename": filename, **meta})
         return DownloadResult(source.source_id, source.provider, output_dir, tuple(downloaded), {"api_url": api_url, "files": entries})
