@@ -10,8 +10,9 @@
 2. 새 작물/분석 규칙이 추가되어도 기존 코드 수정이 최소화된다.
 3. AI 결과와 실제 농작업 의사결정 정책을 분리한다.
 4. 현재 수기 위치/영상 방식과 미래 Robot 연계를 Adapter 경계로 분리한다.
-5. 현장 원본 데이터는 read-only source로 보존하고 ingestion/rename/학습은 Working Copy와 immutable snapshot에서 수행한다.
+5. 현장 원본 데이터는 read-only source로 보존하고 ingestion/rename/학습은 revisioned working store와 immutable snapshot manifest에서 수행한다.
 6. 데이터 관리 경계는 최소 `farm_id + capture_session_id`로 유지한다.
+7. 최초 baseline 이후 전체 재복사 대신 source scan + change detection + append-only revision을 사용한다.
 
 ## 2. 전체 구조
 
@@ -49,7 +50,7 @@ Sensor / Weather / RGB / Thermal / Manual / Dataset / Video
 - use case 처리 순서
 - Adapter/Repository/Strategy 호출
 - 분석 세션·tracking 결과 조합
-- ingestion preflight → manifest → working copy → rename → post-audit orchestration
+- source scan → change detection → revision ledger → preflight → manifest → post-audit orchestration
 
 금지: UI 의존, SQL 직접 작성, 외부 API 응답 구조 직접 의존.
 
@@ -57,13 +58,13 @@ Sensor / Weather / RGB / Thermal / Manual / Dataset / Video
 
 후보:
 
-`Crop`, `Observation`, `Environment`, `Growth`, `Quality`, `Disease`, `Pest`, `Harvest`, `Alert`, `AnalysisResult`, `FruitTrack`, `RipenessResult`, `QualityResult`, `UsageDecision`, `LocationContext`, `MarketPriceObservation`, `PriceForecastResult`, `SettlementEstimateResult`, `DataIngestionJob`, `SourceSnapshot`, `AssetMatch`, `RenameManifest`, `IngestionAuditResult`.
+`Crop`, `Observation`, `Environment`, `Growth`, `Quality`, `Disease`, `Pest`, `Harvest`, `Alert`, `AnalysisResult`, `FruitTrack`, `RipenessResult`, `QualityResult`, `UsageDecision`, `LocationContext`, `MarketPriceObservation`, `PriceForecastResult`, `SettlementEstimateResult`, `DataIngestionJob`, `SourceScan`, `SourceRevision`, `AssetRevision`, `ChangeSet`, `AssetMatch`, `RenameManifest`, `IngestionAuditResult`.
 
 Domain은 framework, DB, model filename, 외부 API를 모른다.
 
 ### Repository
 
-저장/조회만 담당한다. `응애 의심`, `수확 적기`, `JM`, `JAM`, 파일 match/rename 정책 같은 비즈니스 판단은 금지한다.
+저장/조회만 담당한다. `응애 의심`, `수확 적기`, `JM`, `JAM`, 파일 match/rename/change 판단 같은 비즈니스 판단은 금지한다.
 
 ### Infrastructure / Adapter
 
@@ -76,7 +77,8 @@ Domain은 framework, DB, model filename, 외부 API를 모른다.
 - `DatasetAdapter`
 - `FileSystemAssetAdapter`
 - `ExifMetadataAdapter`
-- `SourceExportAdapter`
+- `SourceScannerAdapter`
+- `ContentHashAdapter`
 - `ModelInferenceAdapter`
 - `TrackerAdapter`
 - `LocationContextProvider`
@@ -134,9 +136,11 @@ Robot Navigation / Localization
 ```text
 Google Sheet / Raw Field Assets      External Dataset Providers
           ↓ READ ONLY                         ↓ Provider Adapters
- Source Export / Working Copy                  Raw
+     Source Scan                              Raw
           ↓                                     ↓
- Farm + Capture Session Boundary          Source/License Audit
+   Change Detection                    Source/License Audit
+          ↓                                     ↓
+Revision Ledger / Working Asset Store          │
           └──────────────────┬──────────────────┘
                              ↓
                        Data Audit
@@ -147,7 +151,7 @@ Google Sheet / Raw Field Assets      External Dataset Providers
                              ↓
                    Dedup / Split
                              ↓
-                  Immutable Snapshot
+           Immutable Training Snapshot Manifest
                              ↓
                     Train / Evaluate
 ```
@@ -156,27 +160,27 @@ live Sheet와 raw field/external dataset을 직접 학습 입력으로 사용하
 
 Field ingestion 상세 규칙은 `DATA_INGESTION_MANAGEMENT.md`를 canonical 기준으로 사용한다.
 
-핵심 경계:
-
-```text
-Farm
-└─ Capture Session
-   └─ Assets / Metadata / Working Copy / Ingestion Audit
-```
-
-다른 농가 또는 다른 capture session의 파일을 하나의 rename/audit job에 혼합하지 않는다.
+핵심 원칙:
+- 최초 1회 baseline
+- 이후 source 전체는 비교를 위해 읽되 NEW/UPDATED/REMOVED/UNCHANGED만 판정
+- 저장/복사는 NEW/UPDATED만 수행
+- REMOVED는 물리 삭제하지 않고 상태 기록
+- 동일 content hash asset은 기존 working asset을 재사용
+- Training Snapshot은 물리 파일 전체 재복사가 아니라 revision/hash 집합 manifest로 불변성을 보장
 
 ## 8. 사용자 영역 경계
 
 ### Farmer / Worker UI
-수집/분석 결과와 현장 행동 중심으로 구성한다. Original_No, rename manifest, dedup/split hash 등 내부 데이터 엔지니어링 요소를 기본 노출하지 않는다.
+수집/분석 결과와 현장 행동 중심으로 구성한다. Original_No, rename manifest, revision ledger, dedup/split hash 등 내부 데이터 엔지니어링 요소를 기본 노출하지 않는다.
 
 ### Operator Data Center
 운영자/데이터 관리자 전용 영역에서 다음을 관리한다.
 - 농가별 수집 현황
+- NEW / UPDATED / REMOVED / INVALID 변화
 - capture session별 사진/영상/센서 asset
 - file ↔ metadata preflight audit
-- working copy / canonical rename
+- revision history / changed fields
+- canonical rename
 - 누락/초과/중복/충돌
 - dataset/snapshot 상태
 
@@ -204,11 +208,11 @@ UI → API → Service → Domain/Port
 
 - UI → Repository 직접 접근 금지
 - Controller → Repository 직접 접근 금지
-- Repository → 비즈니스/작물/rename 판단 금지
+- Repository → 비즈니스/작물/rename/change 판단 금지
 - Domain → Framework/DB/API 의존 금지
 - Strategy/Decision Policy → UI 의존 금지
 - model weight/framework → Infrastructure
-- filesystem/EXIF/Google export 세부 구현 → Infrastructure Adapter
+- filesystem/EXIF/source scan/hash 세부 구현 → Infrastructure Adapter
 
 ## 11. 리팩토링 신호
 
@@ -219,7 +223,7 @@ UI → API → Service → Domain/Port
 - 작물별 `if crop` 반복 → Crop Strategy
 - AI 지원 여부가 UI에 하드코딩 → Capability Registry
 - 모델 loading/inference/postprocess 혼합 → Inference Pipeline
-- 파일 매칭/rename 정책이 Controller/UI에 존재 → Ingestion Strategy/Service로 이동
+- 파일 매칭/rename/change 정책이 Controller/UI에 존재 → Ingestion Strategy/Service로 이동
 
 ## 12. 환경
 
