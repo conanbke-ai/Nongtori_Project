@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from .farm_contract import validate_farm_code
+
 FIELD_MAPPING_VERSION = "MAP-FIELD-001-v1"
 ALLOWED_GRADES = {"SP", "HI", "MD", "JM", "NA"}
 ALLOWED_HEALTH = {"NOR", "MIT", "MIT_R", "ANT", "MAL", "OTH"}
@@ -41,6 +43,10 @@ def normalize_field_row(row: dict[str, Any], *, source_id: str = "DATA-FIELD-001
     sample_id = _text(row.get("ID"))
     if not sample_id:
         raise LabelContractError("field row requires ID")
+    try:
+        validate_farm_code(row.get("Farm"))
+    except ValueError as exc:
+        raise LabelContractError(f"field row {sample_id}: {exc}") from exc
     object_class = _text(row.get("Class")).upper()
     health = _text(row.get("Health")).upper()
     if health and health not in ALLOWED_HEALTH:
