@@ -43,10 +43,85 @@ Google Sheet `딸기_프로젝트`는 현장 원본의 working canonical source�
 - `JM`인데 세 실측값 일부가 NULL인 행은 의도적 미측정일 수 있다.
 - 따라서 `NULL = 오류`로 자동 판정하지 않는다.
 - 단, 해당 target이 필요한 regression task에는 사용할 수 없다.
-- `Grade=JM`과 `Health=MAL`은 독립 개념이다.
-- `JM`은 소과/기형/상품성 저하 등을 포함할 수 있고, `MAL`은 기형 health state다.
+- `Grade=JM`과 `Health=MAL`은 서로 다른 축이다.
+- `JM`은 실제 수확물 중 소과/기형/과숙/기타 상품성 저하를 포함할 수 있다.
+- `MAL`은 기형 health/state다.
+- 현장 정책에서는 `Health=MAL`인 수확물의 Grade는 반드시 `JM`이다. 역방향(`JM→MAL`)은 성립하지 않는다.
 
-## 5. 위치
+### Grade 기반 실제 수확 label
+
+현장 데이터에서는 Grade가 실제 수확 여부를 명시한다.
+
+```text
+Grade in {SP, HI, MD, JM} → 실제 수확
+Grade == NA                → 미수확
+```
+
+Normalize/Manifest에서는 다음을 derived field로 만든다.
+
+```text
+observed_harvest = true  if Grade in {SP, HI, MD, JM}
+observed_harvest = false if Grade == NA
+```
+
+`NA`는 unknown이 아니다. 후숙도/수확 적기 등의 이유로 수확하지 않은 개체다.
+
+Harvest Decision 모델에서 Grade는 target 생성에만 사용하고 입력 feature로 사용하지 않는다. 그렇지 않으면 target leakage가 발생한다.
+
+### Maturity와 Harvest는 분리
+
+- `Maturity=3 (Mature)`에서도 수확/미수확이 모두 가능하다.
+- 따라서 `Maturity=3 → HARVEST` 규칙을 만들지 않는다.
+- `Maturity=4`라고 해서 자동 `JM`도 아니다. 정상 완숙 과실은 SP/HI/MD가 될 수 있다.
+
+## 5. Label Mapping / Canonical phenology
+
+외부 데이터는 원본 label을 보존하고 다음 순서로 정규화한다.
+
+```text
+Source Native Label
+→ Canonical Phenology
+→ Nongtori Task Label
+```
+
+상세 기준은 `docs/LABEL_MAPPING_POLICY.md`가 canonical이다.
+
+핵심 기본값:
+
+```text
+GREEN_SMALL   → Maturity 0
+GREEN         → Maturity 0
+WHITE         → Maturity 1
+TURNING_EARLY → Maturity 2
+TURNING_MID   → Maturity 2
+TURNING_LATE  → Maturity 3
+RED_RIPE      → Maturity 4
+OVERRIPE      → Maturity 4 + Grade JM
+FLOWER        → ripeness task 제외
+```
+
+`OVERRIPE → Grade JM`은 과숙이라는 상품성 원인에 대한 task mapping이다. `Grade JM → OVERRIPE`, `Maturity 4 → JM`은 금지한다.
+
+외부 데이터가 실제 농가의 수확 행동을 제공하지 않는다면 `observed_harvest`를 임의 생성하지 않는다.
+
+## 6. Google Sheet schema 유지
+
+현재 Google Sheet schema는 가능하면 변경하지 않는다. 모델 편의를 위한 파생 필드는 Sheet가 아니라 Normalize/Manifest 계층에 둔다.
+
+예:
+
+- `canonical_stage`
+- `nongtori_maturity`
+- `nongtori_grade`
+- `grade_reason`
+- `observed_harvest`
+- `mapping_version`
+- `mapping_confidence`
+- `mapping_basis`
+
+새 원본 컬럼은 기존 26개 필드로 표현할 수 없는 새로운 ground truth가 실제로 필요한 경우에만 검토한다.
+
+## 7. 위치
 
 원본 source label을 보존한다.
 
@@ -68,7 +143,7 @@ zone = C
 
 `농가_베드길이`의 농가/동/베드 수/길이/비고를 위치 context에 사용할 수 있다. 철파이프는 Zone 내부 상대 위치 anchor로만 사용하며 `파이프 N개 = 공통 몇 m` 하드코딩을 금지한다.
 
-## 6. 영상
+## 8. 영상
 
 기존 `DataType=V`를 사용한다. 필요 시 별도 metadata에 다음을 추가한다.
 
@@ -80,7 +155,7 @@ zone = C
 
 동일 video/capture session과 동일 fruit track은 split을 넘지 않는다.
 
-## 7. 데이터 분리
+## 9. 데이터 분리
 
 사진:
 - row random split 금지
@@ -100,7 +175,7 @@ Field data:
 - `FIELD_TEST`는 독립 평가
 - tuning에 사용한 field set은 더 이상 pristine holdout이 아님
 
-## 8. Snapshot
+## 10. Snapshot
 
 학습 전에 다음을 고정한다.
 
@@ -109,6 +184,7 @@ snapshot_id: FIELD_PHOTO_v001
 source: 딸기_프로젝트
 source_tabs: [컬럼정보, 농가_딸기데이터, 농가_베드길이]
 schema_version: v1
+label_policy_version: ...
 manifest_hash: ...
 row_count: ...
 eligible_count_by_task: {}
@@ -118,7 +194,7 @@ created_at: ...
 
 Snapshot 이후에는 원본 Sheet 변경이 기존 실험 결과를 소급 변경하지 않는다.
 
-## 9. Missing / Invalid
+## 11. Missing / Invalid
 
 금지:
 - NULL을 임의 0으로 대입
@@ -128,11 +204,11 @@ Snapshot 이후에는 원본 Sheet 변경이 기존 실험 결과를 소급 변�
 
 Task별 required/optional field를 분리하고 exclusion reason을 manifest에 남긴다.
 
-## 10. 외부 데이터
+## 12. 외부 데이터
 
 외부 데이터는 Source Registry → Download → Audit → Normalize → Dedup → Split → Immutable Snapshot 단계를 거친다. 다운로드 성공은 학습 승인과 동일하지 않다.
 
-## 11. 가격 시나리오 날짜
+## 13. 가격 시나리오 날짜
 
 ```text
 source_harvest_date = Sheet 원본 provenance
@@ -141,7 +217,7 @@ scenario_date       = 가격 예측/백테스트 대상일
 
 `SCENARIO_BACKTEST`에서는 date feature를 `scenario_date` 기준으로 만들고, 당일 실제 가격은 모델 입력이 아니라 사후 `ACTUAL_MARKET_REFERENCE`로만 사용한다.
 
-## 12. 버전
+## 14. 버전
 
 - `DATA_SCHEMA_VERSION`
 - `DATASET_VERSION`
