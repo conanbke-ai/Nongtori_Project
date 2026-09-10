@@ -7,13 +7,28 @@
 - Branch budget: `main` 포함 최대 5개
 - Active workstream: 최대 3개
 - Validation branch: 최대 1개
-- 현재 remote branch 확인: `main`, `feat/application-source-integration`, `ui/tori-design-system-v1` = 3/5
+- 현재 remote branch 확인 기준: `main`, `feat/application-source-integration`, `ui/tori-design-system-v1` = 3/5
+- `feat/application-source-integration`은 PR #2 merge 완료 후 `CLEANUP_CANDIDATE`
 
 | Workstream | Canonical branch / PR | 상태 | Owner / Lease 경로 | 시작/최근 활동 | Acceptance Criteria / 다음 단계 |
 |---|---|---|---|---|---|
 | TORI UI System v1 | `main` / merged PR #1 | MERGED_BASELINE | owner 없음 / lease 없음 | 2026-09-08 | theme/token, 모바일 접근성, cat jelly paw cursor contract를 baseline으로 유지. 동일 foundation 재구현 금지. |
-| Nongtori Design Freeze v1 | `main` | DESIGN_FROZEN / DATA_WIP | owner 없음 / canonical docs | 2026-09-10 | `DESIGN_FREEZE_V1.md` 및 연결 정책 문서 반영·재조회 검증 완료. 다음 AI/data workstream은 Dataset Registry → Downloader → Audit → Normalize → Snapshot → Baseline → Optuna. 구조적 정책 변경 시 Design Review 재오픈. |
-| Canonical application source 편입 | `feat/application-source-integration` / Draft PR #2 | ACTIVE / CANONICAL | 기존 PR #2 writer 유지 / `app/`, `db/`, `drizzle/`, `public/`, `configs/`, `ml/`, `tests/`, `vendor/tori-ui/`, application build config 및 관련 docs | 2026-09-08 / 2026-09-10 | 병해충 종류 확장·농장관리 수확일지·판독 기록 협업·운영 현황 UI를 같은 workstream에서 이어간다. PR #2의 `docs/AI_DATA_MODEL_SOURCES.md`는 main Design Freeze 문서를 canonical로 보고 merge 전에 rebase/reconcile 필요. 새 병해충/운영센터 branch를 만들지 않는다. |
+| Nongtori Design Freeze v1 | `main` | DESIGN_FROZEN / DATA_WIP | owner 없음 / canonical docs | 2026-09-10 | `DESIGN_FREEZE_V1.md` 및 연결 정책 문서 반영·재조회 검증 완료. 구조적 정책 변경 시 Design Review 재오픈. |
+| Canonical application source 편입 | `main` / merged PR #2 | MERGED_BASELINE | owner 없음 / lease 종료 | 2026-09-08 / 2026-09-10 | 운영센터 application source, 병해충 확장, 수확일지/판독 협업, 공통 커서, DB/migration, tests, price-forecast scaffold를 main baseline으로 편입 완료. 브라우저 visual/mobile/E2E·실사용자 왕복·모델 성능 검증은 별도 후속 검증 항목으로 유지. |
+
+## 다음 canonical workstream
+
+```text
+Dataset Registry
+→ 외부 표본 자동수집
+→ Audit
+→ Normalize
+→ Snapshot
+→ Baseline Model
+→ Optuna
+```
+
+새 AI/data 구현은 `docs/DESIGN_FREEZE_V1.md`와 연결 정책 문서를 기준으로 한다.
 
 ## 작업 시작 체크
 
@@ -27,7 +42,7 @@
 8. `ALREADY_DONE / IN_PROGRESS / NEW / BLOCKED` 판정
 9. NEW일 때만 Acceptance Criteria 작성 후 branch/lease 확보
 
-현재 `feat/application-source-integration` 범위와 겹치는 앱/병해충/판독/운영센터 작업은 `IN_PROGRESS`로 판정하고 PR #2를 이어간다.
+앱/병해충/판독/운영센터의 기존 baseline은 이제 `main`이다. 같은 기능을 별도 branch에서 재구현하지 않는다.
 
 AI/data pipeline 신규 구현은 Design Freeze 계약을 기준으로 하고, 구조적 의미를 바꾸는 변경이면 코드보다 먼저 Design Review를 다시 연다.
 
