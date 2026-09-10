@@ -1,0 +1,20 @@
+{
+  "source_id": "DATA-RIP-002",
+  "source_type": "dataset",
+  "provider": "huggingface",
+  "title": "strawberry_growth_detection",
+  "original_url": "https://doi.org/10.5281/zenodo.10957909",
+  "version_or_revision": "70f6277a609fb80fa18b431dccd04b9f09c876e0",
+  "license": "CC-BY-4.0",
+  "license_checked_at": "2026-09-10",
+  "redistribution_allowed": "allowed_with_attribution",
+  "commercial_use": "allowed_with_attribution",
+  "status": "REVIEW_REQUIRED",
+  "retrieval": {
+    "repo_id": "Project-AgML/strawberry_growth_detection",
+    "revision": "70f6277a609fb80fa18b431dccd04b9f09c876e0"
+  },
+  "original_labels": ["flower", "green", "overripe", "red", "small g", "turning red", "white"],
+  "nongtori_mapping": {"status": "UNMAPPED_REVIEW_REQUIRED"},
+  "notes": "1,477 rows, 3,997 boxes, approx. 6.75 GB. Revision is pinned for reproducibility."
+}
