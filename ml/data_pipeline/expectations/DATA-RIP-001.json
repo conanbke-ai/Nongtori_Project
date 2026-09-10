@@ -1,0 +1,24 @@
+{
+  "expectation_id": "EXPECT-DATA-RIP-001-v1",
+  "source_id": "DATA-RIP-001",
+  "provenance": {
+    "canonical_origin": "Mendeley Strawberry-DS v1 / author publication",
+    "dataset_id": "z6dtfdpzz8",
+    "version": "1",
+    "evidence_checked_at": "2026-09-10"
+  },
+  "raw_audit_expectation": {
+    "file_count_field": "label_files",
+    "file_count": 247,
+    "annotation_count": 1062,
+    "class_counts": {
+      "Green": 455,
+      "White": 257,
+      "Early-Turning": 28,
+      "Turning": 35,
+      "Late-Turning": 54,
+      "Red": 233
+    }
+  },
+  "notes": "Canonical expectation is for the original Strawberry-DS source. A Project-AgML/Hugging Face derivative may report a different bbox total and must not silently replace this provenance."
+}
