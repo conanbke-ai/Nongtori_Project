@@ -6,6 +6,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 
+from .farm_contract import audit_farm_codes
+
 FRUIT_CLASS = "STR"
 LEAF_CLASS = "LEF"
 VALID_GRADES = {"SP", "HI", "MD", "JM", "NA"}
@@ -18,6 +20,7 @@ def _text(value: Any) -> str:
 
 def audit_field_rows(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
     rows = [dict(row) for row in rows if _text(row.get("ID"))]
+    farm_audit = audit_farm_codes(rows)
     class_counts = Counter(_text(row.get("Class")).upper() or "UNKNOWN" for row in rows)
     fruit_rows = [row for row in rows if _text(row.get("Class")).upper() == FRUIT_CLASS]
     leaf_rows = [row for row in rows if _text(row.get("Class")).upper() == LEAF_CLASS]
@@ -36,10 +39,13 @@ def audit_field_rows(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
     maturity3 = [row for row in fruit_rows if _text(row.get("Maturity")) == "3"]
     maturity3_harvested = [row for row in maturity3 if _text(row.get("Grade")).upper() != "NA"]
     maturity3_wait = [row for row in maturity3 if _text(row.get("Grade")).upper() == "NA"]
+    review_required = bool(mal_jm_violations or farm_audit["invalid_farm_rows"])
 
     return {
-        "status": "PASS" if not mal_jm_violations else "REVIEW_REQUIRED",
+        "status": "REVIEW_REQUIRED" if review_required else "PASS",
         "rows_with_id": len(rows),
+        "farm_counts": farm_audit["farm_counts"],
+        "invalid_farm_rows": farm_audit["invalid_farm_rows"],
         "class_counts": dict(sorted(class_counts.items())),
         "fruit_rows": len(fruit_rows),
         "leaf_rows": len(leaf_rows),
