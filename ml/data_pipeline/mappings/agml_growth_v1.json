@@ -1,0 +1,13 @@
+{
+  "source_id": "DATA-RIP-002",
+  "mapping_version": "MAP-RIP-002-v1",
+  "labels": {
+    "flower": {"canonical_stage": "FLOWER", "maturity": null, "confidence": "HIGH", "basis": "SOURCE_DEFINITION", "task_eligible": false, "exclusion_reason": "NON_FRUIT_RIPENESS_TARGET"},
+    "small g": {"canonical_stage": "GREEN_SMALL", "maturity": 0, "confidence": "HIGH", "basis": "SOURCE_DEFINITION"},
+    "green": {"canonical_stage": "GREEN", "maturity": 0, "confidence": "HIGH", "basis": "SOURCE_DEFINITION"},
+    "white": {"canonical_stage": "WHITE", "maturity": 1, "confidence": "HIGH", "basis": "SOURCE_DEFINITION"},
+    "turning red": {"canonical_stage": "", "maturity": null, "confidence": "UNMAPPED", "basis": "DECIMAL_STAGE", "task_eligible": false, "exclusion_reason": "AWAIT_DECIMAL_STAGE_AUDIT"},
+    "red": {"canonical_stage": "RED_RIPE", "maturity": 4, "confidence": "HIGH", "basis": "SOURCE_DEFINITION"},
+    "overripe": {"canonical_stage": "OVERRIPE", "maturity": 4, "grade": "JM", "grade_reason": "OVERRIPE", "confidence": "HIGH", "basis": "FIELD_POLICY"}
+  }
+}

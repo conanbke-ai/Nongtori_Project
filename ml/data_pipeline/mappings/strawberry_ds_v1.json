@@ -1,0 +1,12 @@
+{
+  "source_id": "DATA-RIP-001",
+  "mapping_version": "MAP-RIP-001-v1",
+  "labels": {
+    "Green": {"canonical_stage": "GREEN", "maturity": 0, "confidence": "HIGH", "basis": "SOURCE_DEFINITION"},
+    "White": {"canonical_stage": "WHITE", "maturity": 1, "confidence": "HIGH", "basis": "SOURCE_DEFINITION"},
+    "Early-Turning": {"canonical_stage": "TURNING_EARLY", "maturity": 2, "confidence": "HIGH", "basis": "COLOR_PERCENT_RANGE"},
+    "Turning": {"canonical_stage": "TURNING_MID", "maturity": 2, "confidence": "HIGH", "basis": "COLOR_PERCENT_RANGE"},
+    "Late-Turning": {"canonical_stage": "TURNING_LATE", "maturity": 3, "confidence": "HIGH", "basis": "COLOR_PERCENT_RANGE"},
+    "Red": {"canonical_stage": "RED_RIPE", "maturity": 4, "confidence": "HIGH", "basis": "SOURCE_DEFINITION"}
+  }
+}
