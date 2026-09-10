@@ -183,12 +183,15 @@ Sample Revision Set
 
 2026-09-10 live Sheet audit에서 다음 구조가 확인되었다.
 
+- canonical `Farm` code는 `M / C1 / C2 / U`
 - ID가 있는 active metadata row: 110
 - STR row: 98
 - LEF row: 12
 - 동일 `Original_No`가 여러 sample row에 사용되는 shared-source 사례 존재
 - 동일 `Original_No`가 서로 다른 Zone에서 재사용된 context-conflict 사례도 존재
-- Drive의 M/C/U 촬영 source folder는 현재 비어 있어 physical file 검증은 아직 수행할 수 없음
+- Drive 상위 분류 폴더명 `남자친구농가(M)`, `응애피해농가(C)`, `외부플랫폼(U)`는 canonical Farm code와 동일한 계층이 아니다.
+- 특히 Drive의 `응애피해농가(C)`는 `Farm=C`를 의미하지 않으며 `C1 / C2` source를 묶는 상위 분류로 취급한다.
+- 현재 해당 상위 분류 폴더들에는 physical 촬영 파일이 없어 실제 file/hash 검증은 아직 수행할 수 없음
 
 raw row/개인 field asset은 Git에 기록하지 않고 aggregate finding만 유지한다.
 
