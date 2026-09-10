@@ -1,0 +1,29 @@
+name: Data Pipeline Tests
+
+on:
+  pull_request:
+    paths:
+      - 'ml/data_pipeline/**'
+      - 'tests/test_data_pipeline.py'
+      - '.github/workflows/data-pipeline-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ml/data_pipeline/**'
+      - 'tests/test_data_pipeline.py'
+      - '.github/workflows/data-pipeline-tests.yml'
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python -m compileall -q ml/data_pipeline tests/test_data_pipeline.py
+      - name: Unit tests
+        run: python -m unittest tests/test_data_pipeline.py
+      - name: Registry CLI smoke
+        run: python -m ml.data_pipeline.cli list
