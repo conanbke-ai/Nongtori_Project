@@ -1,0 +1,27 @@
+name: KGCV Live Metadata Audit
+
+on:
+  pull_request:
+    paths:
+      - 'ml/data_pipeline/hf_metadata_audit.py'
+      - '.github/workflows/kgcv-live-audit.yml'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Audit KGCV metadata only
+        run: python -m ml.data_pipeline.hf_metadata_audit --output artifacts/kgcv_hf_metadata_audit.json
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kgcv-hf-metadata-audit
+          path: artifacts/kgcv_hf_metadata_audit.json
+          if-no-files-found: warn

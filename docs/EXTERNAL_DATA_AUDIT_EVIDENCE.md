@@ -1,6 +1,6 @@
 # External Data Audit Evidence
 
-Status: **PARTIAL_RAW_AUDIT / EVIDENCE_LOCKED**
+Status: **METADATA_AUDITED / EVIDENCE_LOCKED / RAW_IMAGE_AUDIT_PENDING**
 
 ## DATA-RIP-001 Strawberry-DS
 
@@ -24,26 +24,56 @@ Evidence-locked facts:
 - canonical origin: Zenodo 10957909 / KGCV Strawberry
 - Hugging Face derivative: `Project-AgML/strawberry_growth_detection`
 - pinned revision: `70f6277a609fb80fa18b431dccd04b9f09c876e0`
-- rows/images: 1,477
-- bounding boxes: 3,997
+- rows/images: **1,477**
+- bounding boxes: **3,997**
 - official main-stage order: `flower`, `small g`, `green`, `white`, `turning red`, `red`, `overripe`
 - tagged label format: `main_stage, diameter, length, decimal_stage`
-- `decimal_stage` is within-main-stage fractional progress in the official implementation and must not be interpreted as a global Nongtori maturity score.
+- `decimal_stage` is within-main-stage fractional progress and must not be interpreted as a global Nongtori maturity score.
 
-Raw per-class counts and the actual `turning red` decimal-stage distribution are not yet evidence-locked because the full raw annotation archive was not available in this execution environment.
+### 2026-09-10 full metadata audit
+
+Hugging Face Dataset Viewer metadata was paged over all 1,477 rows without downloading image shards.
+
+Actual class counts:
+- flower: 539
+- small g: 673
+- green: 898
+- white: 731
+- turning red: 296
+- red: 669
+- overripe: 191
+
+Total: **3,997**, errors: **0**.
+
+Source row counts:
+- random: 840
+- tagged: 637
+
+Usable `turning red` decimal-stage values exist for only **48 / 296** turning-red annotations. Distribution:
+
+```text
+0.1=15, 0.2=5, 0.3=4, 0.4=0, 0.5=10,
+0.6=1, 0.7=3, 0.8=5, 0.9=5
+```
+
+Median is 0.4 and mean is approximately 0.4146. A 0.4 or 0.5 diagnostic cut happens to split the 48 decimal-tagged samples 24/24, but this is **not sufficient evidence for a Nongtori Maturity 2/3 policy threshold** because most turning-red annotations have no decimal-stage value and there is no direct field calibration link yet.
 
 Therefore:
-- `turning red -> Maturity 2/3` threshold remains **UNRESOLVED**.
-- no 0.5 or other threshold may be invented.
-- running `audit-kgcv` against the extracted raw annotation directory is the required gate before calibration.
+- `turning red -> Maturity 2/3` threshold remains **FIELD_CALIBRATION_REQUIRED**.
+- no 0.5 or other threshold is promoted merely from distribution balance.
+- raw `main_stage` and `decimal_stage` are preserved for later calibration.
+- `overripe -> Maturity 4 + Grade JM` remains unchanged.
+
+Detailed aggregate evidence: `docs/KGCV_LIVE_METADATA_AUDIT_20260910.md`.
+Executable audit: `ml/data_pipeline/hf_metadata_audit.py`.
 
 ## Field data availability
 
-The connected Drive exposes the `딸기_프로젝트` Sheet and farm-scoped folder structure under `촬영`, but no actual image files were enumerable in the connected Drive search at this time. Therefore an actual field Training Snapshot containing image content hashes cannot yet be generated from the connected source.
+The connected Drive exposes the `딸기_프로젝트` Sheet and farm/source grouping structure under `촬영`, but no actual image files were enumerable at the last connected-source audit. Therefore an actual field Training Snapshot containing image content hashes cannot yet be generated from the connected source.
 
 ## Automation Gate
 
-`ml/data_pipeline/audit_expectations.py` compares raw audit output against evidence-locked expectations.
+`ml/data_pipeline/audit_expectations.py` compares audit output against evidence-locked expectations.
 
 - exact match -> `MATCH`
 - any required count mismatch -> `MISMATCH`
