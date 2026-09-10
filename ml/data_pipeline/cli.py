@@ -8,6 +8,8 @@ from .archive import extract_archive
 from .audit import audit_directory
 from .dedup import deduplicate_manifest
 from .downloader import DatasetDownloader
+from .field_audit import audit_field_csv
+from .incremental import incremental_scan_csv
 from .normalize import normalize_external_csv, normalize_field_csv
 from .registry import DatasetRegistry
 from .snapshot import create_snapshot
@@ -26,6 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("extract"); p.add_argument("--archive", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("audit"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("snapshot"); p.add_argument("source_id"); p.add_argument("--audit-dir", type=Path, required=True); p.add_argument("--snapshot-root", type=Path, required=True); p.add_argument("--snapshot-id", required=True)
+    p = sub.add_parser("incremental-scan"); p.add_argument("--input", type=Path, required=True); p.add_argument("--ledger", type=Path, required=True); p.add_argument("--output-ledger", type=Path, required=True); p.add_argument("--key-field", action="append", default=[]); p.add_argument("--ignore-field", action="append", default=[])
+    p = sub.add_parser("field-audit"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path)
     p = sub.add_parser("normalize-field"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path, required=True); p.add_argument("--source-id", default="DATA-FIELD-001")
     p = sub.add_parser("normalize-external"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path, required=True); p.add_argument("--mapping", type=Path, required=True); p.add_argument("--label-column", default="label"); p.add_argument("--sample-id-column", default="sample_id"); p.add_argument("--asset-column", default="asset_path"); p.add_argument("--hash-column", default="content_sha256"); p.add_argument("--group-column", default="group_id")
     p = sub.add_parser("dedup"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
@@ -47,6 +51,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "audit": print(json.dumps(audit_directory(args.input, args.output), ensure_ascii=False, indent=2)); return 0
     if args.command == "snapshot":
         source = registry.get(args.source_id); print(create_snapshot(args.snapshot_id, source.source_id, source.version_or_revision or "unversioned", args.audit_dir, args.snapshot_root)); return 0
+    if args.command == "incremental-scan":
+        key_fields = tuple(args.key_field) if args.key_field else ("Farm", "ID")
+        print(json.dumps(incremental_scan_csv(args.input, args.ledger, args.output_ledger, key_fields=key_fields, ignored_fields=args.ignore_field), ensure_ascii=False, indent=2)); return 0
+    if args.command == "field-audit": print(json.dumps(audit_field_csv(args.input, args.output), ensure_ascii=False, indent=2)); return 0
     if args.command == "normalize-field": print(normalize_field_csv(args.input, args.output, source_id=args.source_id)); return 0
     if args.command == "normalize-external": print(normalize_external_csv(args.input, args.output, args.mapping, label_column=args.label_column, sample_id_column=args.sample_id_column, asset_column=args.asset_column, hash_column=args.hash_column, group_column=args.group_column)); return 0
     if args.command == "dedup": print(json.dumps(deduplicate_manifest(args.input, args.output), ensure_ascii=False, indent=2)); return 0
