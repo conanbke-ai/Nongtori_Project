@@ -1,91 +1,152 @@
 # Data Strategy
 
-## 1. 핵심 원칙
-
-농토리의 모델 품질은 모델 구조보다 **현장 조건이 제대로 라벨링된 데이터**에 더 크게 좌우된다고 봅니다.
-
-따라서 이미지 파일만 모으지 않고 아래 메타데이터를 함께 관리합니다.
-
-- 작물/품종
-- 농가/구역
-- 촬영 일시
-- RGB/IR/열화상 여부
-- 정상/이상 라벨
-- 병해충 종류
-- 숙도/등급
-- 관수 전/후
-- 온도/습도 등 환경값
-- 촬영 거리/각도/광량 조건
-- 라벨 검수 상태
-
-## 2. 초기 딸기 데이터 시나리오
-
-### CASE 1. 생육/품질
-- 숙도 단계
-- 상품 등급
-- 외관 이상
-
-### CASE 2. 병해충/스트레스
-- 흰가루병
-- 응애
-- 정상 잎
-- 관수/습윤 상태
-
-응애와 물에 젖은 잎을 혼동하지 않도록 관수 전/후 데이터를 별도로 확보하고 기록합니다.
-
-## 3. RGB + Thermal/IR
-
-RGB와 열화상은 같은 샘플을 동일 ID로 연결할 수 있도록 합니다.
+## 1. 상태와 원칙
 
 ```text
-observation_id
-├─ rgb_image
-├─ thermal_image
-├─ environment
-└─ labels
+DESIGN / SCHEMA SEMANTICS → freeze 가능
+SOURCE GOOGLE SHEET       → WORK_IN_PROGRESS
+TRAINING DATASET          → versioned immutable snapshot만 사용
 ```
 
-열화상 단독으로 병해충을 확정하지 않고, 환경 수치와 RGB 특징을 함께 비교하는 방향을 우선합니다.
+Google Sheet `딸기_프로젝트`는 현장 원본의 working canonical source다. 행 자체는 계속 수정/추가될 수 있으므로 live Sheet를 직접 학습 입력으로 사용하지 않는다.
 
-## 4. 데이터셋 분리
+## 2. 현재 canonical tabs
 
-- train
-- validation
-- test
-- field holdout
+- `컬럼정보`
+- `농가_딸기데이터`
+- `농가_베드길이`
 
-같은 농가/같은 연속 촬영 프레임이 train과 test에 섞여 과대평가되지 않도록 농가·구역·촬영 세션 단위 분리를 검토합니다.
+현재 실제 데이터 헤더는 다음 26개 필드다.
 
-## 5. 이상값 / Missing Data
+`Date`, `Time_Stamp`, `ID`, `Group_ID`, `Original_No`, `Weather`, `Farm`, `Zone`, `Variety`, `Class`, `DataType`, `View_Type`, `Occlusion`, `Length`, `Width`, `Weight_g`, `Maturity`, `Grade`, `Amb_Temp`, `Ref_Temp`, `Leaf_Temp`, `Amb_Humi`, `Light_Level`, `Health`, `Risk_Status`, `Final_Name`.
 
-- 센서 단위 검증
-- 물리적으로 불가능한 범위 차단
-- 누락값 명시
-- 임의 0 대입 금지
-- 모델이 요구하는 필드와 선택 필드 분리
+주요 코드:
 
-## 6. 평가 지표
+- `Farm`: `M / C1 / C2 / U`
+- `Variety`: 설향(`Sulhyang`) 중심
+- `DataType`: `R / T / M / V`
+- `Maturity`: `0 Green / 1 White / 2 Turning / 3 Mature / 4 Full`
+- `Grade`: `SP / HI / MD / JM / NA`
+- `Health`: `NOR / MIT / MIT_R / ANT / MAL / OTH`
 
-분류 모델:
-- Precision
-- Recall
-- F1
-- confusion matrix
-- class별 support
+## 3. Group_ID / multi-view
 
-탐지 모델:
-- mAP
-- Precision / Recall
-- 현장 false positive / false negative
+`Group_ID`는 동일 실제 딸기를 여러 시점으로 촬영한 묶음이다. `F`와 `RT45`는 정면 성능과 45도 성능을 별개 문제로 비교하기 위한 것이 아니라, 동일 과실의 형태를 다양한 시점에서 확보해 특정 방향 외형 과적합을 줄이기 위한 표본이다.
 
-농업 현장에서는 이상 징후를 놓치는 미탐 비용과 과도한 오탐 비용이 다르므로 클래스별 임계값을 별도 검토합니다.
+`컬럼정보`에 남아 있는 RT45의 로봇 시점 설명은 legacy collection label로 취급한다. **RT45를 실제 Robot camera installation angle의 ground truth로 해석하지 않는다.**
 
-## 7. 데이터 버전
+동일 `Group_ID`는 train/validation/test로 절대 분리하지 않는다.
+
+## 4. 측정 / label 의미
+
+- `Length`, `Width`, `Weight_g`는 실측 ground truth다.
+- `JM`인데 세 실측값 일부가 NULL인 행은 의도적 미측정일 수 있다.
+- 따라서 `NULL = 오류`로 자동 판정하지 않는다.
+- 단, 해당 target이 필요한 regression task에는 사용할 수 없다.
+- `Grade=JM`과 `Health=MAL`은 독립 개념이다.
+- `JM`은 소과/기형/상품성 저하 등을 포함할 수 있고, `MAL`은 기형 health state다.
+
+## 5. 위치
+
+원본 source label을 보존한다.
 
 ```text
-DATA_SCHEMA_VERSION
-DATASET_VERSION
-LABEL_POLICY_VERSION
+Farm = M
+Zone = 숲촌1동-4-C
 ```
 
-모델 버전과 데이터 버전을 별도로 기록해 같은 모델 코드라도 학습 데이터 변화로 결과가 달라진 이유를 추적할 수 있게 합니다.
+내부에서 필요할 때만 다음처럼 파싱한다.
+
+```text
+farm = M
+house = 숲촌1동
+bed = 4
+zone = C
+```
+
+원본 Zone 문자열은 절대 버리지 않는다.
+
+`농가_베드길이`의 농가/동/베드 수/길이/비고를 위치 context에 사용할 수 있다. 철파이프는 Zone 내부 상대 위치 anchor로만 사용하며 `파이프 N개 = 공통 몇 m` 하드코딩을 금지한다.
+
+## 6. 영상
+
+기존 `DataType=V`를 사용한다. 필요 시 별도 metadata에 다음을 추가한다.
+
+- `duration`
+- `observed_pipe_count`
+- `start_anchor`
+- `end_anchor`
+- `capture_session_id`
+
+동일 video/capture session과 동일 fruit track은 split을 넘지 않는다.
+
+## 7. 데이터 분리
+
+사진:
+- row random split 금지
+- `Group_ID` atomic split
+- near-duplicate/background leakage audit
+
+영상:
+- video/capture session atomic split
+- fruit track cross-split 금지
+
+가격:
+- chronological split
+- target date 이후 정보 사용 금지
+
+Field data:
+- public train/valid/test와 역할 분리
+- `FIELD_TEST`는 독립 평가
+- tuning에 사용한 field set은 더 이상 pristine holdout이 아님
+
+## 8. Snapshot
+
+학습 전에 다음을 고정한다.
+
+```yaml
+snapshot_id: FIELD_PHOTO_v001
+source: 딸기_프로젝트
+source_tabs: [컬럼정보, 농가_딸기데이터, 농가_베드길이]
+schema_version: v1
+manifest_hash: ...
+row_count: ...
+eligible_count_by_task: {}
+excluded_count_by_reason: {}
+created_at: ...
+```
+
+Snapshot 이후에는 원본 Sheet 변경이 기존 실험 결과를 소급 변경하지 않는다.
+
+## 9. Missing / Invalid
+
+금지:
+- NULL을 임의 0으로 대입
+- JM 측정 NULL을 자동 오류 처리
+- 위치를 추정값으로 덮어쓰기
+- `Final_Name` 존재만으로 READY 판정
+
+Task별 required/optional field를 분리하고 exclusion reason을 manifest에 남긴다.
+
+## 10. 외부 데이터
+
+외부 데이터는 Source Registry → Download → Audit → Normalize → Dedup → Split → Immutable Snapshot 단계를 거친다. 다운로드 성공은 학습 승인과 동일하지 않다.
+
+## 11. 가격 시나리오 날짜
+
+```text
+source_harvest_date = Sheet 원본 provenance
+scenario_date       = 가격 예측/백테스트 대상일
+```
+
+`SCENARIO_BACKTEST`에서는 date feature를 `scenario_date` 기준으로 만들고, 당일 실제 가격은 모델 입력이 아니라 사후 `ACTUAL_MARKET_REFERENCE`로만 사용한다.
+
+## 12. 버전
+
+- `DATA_SCHEMA_VERSION`
+- `DATASET_VERSION`
+- `LABEL_POLICY_VERSION`
+- `MODEL_VERSION`
+- `RULE_VERSION`
+
+모든 공식 실험은 source IDs, snapshot/manifest hash, split manifest, model source IDs, Optuna study/params, 최종 metric을 함께 기록한다.
