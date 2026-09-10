@@ -1,12 +1,12 @@
 # Nongtori AI Data Pipeline Design
 
-Status: **IMPLEMENTED_V1_CORE / INGESTION_AND_ANNOTATION_AUDIT_NEXT**
+Status: **IMPLEMENTED_V1_CORE / INCREMENTAL_INGESTION_NEXT**
 
 ## 1. 목표
 
 외부 표본 데이터와 Nongtori field data를 재현 가능한 방식으로 수집·감사·정규화·분리·snapshot한다. 모델마다 임시 다운로드/수작업 라벨 변환을 반복하지 않는다.
 
-현장 원본은 직접 수정하지 않는다. Google Sheet·원본 사진/영상은 read-only canonical source로 보존하고, export snapshot/Working Copy를 통해 파이프라인에 진입시킨다.
+현장 원본은 직접 수정하지 않는다. Google Sheet·원본 사진/영상은 read-only canonical source로 보존하고, 최초 baseline 이후에는 source scan + change detection + revision ledger 기반 증분 ingestion을 사용한다.
 
 ## 2. 전체 파이프라인
 
@@ -31,7 +31,10 @@ Field data:
 
 ```text
 Google Sheet / Raw Photo / Raw Video (READ ONLY)
-→ Source Export / Working Copy
+→ Initial Baseline Scan (1회)
+→ 이후 Source Scan / Change Detection
+→ NEW / UPDATED / REMOVED / UNCHANGED
+→ Revision Ledger / Working Asset Store
 → farm_id + capture_session_id boundary
 → File ↔ Metadata Preflight Audit
 → Rename Manifest / Validated Working Assets
@@ -40,7 +43,7 @@ Google Sheet / Raw Photo / Raw Video (READ ONLY)
 → Normalize
 → Dedup
 → Split
-→ Immutable Training Snapshot
+→ Immutable Training Snapshot Manifest
 ```
 
 상세 ingestion 규칙은 `DATA_INGESTION_MANAGEMENT.md`를 canonical 기준으로 사용한다.
@@ -65,60 +68,61 @@ Google Sheet / Raw Photo / Raw Video (READ ONLY)
 - CLI 및 unit test/CI
 
 다음 구현/검증 Gate:
+- incremental source scanner / change detector
+- source revision ledger / asset revision store
 - field task audit에서 STR/LEF 등 대상별 eligibility 분리
 - farm/capture session 기반 ingestion audit
 - Original_No/Final_Name 기반 photo rename manifest
-- Working Copy rename/rollback
 - DATA-RIP-001/002 actual annotation/class audit
 - AgML decimal stage 기반 `turning red` calibration
 - 실제 field/external normalized manifest 및 Training Snapshot v001
 
-## 4. Source lifecycle
-
-- `DISCOVERED`
-- `REVIEW_REQUIRED`
-- `AUTH_REQUIRED`
-- `DOWNLOADED`
-- `AUDITED`
-- `APPROVED`
-- `NORMALIZED`
-- `SNAPSHOT_READY`
-- `IN_USE`
-- `REJECTED`
-- `RETIRED`
-- `SUPERSEDED`
-
-`DOWNLOADED != APPROVED`.
-
-Field source는 추가로 ingestion 상태를 가진다.
+## 4. Incremental Field Source Lifecycle
 
 ```text
-SOURCE_DISCOVERED
-→ SOURCE_EXPORTED
+BASELINE
+→ SCANNED
+→ NEW | UPDATED | REMOVED | UNCHANGED | INVALID
+→ REVISION_RECORDED
 → PREFLIGHT_BLOCKED | PREFLIGHT_PASSED
-→ WORKING_COPY_READY
-→ RENAMED_VALIDATED
+→ WORKING_ASSET_READY
 → NORMALIZED
 → SNAPSHOT_READY
 ```
 
-## 5. Downloader interface
+행 변경 판정:
 
 ```text
-DatasetRegistry
-  → source record
-DatasetDownloader
-  → provider adapter
-ProviderAdapter
-  → version-pinned download
+NEW        source_key 없음
+UNCHANGED  source_key 있음 + row_hash 동일
+UPDATED    source_key 있음 + row_hash 변경
+REMOVED    이전에는 존재했으나 현재 source에서 사라짐
+INVALID    schema/semantic contract 위반
 ```
 
-Provider별 동작:
-- Mendeley: public dataset file API
-- Hugging Face: `snapshot_download` + pinned revision
-- Direct HTTP: streamed download
-- Kaggle: authenticated CLI
-- AI-Hub: official `aihubshell` + approval/API key
+`UPDATED`는 기존 revision을 덮어쓰지 않는다. 기존 revision은 `SUPERSEDED`, 새 revision은 `ACTIVE`로 append한다.
+
+`REMOVED`도 물리 삭제하지 않고 `REMOVED_FROM_SOURCE`로 보존한다.
+
+## 5. Source Key / Hash
+
+Field source key는 기본적으로 다음을 사용한다.
+
+```text
+farm_id + ID
+```
+
+source 특성상 ID가 capture session 내에서만 유일한 경우:
+
+```text
+farm_id + capture_session_id + ID
+```
+
+행 비교는 canonical source fields의 SHA-256 `row_hash`를 사용하고, UPDATED에서는 changed_fields diff를 함께 저장한다.
+
+Asset은 `content_sha256`으로 식별하고 동일 hash는 working store에서 재사용한다.
+
+같은 filename/Original_No인데 hash가 변경되면 자동 덮어쓰기하지 않고 `SAME_SOURCE_NAME_CONTENT_CHANGED`로 audit한다.
 
 ## 6. Raw / Git 정책
 
@@ -126,7 +130,7 @@ raw 외부 데이터와 private field 원본은 Git에 넣지 않는다.
 
 Git에 저장 가능:
 - source JSON
-- source snapshot ID/checksum
+- source scan/checkpoint ID/checksum
 - README/source notes
 - aggregate manifest/checksum
 - label mapping/split manifest
@@ -136,6 +140,7 @@ Git에 저장 가능:
 Git에 저장하지 않음:
 - raw image/video/archive
 - private field row-level source snapshot
+- revision ledger의 private row payload
 - 재배포 제한 원본
 - 대용량 model weights
 
@@ -151,19 +156,11 @@ Preflight에서 최소 검증:
 - missing/extra/unmatched asset
 - target filename collision
 - 지원 확장자
-- source snapshot provenance
+- source scan provenance
 
 blocking mismatch가 있으면 rename/normalize를 진행하지 않는다.
 
-기본 rename 대상은 원본이 아니라 Working Copy다.
-
-```text
-Raw Source Folder
-→ Working Copy
-→ temporary safe rename
-→ Final_Name
-→ post-rename integrity audit
-```
+기존에 동일 content hash가 validated working asset으로 존재하면 새로 복사하지 않고 기존 asset을 참조한다.
 
 ## 8. Audit gate
 
@@ -182,6 +179,7 @@ Core audit:
 - near duplicate
 - label ambiguity
 - license/commercial/redistribution constraint
+- revision consistency / source-key collision
 
 ## 9. Normalize
 
@@ -210,6 +208,7 @@ DATA-RIP-001/002는 source annotation 정의를 보존한다. AgML/KGCV의 `turn
 split 전에 dedup한다.
 
 Field image:
+- latest eligible ACTIVE revision만 대상
 - Group_ID atomicity
 - capture_session provenance 유지
 
@@ -223,37 +222,40 @@ External:
 Price:
 - chronological split
 
-## 11. Snapshot
+## 11. Training Snapshot
 
-Source snapshot과 training snapshot을 구분한다.
+Training Snapshot은 매 버전마다 전체 source/asset을 물리 복제하지 않는다.
 
 ```text
-Source Snapshot
-= 원본 Google Sheet/export/raw asset의 특정 시점 복사본 provenance
-
-Training Snapshot
-= ingestion audit + normalize + dedup + split을 통과한 학습 입력
+Revision Ledger / Working Asset Store
+→ latest eligible ACTIVE revision selection
+→ normalized manifest
+→ dedup / split
+→ immutable Training Snapshot manifest
 ```
 
-Snapshot ID overwrite는 금지한다.
+Snapshot에는 최소 다음을 고정한다.
 
 ```yaml
 snapshot_id: ...
-source_snapshot_ids: []
-source_ids: []
-source_versions: []
+source_scan_ids: []
+source_revision_set_hash: ...
+asset_hashes: []
 schema_version: ...
 label_mapping_version: ...
-manifest_hash: ...
+normalized_manifest_hash: ...
 split_manifest_hash: ...
 created_at: ...
 ```
+
+동일 content hash asset은 여러 snapshot에서 재사용할 수 있다. Snapshot 불변성은 참조한 revision/hash 집합으로 보장한다.
 
 ## 12. Experiment linkage
 
 모든 baseline/Optuna/final run은 다음을 기록한다.
 
-- source snapshot ID/hash
+- source scan/checkpoint ID/hash
+- source revision set hash
 - training snapshot ID/hash
 - split manifest
 - model source ID
@@ -272,10 +274,11 @@ Farmer/Worker UI:
 - 현장 행동/알림
 
 Operator Data Center:
-- 농가별/capture session별 raw/working asset 상태
+- 농가별/capture session별 NEW/UPDATED/REMOVED/INVALID
+- raw/working asset 상태
 - file ↔ metadata audit
+- revision history / changed fields
 - rename preview/manifest
-- 누락/초과/중복/충돌
 - source/training snapshot 상태
 
 내부 데이터 엔지니어링 정보를 농민 화면에 그대로 노출하지 않는다.
@@ -284,7 +287,9 @@ Operator Data Center:
 
 ```text
 현재
-Field Task Audit + Farm-scoped Ingestion/Rename Manifest
+Incremental Ingestion Scanner / Revision Ledger
++ Field Task Audit
++ Farm-scoped Rename Manifest
 + DATA-RIP-001/002 Annotation Audit
 
 그 다음
