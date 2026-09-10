@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from .archive import extract_archive
 from .audit import audit_directory
 from .downloader import DatasetDownloader
 from .registry import DatasetRegistry
@@ -18,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list")
     p = sub.add_parser("download"); p.add_argument("source_id"); p.add_argument("--raw-root", type=Path, required=True)
+    p = sub.add_parser("extract"); p.add_argument("--archive", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("audit"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("snapshot"); p.add_argument("source_id"); p.add_argument("--audit-dir", type=Path, required=True); p.add_argument("--snapshot-root", type=Path, required=True); p.add_argument("--snapshot-id", required=True)
     return parser
@@ -33,6 +35,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "download":
         result = DatasetDownloader().download(registry.get(args.source_id), args.raw_root)
         print(json.dumps({"source_id": result.source_id, "output_dir": str(result.output_dir), "files": len(result.files), "metadata": result.metadata}, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "extract":
+        files = extract_archive(args.archive, args.output)
+        print(json.dumps({"output_dir": str(args.output), "files": len(files)}, ensure_ascii=False, indent=2))
         return 0
     if args.command == "audit":
         print(json.dumps(audit_directory(args.input, args.output), ensure_ascii=False, indent=2))
