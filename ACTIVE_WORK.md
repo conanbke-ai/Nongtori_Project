@@ -7,7 +7,7 @@
 - Branch budget: `main` 포함 최대 5개
 - Active workstream: 최대 3개
 - Validation branch: 최대 1개
-- 현재 remote branch 확인 기준: `main`, `feat/ai-data-pipeline-v1` = 2/5
+- 현재 remote branch 확인 기준: `main`, `feat/ai-data-pipeline-v1`, `feat/data-normalize-split-v1` = 3/5
 - `feat/ai-data-pipeline-v1`은 merged PR #3 이후 `CLEANUP_CANDIDATE`
 
 | Workstream | Canonical branch / PR | 상태 | Owner / Lease 경로 | 시작/최근 활동 | Acceptance Criteria / 다음 단계 |
@@ -16,6 +16,7 @@
 | Nongtori Design Freeze v1 | `main` | DESIGN_FROZEN / DATA_WIP | owner 없음 / canonical docs | 2026-09-10 | `DESIGN_FREEZE_V1.md` 및 연결 정책 문서 반영·재조회 검증 완료. 구조적 정책 변경 시 Design Review 재오픈. |
 | Canonical application source 편입 | `main` / merged PR #2 | MERGED_BASELINE | owner 없음 / lease 종료 | 2026-09-08 / 2026-09-10 | 운영센터 application source, 병해충 확장, 수확일지/판독 협업, 공통 커서, DB/migration, tests, price-forecast scaffold를 main baseline으로 편입 완료. 브라우저 visual/mobile/E2E·실사용자 왕복·모델 성능 검증은 별도 후속 검증 항목으로 유지. |
 | AI Data Pipeline v1 Core | `main` / merged PR #3 | MERGED_BASELINE | owner 없음 / lease 종료 | 2026-09-10 | Dataset Registry, Mendeley/HuggingFace/Direct HTTP/Kaggle/AI-Hub adapter, streamed checksum download, safe extraction, audit manifest, immutable provenance snapshot, CLI, source records, unit tests/CI를 main baseline으로 편입 완료. |
+| Normalize / Dedup / Split / Training Snapshot v1 | `feat/data-normalize-split-v1` / PR TBD | ACTIVE / CANONICAL | 현재 세션 / `ml/data_pipeline/`, mapping configs, `tests/test_data_pipeline.py`, data docs | 2026-09-10 | Field/External normalize, canonical label mapping, `Grade!=NA` harvest target, `MAL→JM` contract, `OVERRIPE→4+JM`, exact dedup, atomic split/leakage guard, immutable training snapshot, CLI/test/CI를 구현한다. Google Sheet 원본 schema는 수정하지 않는다. |
 
 ## 다음 canonical workstream
 
@@ -29,9 +30,9 @@ Annotation / Label Audit
 → Optuna
 ```
 
-현재 외부 표본 자동수집 core는 완료되었고, 다음 단계에서는 DATA-RIP-001/002의 실제 annotation/class 구조를 audit한 뒤 Nongtori label mapping version을 확정한다. `APPROVED / NORMALIZED / SNAPSHOT_READY` 상태는 이 단계를 통과하기 전에는 부여하지 않는다.
+현재 `Normalize → Dedup → Split Manifest → Training Snapshot` 구간은 `feat/data-normalize-split-v1`에서 구현한다. DATA-RIP-002의 ambiguous `turning red`는 decimal-stage audit/threshold가 확정되기 전까지 강제 mapping하지 않는다.
 
-새 AI/data 구현은 `docs/DESIGN_FREEZE_V1.md`와 연결 정책 문서를 기준으로 한다.
+새 AI/data 구현은 `docs/DESIGN_FREEZE_V1.md`, `docs/LABEL_MAPPING_POLICY.md`와 연결 정책 문서를 기준으로 한다.
 
 ## 작업 시작 체크
 
