@@ -9,6 +9,7 @@
 - Validation branch: 최대 1개
 - 현재 remote branch 확인 기준: `main`, `feat/ai-data-pipeline-v1`, `feat/data-normalize-split-v1` = 3/5
 - `feat/ai-data-pipeline-v1`은 merged PR #3 이후 `CLEANUP_CANDIDATE`
+- `feat/data-normalize-split-v1`은 merged PR #4 이후 `CLEANUP_CANDIDATE`
 
 | Workstream | Canonical branch / PR | 상태 | Owner / Lease 경로 | 시작/최근 활동 | Acceptance Criteria / 다음 단계 |
 |---|---|---|---|---|---|
@@ -16,21 +17,21 @@
 | Nongtori Design Freeze v1 | `main` | DESIGN_FROZEN / DATA_WIP | owner 없음 / canonical docs | 2026-09-10 | `DESIGN_FREEZE_V1.md` 및 연결 정책 문서 반영·재조회 검증 완료. 구조적 정책 변경 시 Design Review 재오픈. |
 | Canonical application source 편입 | `main` / merged PR #2 | MERGED_BASELINE | owner 없음 / lease 종료 | 2026-09-08 / 2026-09-10 | 운영센터 application source, 병해충 확장, 수확일지/판독 협업, 공통 커서, DB/migration, tests, price-forecast scaffold를 main baseline으로 편입 완료. 브라우저 visual/mobile/E2E·실사용자 왕복·모델 성능 검증은 별도 후속 검증 항목으로 유지. |
 | AI Data Pipeline v1 Core | `main` / merged PR #3 | MERGED_BASELINE | owner 없음 / lease 종료 | 2026-09-10 | Dataset Registry, Mendeley/HuggingFace/Direct HTTP/Kaggle/AI-Hub adapter, streamed checksum download, safe extraction, audit manifest, immutable provenance snapshot, CLI, source records, unit tests/CI를 main baseline으로 편입 완료. |
-| Normalize / Dedup / Split / Training Snapshot v1 | `feat/data-normalize-split-v1` / PR TBD | ACTIVE / CANONICAL | 현재 세션 / `ml/data_pipeline/`, mapping configs, `tests/test_data_pipeline.py`, data docs | 2026-09-10 | Field/External normalize, canonical label mapping, `Grade!=NA` harvest target, `MAL→JM` contract, `OVERRIPE→4+JM`, exact dedup, atomic split/leakage guard, immutable training snapshot, CLI/test/CI를 구현한다. Google Sheet 원본 schema는 수정하지 않는다. |
+| Normalize / Dedup / Split / Training Snapshot v1 | `main` / merged PR #4 | MERGED_BASELINE | owner 없음 / lease 종료 | 2026-09-10 | Field/External normalize, `Grade!=NA` harvest target, `MAL→JM` contract, `OVERRIPE→4+JM`, exact SHA-256 dedup, atomic split/leakage guard, immutable training snapshot, CLI/test/CI를 main baseline으로 편입 완료. Google Sheet 원본 schema는 변경하지 않음. |
 
 ## 다음 canonical workstream
 
 ```text
-Annotation / Label Audit
-→ Normalize
-→ Dedup
-→ Split Manifest
-→ Training Snapshot
+DATA-RIP-001 / DATA-RIP-002 실제 Annotation Audit
+→ AgML decimal-stage / turning red 기준 확정
+→ 실제 normalized manifest 생성
+→ 실제 dedup / split manifest 생성
+→ Training Snapshot v001
 → Baseline Model
 → Optuna
 ```
 
-현재 `Normalize → Dedup → Split Manifest → Training Snapshot` 구간은 `feat/data-normalize-split-v1`에서 구현한다. DATA-RIP-002의 ambiguous `turning red`는 decimal-stage audit/threshold가 확정되기 전까지 강제 mapping하지 않는다.
+Normalize/Dedup/Split/Snapshot 구현 코드는 완료되었다. 다음 단계에서는 실제 외부/현장 데이터로 manifest를 생성하고 class distribution, annotation integrity, mapping ambiguity를 audit한다. DATA-RIP-002의 `turning red`는 decimal-stage audit/threshold가 확정되기 전까지 `UNMAPPED / excluded` 상태를 유지한다.
 
 새 AI/data 구현은 `docs/DESIGN_FREEZE_V1.md`, `docs/LABEL_MAPPING_POLICY.md`와 연결 정책 문서를 기준으로 한다.
 
@@ -46,7 +47,7 @@ Annotation / Label Audit
 8. `ALREADY_DONE / IN_PROGRESS / NEW / BLOCKED` 판정
 9. NEW일 때만 Acceptance Criteria 작성 후 branch/lease 확보
 
-앱/병해충/판독/운영센터와 AI data pipeline core baseline은 이제 `main`이다. 같은 기능을 별도 branch에서 재구현하지 않는다.
+앱/병해충/판독/운영센터와 AI data pipeline baseline은 이제 `main`이다. 같은 기능을 별도 branch에서 재구현하지 않는다.
 
 AI/data pipeline 신규 구현은 Design Freeze 계약을 기준으로 하고, 구조적 의미를 바꾸는 변경이면 코드보다 먼저 Design Review를 다시 연다.
 
