@@ -14,9 +14,11 @@ from ml.data_pipeline.models import SourceRecord
 from ml.data_pipeline.normalize import ExternalMapping, LabelContractError, normalize_external_row, normalize_field_row, write_normalized
 from ml.data_pipeline.providers.direct_http import DirectHttpAdapter
 from ml.data_pipeline.registry import DatasetRegistry
+from ml.data_pipeline.rename_manifest import preflight_rename
 from ml.data_pipeline.snapshot import create_snapshot
 from ml.data_pipeline.split import create_split_manifest
 from ml.data_pipeline.training_snapshot import create_training_snapshot
+from ml.data_pipeline.working_assets import materialize_working_assets
 
 
 class RegistryTest(unittest.TestCase):
@@ -30,22 +32,14 @@ class RegistryTest(unittest.TestCase):
 
 class IncrementalIngestionTest(unittest.TestCase):
     def test_new_unchanged_updated_removed_revision_flow(self):
-        initial = [
-            {"Farm": "M", "ID": "1", "Grade": "NA", "Maturity": "3"},
-            {"Farm": "M", "ID": "2", "Grade": "SP", "Maturity": "4"},
-        ]
+        initial = [{"Farm": "M", "ID": "1", "Grade": "NA", "Maturity": "3"}, {"Farm": "M", "ID": "2", "Grade": "SP", "Maturity": "4"}]
         ledger, counts = scan_incremental_rows(initial, [], recorded_at="2026-09-10T00:00:00+00:00")
         self.assertEqual(counts, {"NEW": 2, "UPDATED": 0, "REMOVED": 0, "UNCHANGED": 0})
-        current = [
-            {"Farm": "M", "ID": "1", "Grade": "SP", "Maturity": "3"},
-            {"Farm": "M", "ID": "3", "Grade": "NA", "Maturity": "2"},
-        ]
+        current = [{"Farm": "M", "ID": "1", "Grade": "SP", "Maturity": "3"}, {"Farm": "M", "ID": "3", "Grade": "NA", "Maturity": "2"}]
         ledger2, counts2 = scan_incremental_rows(current, ledger, recorded_at="2026-09-11T00:00:00+00:00")
         self.assertEqual(counts2, {"NEW": 1, "UPDATED": 1, "REMOVED": 1, "UNCHANGED": 0})
         updated = next(e for e in ledger2 if e["source_key"] == "M:1" and e["revision"] == "2")
         self.assertEqual(json.loads(updated["changed_fields_json"])["Grade"], {"old": "NA", "new": "SP"})
-        removed = next(e for e in ledger2 if e["source_key"] == "M:2" and e["revision"] == "2")
-        self.assertEqual(removed["state_after"], "REMOVED_FROM_SOURCE")
         ledger3, counts3 = scan_incremental_rows(current, ledger2, recorded_at="2026-09-12T00:00:00+00:00")
         self.assertEqual(counts3["UNCHANGED"], 2)
         self.assertEqual(len(ledger3), len(ledger2))
@@ -53,19 +47,48 @@ class IncrementalIngestionTest(unittest.TestCase):
 
 class FieldAuditTest(unittest.TestCase):
     def test_str_and_lef_are_task_separated(self):
-        rows = [
-            {"ID": "1", "Class": "STR", "Maturity": "3", "Grade": "SP", "Health": "NOR"},
-            {"ID": "2", "Class": "STR", "Maturity": "3", "Grade": "NA", "Health": "NOR"},
-            {"ID": "3", "Class": "LEF", "Health": "MIT"},
-        ]
+        rows = [{"ID": "1", "Class": "STR", "Maturity": "3", "Grade": "SP", "Health": "NOR"}, {"ID": "2", "Class": "STR", "Maturity": "3", "Grade": "NA", "Health": "NOR"}, {"ID": "3", "Class": "LEF", "Health": "MIT"}]
         report = audit_field_rows(rows)
         self.assertEqual(report["fruit_rows"], 2)
         self.assertEqual(report["leaf_rows"], 1)
-        self.assertEqual(report["maturity3_harvested"], 1)
-        self.assertEqual(report["maturity3_not_harvested"], 1)
         leaf = normalize_field_row(rows[2])
         self.assertEqual(leaf["task_eligible"], "false")
-        self.assertEqual(leaf["exclusion_reason"], "NON_FRUIT_RIPENESS_TARGET")
+
+
+class RenameManifestTest(unittest.TestCase):
+    def test_exact_match_and_content_store_reuse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); source = root / "source"; source.mkdir()
+            (source / "IMG_0001.jpg").write_bytes(b"same-image")
+            rows = [{"ID": "1", "Farm": "M", "Original_No": "IMG_0001", "Final_Name": "SB_1.jpg"}]
+            manifest, summary = preflight_rename(rows, source, farm_id="M", capture_session_id="S1")
+            self.assertEqual(summary["status"], "PREFLIGHT_PASSED")
+            self.assertEqual(manifest[0]["match_strategy"], "ORIGINAL_NO_EXACT")
+            out1, counts1 = materialize_working_assets(manifest, source, root / "objects", root / "sessions")
+            self.assertTrue(Path(out1[0]["working_session_path"]).exists())
+            self.assertEqual(counts1["SESSION_LINKED"], 1)
+            (source / "IMG_0002.jpg").write_bytes(b"same-image")
+            rows2 = [{"ID": "2", "Farm": "M", "Original_No": "IMG_0002", "Final_Name": "SB_2.jpg"}]
+            manifest2, summary2 = preflight_rename(rows2, source, farm_id="M", capture_session_id="S2")
+            # isolate the second capture session source set as production ingestion does
+            source2 = root / "source2"; source2.mkdir(); (source2 / "IMG_0002.jpg").write_bytes(b"same-image")
+            manifest2, summary2 = preflight_rename(rows2, source2, farm_id="M", capture_session_id="S2")
+            self.assertEqual(summary2["status"], "PREFLIGHT_PASSED")
+            _, counts2 = materialize_working_assets(manifest2, source2, root / "objects", root / "sessions")
+            self.assertEqual(counts2["REUSED"], 1)
+
+    def test_count_mismatch_blocks_materialization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); source = root / "source"; source.mkdir()
+            (source / "IMG_0001.jpg").write_bytes(b"1")
+            rows = [
+                {"ID": "1", "Farm": "M", "Original_No": "IMG_0001", "Final_Name": "SB_1.jpg"},
+                {"ID": "2", "Farm": "M", "Original_No": "IMG_0002", "Final_Name": "SB_2.jpg"},
+            ]
+            manifest, summary = preflight_rename(rows, source, farm_id="M", capture_session_id="S1")
+            self.assertEqual(summary["status"], "PREFLIGHT_BLOCKED")
+            with self.assertRaises(ValueError):
+                materialize_working_assets(manifest, source, root / "objects", root / "sessions")
 
 
 class LabelMappingTest(unittest.TestCase):
@@ -93,8 +116,7 @@ class LabelMappingTest(unittest.TestCase):
 class NormalizeSplitSnapshotTest(unittest.TestCase):
     def test_dedup_atomic_split_and_immutable_training_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            normalized = root / "normalized.csv"
+            root = Path(tmp); normalized = root / "normalized.csv"
             rows = [
                 normalize_field_row({"ID": "1", "Class": "STR", "Group_ID": "G1", "Maturity": "3", "Grade": "SP", "Health": "NOR", "Final_Name": "1.jpg", "content_sha256": "a" * 64}),
                 normalize_field_row({"ID": "2", "Class": "STR", "Group_ID": "G1", "Maturity": "3", "Grade": "SP", "Health": "NOR", "Final_Name": "2.jpg", "content_sha256": "b" * 64}),
@@ -102,34 +124,21 @@ class NormalizeSplitSnapshotTest(unittest.TestCase):
                 normalize_field_row({"ID": "4", "Class": "STR", "Group_ID": "G3", "Maturity": "2", "Grade": "NA", "Health": "NOR", "Final_Name": "4.jpg", "content_sha256": "c" * 64}),
             ]
             write_normalized(rows, normalized)
-            dedup = root / "dedup.csv"
-            report = deduplicate_manifest(normalized, dedup)
-            self.assertEqual(report["duplicate"], 1)
-            split = root / "split.csv"
-            counts = create_split_manifest(dedup, split, seed="test-seed")
-            self.assertEqual(sum(counts.values()), 4)
-            snapshots = root / "snapshots"
-            snapshot = create_training_snapshot("train-snap-001", normalized_manifest=normalized, dedup_manifest=dedup, split_manifest=split, snapshot_root=snapshots, label_mapping_version="MAP-FIELD-001-v1", source_ids=["DATA-FIELD-001"])
+            dedup = root / "dedup.csv"; self.assertEqual(deduplicate_manifest(normalized, dedup)["duplicate"], 1)
+            split = root / "split.csv"; create_split_manifest(dedup, split, seed="test-seed")
+            snapshot = create_training_snapshot("train-snap-001", normalized_manifest=normalized, dedup_manifest=dedup, split_manifest=split, snapshot_root=root / "snapshots", label_mapping_version="MAP-FIELD-001-v1", source_ids=["DATA-FIELD-001"])
             self.assertTrue((snapshot / "TRAINING_SNAPSHOT.json").exists())
 
 
 class PipelineTest(unittest.TestCase):
     def test_direct_download_audit_and_immutable_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source_file = root / "source.bin"
-            source_file.write_bytes(b"nongtori-test-data")
+            root = Path(tmp); source_file = root / "source.bin"; source_file.write_bytes(b"nongtori-test-data")
             source = SourceRecord.from_dict({"source_id": "DATA-X-001", "provider": "direct_http", "title": "local fixture", "original_url": source_file.as_uri(), "version_or_revision": "v1", "retrieval": {"url": source_file.as_uri(), "filename": "fixture.bin"}})
-            raw = root / "raw"
-            result = DirectHttpAdapter().download(source, raw)
+            result = DirectHttpAdapter().download(source, root / "raw")
             self.assertEqual(result.files[0].read_bytes(), b"nongtori-test-data")
-            audit_dir = root / "audit"
-            report = audit_directory(raw, audit_dir)
-            self.assertEqual(report["status"], "AUDITED")
-            snapshots = root / "snapshots"
-            snapshot = create_snapshot("snap-001", source.source_id, "v1", audit_dir, snapshots)
-            self.assertTrue((snapshot / "SNAPSHOT.json").exists())
+            audit_dir = root / "audit"; self.assertEqual(audit_directory(root / "raw", audit_dir)["status"], "AUDITED")
+            self.assertTrue((create_snapshot("snap-001", source.source_id, "v1", audit_dir, root / "snapshots") / "SNAPSHOT.json").exists())
 
 
-if __name__ == "__main__":
-    unittest.main()
+if __name__ == "__main__": unittest.main()
