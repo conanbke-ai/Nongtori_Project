@@ -8,27 +8,28 @@
 - Active workstream: 최대 3개
 - Validation branch: 최대 1개
 - 현재 remote branch 확인 기준: `main`, `feat/ai-data-pipeline-v1` = 2/5
+- `feat/ai-data-pipeline-v1`은 merged PR #3 이후 `CLEANUP_CANDIDATE`
 
 | Workstream | Canonical branch / PR | 상태 | Owner / Lease 경로 | 시작/최근 활동 | Acceptance Criteria / 다음 단계 |
 |---|---|---|---|---|---|
 | TORI UI System v1 | `main` / merged PR #1 | MERGED_BASELINE | owner 없음 / lease 없음 | 2026-09-08 | theme/token, 모바일 접근성, cat jelly paw cursor contract를 baseline으로 유지. 동일 foundation 재구현 금지. |
 | Nongtori Design Freeze v1 | `main` | DESIGN_FROZEN / DATA_WIP | owner 없음 / canonical docs | 2026-09-10 | `DESIGN_FREEZE_V1.md` 및 연결 정책 문서 반영·재조회 검증 완료. 구조적 정책 변경 시 Design Review 재오픈. |
 | Canonical application source 편입 | `main` / merged PR #2 | MERGED_BASELINE | owner 없음 / lease 종료 | 2026-09-08 / 2026-09-10 | 운영센터 application source, 병해충 확장, 수확일지/판독 협업, 공통 커서, DB/migration, tests, price-forecast scaffold를 main baseline으로 편입 완료. 브라우저 visual/mobile/E2E·실사용자 왕복·모델 성능 검증은 별도 후속 검증 항목으로 유지. |
-| AI Data Pipeline v1 | `feat/ai-data-pipeline-v1` / PR TBD | ACTIVE / CANONICAL | 현재 세션 / `ml/data_pipeline/`, `tests/test_data_pipeline.py`, AI data docs | 2026-09-10 | Dataset Registry, HuggingFace/Mendeley/Direct HTTP/Kaggle/AI-Hub provider adapter, streamed download/checksum, audit manifest, immutable snapshot, CLI, source records, unit tests를 구현한다. raw dataset은 Git에 넣지 않는다. Baseline Model/Optuna는 이 workstream 후속 단계로 남긴다. |
+| AI Data Pipeline v1 Core | `main` / merged PR #3 | MERGED_BASELINE | owner 없음 / lease 종료 | 2026-09-10 | Dataset Registry, Mendeley/HuggingFace/Direct HTTP/Kaggle/AI-Hub adapter, streamed checksum download, safe extraction, audit manifest, immutable provenance snapshot, CLI, source records, unit tests/CI를 main baseline으로 편입 완료. |
 
 ## 다음 canonical workstream
 
 ```text
-Dataset Registry
-→ 외부 표본 자동수집
-→ Audit
+Annotation / Label Audit
 → Normalize
-→ Snapshot
+→ Dedup
+→ Split Manifest
+→ Training Snapshot
 → Baseline Model
 → Optuna
 ```
 
-현재 `Dataset Registry → 외부 표본 자동수집 → Audit → Snapshot` 구간은 `feat/ai-data-pipeline-v1`에서 진행한다.
+현재 외부 표본 자동수집 core는 완료되었고, 다음 단계에서는 DATA-RIP-001/002의 실제 annotation/class 구조를 audit한 뒤 Nongtori label mapping version을 확정한다. `APPROVED / NORMALIZED / SNAPSHOT_READY` 상태는 이 단계를 통과하기 전에는 부여하지 않는다.
 
 새 AI/data 구현은 `docs/DESIGN_FREEZE_V1.md`와 연결 정책 문서를 기준으로 한다.
 
@@ -44,7 +45,7 @@ Dataset Registry
 8. `ALREADY_DONE / IN_PROGRESS / NEW / BLOCKED` 판정
 9. NEW일 때만 Acceptance Criteria 작성 후 branch/lease 확보
 
-앱/병해충/판독/운영센터의 기존 baseline은 이제 `main`이다. 같은 기능을 별도 branch에서 재구현하지 않는다.
+앱/병해충/판독/운영센터와 AI data pipeline core baseline은 이제 `main`이다. 같은 기능을 별도 branch에서 재구현하지 않는다.
 
 AI/data pipeline 신규 구현은 Design Freeze 계약을 기준으로 하고, 구조적 의미를 바꾸는 변경이면 코드보다 먼저 Design Review를 다시 연다.
 
