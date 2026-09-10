@@ -40,14 +40,13 @@ class FarmContractTest(unittest.TestCase):
         self.assertEqual(report["farm_counts"], {"C1": 1, "C2": 1, "M": 1, "U": 1})
         self.assertEqual(report["invalid_farm_rows"], [{"id": "5", "farm": "C"}])
 
-    def test_rename_preflight_cannot_treat_parent_folder_c_as_farm(self):
+    def test_rename_preflight_rejects_parent_folder_c_as_farm(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp)
             (source / "IMG_1.jpg").write_bytes(b"x")
             rows = [{"ID": "1", "Farm": "C1", "Original_No": "IMG_1", "Final_Name": "a.jpg"}]
-            manifest, summary = preflight_rename(rows, source, farm_id="C", capture_session_id="S1")
-            self.assertEqual(manifest, [])
-            self.assertEqual(summary["sheet_rows"], 0)
+            with self.assertRaises(ValueError):
+                preflight_rename(rows, source, farm_id="C", capture_session_id="S1")
 
 
 if __name__ == "__main__":
