@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'ml/data_pipeline/hf_metadata_audit.py'
+      - 'ml/data_pipeline/kgcv_manifest.py'
+      - 'tests/test_kgcv_manifest.py'
       - '.github/workflows/kgcv-live-audit.yml'
   workflow_dispatch:
 
@@ -18,10 +20,15 @@ jobs:
           python-version: '3.12'
       - name: Audit KGCV metadata only
         run: python -m ml.data_pipeline.hf_metadata_audit --output artifacts/kgcv_hf_metadata_audit.json
-      - name: Upload audit report
+      - name: Build normalized metadata manifest
+        run: python -m ml.data_pipeline.kgcv_manifest --output artifacts/kgcv_normalized_manifest.csv --summary artifacts/kgcv_normalized_summary.json
+      - name: Upload audit and normalized manifest
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kgcv-hf-metadata-audit
-          path: artifacts/kgcv_hf_metadata_audit.json
+          name: kgcv-normalized-metadata
+          path: |
+            artifacts/kgcv_hf_metadata_audit.json
+            artifacts/kgcv_normalized_manifest.csv
+            artifacts/kgcv_normalized_summary.json
           if-no-files-found: warn
