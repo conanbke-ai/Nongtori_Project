@@ -1,0 +1,56 @@
+name: KGCV Asset Hash and Split
+
+on:
+  pull_request:
+    paths:
+      - 'ml/data_pipeline/kgcv_assets.py'
+      - 'ml/data_pipeline/kgcv_manifest.py'
+      - '.github/workflows/kgcv-asset-hash.yml'
+  workflow_dispatch:
+
+jobs:
+  hash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Hash remote image shard
+        run: python -m ml.data_pipeline.kgcv_assets hash-shard --shard-index ${{ matrix.shard }} --shard-count 10 --output artifacts/shard-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kgcv-hash-shard-${{ matrix.shard }}
+          path: artifacts/shard-${{ matrix.shard }}.json
+          retention-days: 7
+
+  aggregate:
+    needs: hash
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build normalized metadata manifest
+        run: python -m ml.data_pipeline.kgcv_manifest --output artifacts/kgcv_normalized_manifest.csv --summary artifacts/kgcv_normalized_summary.json
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: kgcv-hash-shard-*
+          path: artifacts/shards
+          merge-multiple: true
+      - name: Aggregate hashes and atomic split
+        run: python -m ml.data_pipeline.kgcv_assets aggregate --shard-dir artifacts/shards --normalized-manifest artifacts/kgcv_normalized_manifest.csv --output-manifest artifacts/kgcv_snapshot_candidate.csv --summary artifacts/kgcv_asset_split_summary.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kgcv-asset-split-candidate
+          path: |
+            artifacts/kgcv_snapshot_candidate.csv
+            artifacts/kgcv_asset_split_summary.json
+          retention-days: 90
