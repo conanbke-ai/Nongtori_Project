@@ -43,10 +43,12 @@ def normalize_field_row(row: dict[str, Any], *, source_id: str = "DATA-FIELD-001
     sample_id = _text(row.get("ID"))
     if not sample_id:
         raise LabelContractError("field row requires ID")
-    try:
-        validate_farm_code(row.get("Farm"))
-    except ValueError as exc:
-        raise LabelContractError(f"field row {sample_id}: {exc}") from exc
+    farm_value = _text(row.get("Farm"))
+    if farm_value:
+        try:
+            validate_farm_code(farm_value)
+        except ValueError as exc:
+            raise LabelContractError(f"field row {sample_id}: {exc}") from exc
     object_class = _text(row.get("Class")).upper()
     health = _text(row.get("Health")).upper()
     if health and health not in ALLOWED_HEALTH:
