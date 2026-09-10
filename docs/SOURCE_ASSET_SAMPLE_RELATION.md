@@ -15,121 +15,100 @@ SourceAsset (physical image/video)
    └─ SampleRow C
 ```
 
-한 장의 사진에 여러 분석 대상이 존재할 수 있으므로 **하나의 source asset이 여러 sample row에 참조되는 many-to-one 관계를 허용**한다.
+한 장의 사진에 여러 분석 대상이 존재할 수 있으므로 하나의 source asset이 여러 sample row에 참조되는 many-to-one 관계를 허용한다.
 
-반대로 한 sample row가 여러 독립 source asset을 암묵적으로 가리키는 것은 허용하지 않는다. RGB/Thermal pairing처럼 여러 asset이 필요한 경우 명시적 pairing/domain relation을 사용한다.
+## 2. Farm Code와 Farm Scope
 
-## 2. 식별자 분리
+개별 source row의 canonical `Farm` code:
 
-### Sample identity
+```text
+M / C1 / C2 / U
+```
+
+운영자 조회·Drive 상위 분류·ingestion job의 `Farm Scope`:
+
+```text
+M  → {M}
+C  → {C1, C2}
+C1 → {C1}
+C2 → {C2}
+U  → {U}
+```
+
+따라서 `C`는 오류 코드가 아니라 C1/C2를 함께 다루기 위한 정상적인 group/scope selector다. 단, 개별 sample provenance와 revision key에는 실제 row의 `C1` 또는 `C2`를 보존한다.
+
+Drive의 `응애피해농가(C)`는 이 `C` scope와 자연스럽게 연결할 수 있으며, 하위 실제 sample의 Farm identity를 `C`로 덮어쓰지 않는다.
+
+## 3. 식별자 분리
 
 ```text
 sample_id = Sheet.ID
-source_key = farm_id + ':' + sample_id
-```
-
-Sample은 Maturity/Grade/Health/측정값 등 object-level metadata revision을 가진다.
-
-### Source asset identity
-
-Preflight 단계의 논리 key:
-
-```text
-source_asset_key = farm_id + ':' + capture_session_id + ':' + normalized(Original_No)
-```
-
-실제 Working Asset Store의 최종 identity는 content SHA-256이다.
-
-```text
+source_key = actual_farm_code + ':' + sample_id
+source_asset_key = actual_farm_code + ':' + capture_session_id + ':' + normalized(Original_No)
 working_asset_id = content_sha256
 ```
 
-즉 source filename/Original_No는 provenance와 matching key이고, content hash가 저장 파일 identity다.
+Farm Scope는 조회/작업 선택자이고 physical/sample identity의 일부로 사용하지 않는다.
 
-## 3. `Original_No` 중복의 의미
+## 4. `Original_No` 중복의 의미
 
 같은 `Original_No`가 여러 sample row에 존재하는 것 자체는 오류가 아니다.
 
 ```text
 same Original_No + compatible context + one physical file
 → SHARED_SOURCE_ASSET
-→ 정상 many-to-one relation
 ```
 
-공유 asset의 실제 파일은 content-addressed object store에 한 번만 저장하고, 여러 sample manifest row가 같은 `source_asset_key`와 `content_sha256`을 참조한다.
+## 5. Context conflict
 
-## 4. Context conflict
+같은 `Original_No`를 공유하는 row들 사이에서 다음 source context가 다르면 자동 동일 asset으로 확정하지 않는다.
 
-같은 `Original_No`를 공유하는 row들 사이에서 다음 source context가 서로 다르면 자동 동일 asset으로 확정하지 않는다.
-
+- actual `Farm` code
 - `Date`
 - `Zone`
 - `DataType`
 
 ```text
-same Original_No
-+ Date/Zone/DataType conflict
+same Original_No + context conflict
 → SOURCE_ASSET_CONTEXT_CONFLICT
 → PREFLIGHT_BLOCKED
-→ operator review
 ```
 
-`Group_ID` 차이만으로는 blocking하지 않는다. 한 이미지 안에 여러 분석 object가 존재할 수 있기 때문이다.
+특히 C scope로 C1/C2를 함께 읽을 때 동일 Original_No가 양 농가에서 재사용되면 별도 asset으로 식별되거나 operator review가 필요하며, 단순 병합하지 않는다.
 
-`Class` 차이도 단독 blocking 조건으로 사용하지 않는다. 실제 asset 자체와 object-level task label을 분리한다.
-
-## 5. Count 검증
+## 6. Count 검증
 
 파일 수를 Sheet row 수와 직접 비교하지 않는다.
 
-잘못된 방식:
-
 ```text
-sheet_rows == source_files
-```
-
-올바른 방식:
-
-```text
-expected_source_assets = distinct valid Original_No groups
+expected_source_assets = distinct valid source asset groups
 expected_source_assets == source_files
 ```
 
-따라서 2개 sample row가 같은 원본 사진 1장을 공유하면:
+## 7. Rename / Final_Name
 
-```text
-sheet_rows = 2
-expected_source_assets = 1
-source_files = 1
-→ count 정상
-```
-
-## 6. Rename / Final_Name 의미
-
-`Final_Name`은 sample-level canonical logical name이다. source asset의 유일한 physical filename일 필요는 없다.
+`Final_Name`은 sample-level canonical logical name이다. physical object는 content-addressed store에 한 번 저장할 수 있다.
 
 ```text
 Content Object Store
-└─ <sha256>.jpg      # physical object 1개
+└─ <sha256>.jpg
 
 Session Logical View
-├─ Final_Name_A.jpg  ─┐
-└─ Final_Name_B.jpg  ─┴→ same content object
+├─ Final_Name_A.jpg
+└─ Final_Name_B.jpg → same content object 가능
 ```
 
-filesystem이 hardlink를 지원하면 logical view는 hardlink를 우선하고, 불가능할 때만 copy fallback을 사용한다. 원본 source file은 변경하지 않는다.
+원본 source file은 변경하지 않는다.
 
-## 7. Preflight 상태
+## 8. Preflight 상태
 
-### 정상/정보 상태
-
+정상/정보:
 - `ONE_TO_ONE_SOURCE_ASSET`
 - `SHARED_SOURCE_ASSET`
 - `ORIGINAL_NO_EXACT`
 - `NATURAL_ORDER_FALLBACK`
 
-### Blocking
-
+Blocking:
 - `SOURCE_ASSET_CONTEXT_CONFLICT`
 - `AMBIGUOUS_SOURCE_FILE`
 - `SOURCE_ASSET_COUNT_MISMATCH`
@@ -141,14 +120,10 @@ filesystem이 hardlink를 지원하면 logical view는 hardlink를 우선하고,
 - `UNSUPPORTED_EXTENSION`
 - `INVALID_METADATA`
 
-`DUPLICATE_ORIGINAL_NO`는 더 이상 단독 blocking error가 아니다.
-
-## 8. Manifest contract
-
-Sample manifest는 최소 다음을 가진다.
+## 9. Manifest contract
 
 ```text
-farm_id
+farm_id                 # actual M/C1/C2/U
 capture_session_id
 sample_id
 source_asset_key
@@ -163,11 +138,9 @@ working_object_path
 working_session_path
 ```
 
-여러 sample row가 같은 asset을 공유하면 `source_asset_key`, `source_file`, `content_sha256`, `working_object_path`가 동일할 수 있다.
+Preflight summary에는 별도로 `farm_scope`와 `resolved_farm_codes`를 기록한다.
 
-## 9. Training Snapshot
-
-Training Snapshot은 sample row와 physical asset을 별도로 고정한다.
+## 10. Training Snapshot
 
 ```text
 Sample Revision Set
@@ -177,29 +150,26 @@ Sample Revision Set
 → Immutable Training Snapshot
 ```
 
-동일 asset을 참조하는 여러 sample이 split leakage를 만들 수 있으므로 **같은 content SHA-256을 가진 sample은 cross-split 금지**한다. 기존 Group_ID atomicity보다 asset-sharing 제약이 더 강하면 asset hash 기준을 우선한다.
+같은 content SHA-256을 가진 sample은 cross-split 금지한다.
 
-## 10. 실제 field source audit에서 확인된 이유
+## 11. 실제 field source audit
 
-2026-09-10 live Sheet audit에서 다음 구조가 확인되었다.
-
-- canonical `Farm` code는 `M / C1 / C2 / U`
+2026-09-10 live Sheet audit 기준:
+- canonical Farm code: `M / C1 / C2 / U`
 - ID가 있는 active metadata row: 110
-- STR row: 98
-- LEF row: 12
-- 동일 `Original_No`가 여러 sample row에 사용되는 shared-source 사례 존재
-- 동일 `Original_No`가 서로 다른 Zone에서 재사용된 context-conflict 사례도 존재
-- Drive 상위 분류 폴더명 `남자친구농가(M)`, `응애피해농가(C)`, `외부플랫폼(U)`는 canonical Farm code와 동일한 계층이 아니다.
-- 특히 Drive의 `응애피해농가(C)`는 `Farm=C`를 의미하지 않으며 `C1 / C2` source를 묶는 상위 분류로 취급한다.
-- 현재 해당 상위 분류 폴더들에는 physical 촬영 파일이 없어 실제 file/hash 검증은 아직 수행할 수 없음
+- STR 98 / LEF 12
+- shared-source 사례 존재
+- Original_No context-conflict 사례 존재
+- Drive 상위 분류 `응애피해농가(C)`는 C1/C2를 묶는 C scope로 취급 가능
+- 현재 physical 촬영 파일이 없어 file/hash 검증은 아직 수행할 수 없음
 
 raw row/개인 field asset은 Git에 기록하지 않고 aggregate finding만 유지한다.
 
-## 11. 구현 규칙
+## 12. 구현 규칙
 
-- Preflight는 sample count가 아니라 distinct source asset count를 기준으로 한다.
-- 같은 source asset의 SHA-256은 한 번만 계산/저장해 재사용할 수 있다.
+- `C` scope 선택은 C1/C2를 함께 조회한다.
+- 실제 sample/asset manifest의 `farm_id`는 C1/C2 원본 값을 보존한다.
+- Preflight는 sample count가 아니라 distinct source asset count 기준이다.
+- 같은 asset SHA-256은 재사용한다.
 - context conflict는 자동 교정하지 않는다.
-- duplicate/typo 가능성이 있는 `Original_No`를 임의 수정하지 않는다.
-- operator가 source metadata를 수정하면 Incremental Revision Ledger가 변경 이력을 남긴다.
 - 원본 Sheet/사진/영상은 read-only다.
