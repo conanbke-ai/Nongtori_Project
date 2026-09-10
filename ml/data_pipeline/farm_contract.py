@@ -3,6 +3,14 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 CANONICAL_FARM_CODES = frozenset({"M", "C1", "C2", "U"})
+FARM_SCOPES = frozenset({"M", "C", "C1", "C2", "U"})
+FARM_SCOPE_MEMBERS = {
+    "M": frozenset({"M"}),
+    "C": frozenset({"C1", "C2"}),
+    "C1": frozenset({"C1"}),
+    "C2": frozenset({"C2"}),
+    "U": frozenset({"U"}),
+}
 
 
 def _text(value: Any) -> str:
@@ -15,6 +23,14 @@ def validate_farm_code(value: Any, *, field_name: str = "Farm") -> str:
         allowed = ", ".join(sorted(CANONICAL_FARM_CODES))
         raise ValueError(f"{field_name} must be one of {{{allowed}}}; got {value!r}")
     return farm
+
+
+def resolve_farm_scope(value: Any, *, field_name: str = "farm_scope") -> frozenset[str]:
+    scope = _text(value).upper()
+    if scope not in FARM_SCOPES:
+        allowed = ", ".join(sorted(FARM_SCOPES))
+        raise ValueError(f"{field_name} must be one of {{{allowed}}}; got {value!r}")
+    return FARM_SCOPE_MEMBERS[scope]
 
 
 def audit_farm_codes(rows: Iterable[dict[str, Any]]) -> dict[str, object]:
