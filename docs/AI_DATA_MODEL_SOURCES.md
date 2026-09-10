@@ -53,20 +53,46 @@ DISCOVERED
 - `MODEL-TRACK-###`
 - `MODEL-PRICE-###`
 
-## 4. 현재 후보 Registry
+## 4. 현재 Registry
 
-| Source ID | Provider / Source | 목적 | License 상태 | 상태 |
+| Source ID | Provider / Source | 목적 | License / access | 상태 |
 |---|---|---|---|---|
-| DATA-RIP-001 | Mendeley / Strawberry-DS | 숙도 reference | CC BY 계열 확인 필요 | REVIEW_REQUIRED |
-| DATA-RIP-002 | AgML/Hugging Face strawberry growth dataset | detection/ripeness reference | 원 출처 audit 필요 | REVIEW_REQUIRED |
+| DATA-RIP-001 | Mendeley Data / Strawberry-DS v1 | 숙도/객체탐지 reference | CC BY 4.0 확인, public API 다운로드 가능 | REVIEW_REQUIRED |
+| DATA-RIP-002 | Project-AgML / Hugging Face `strawberry_growth_detection` | detection/ripeness/size reference | CC BY 4.0 확인, 약 6.75GB, revision pin | REVIEW_REQUIRED |
+| DATA-RIP-003 | AI-Hub 지능형 수직농장 통합 데이터(딸기), dataset key 596 | 설향/금실/환경 reference | 승인 + API key + `aihubshell` 필요 | AUTH_REQUIRED |
 | DATA-DIS-001 | Strawberry disease multimodal public dataset 후보 | 질병 보조 | 비상업 조건 재확인 | REVIEW_REQUIRED |
 | DATA-PEST-001 | Strawberry pest public dataset 후보 | 병해충 label audit | 원 출처/label/license audit 필요 | REVIEW_REQUIRED |
-| DATA-RIP-003 | AI-Hub 지능형 수직농장 통합 데이터(딸기) | 설향/금실/환경 reference | 인증/이용조건 확인 | AUTH_REQUIRED |
 | DATA-FIELD-001 | NONGTORI_FIELD | 실제 현장 사진/영상 | PRIVATE | IN_USE |
-| MODEL-TRACK-001 | ByteTrack | MOT baseline | 공식 repo license 확인 | REVIEW_REQUIRED |
-| MODEL-TRACK-002 | BoT-SORT | moving-camera MOT candidate | 공식 repo license 확인 | REVIEW_REQUIRED |
+| MODEL-TRACK-001 | ByteTrack | MOT baseline | 공식 repo/license audit | REVIEW_REQUIRED |
+| MODEL-TRACK-002 | BoT-SORT | moving-camera MOT candidate | 공식 repo/license audit | REVIEW_REQUIRED |
 
-외부 source의 정확한 URL/DOI/license는 downloader 구현 전에 개별 source record에서 재검증해 고정한다.
+실제 기계 판독 가능한 source record는 `ml/data_pipeline/sources/*.json`을 canonical input으로 사용한다. 문서 표와 JSON이 충돌하면 최신 검증 근거를 반영해 둘을 같은 변경에서 정합화한다.
+
+### DATA-RIP-001
+
+- DOI: `10.17632/z6dtfdpzz8.1`
+- version: `1`
+- 247 RGB 이미지 + YOLO annotation
+- 원본 maturity labels: Green, White, Early-Turning, Turning, Late-Turning, Red
+- Mendeley public API로 version 고정 다운로드
+- Nongtori 0~4 mapping은 **아직 확정하지 않음**. audit 후 별도 mapping version으로 결정
+
+### DATA-RIP-002
+
+- 원 연구 데이터 DOI: `10.5281/zenodo.10957909`
+- HF mirror: `Project-AgML/strawberry_growth_detection`
+- 현재 registry pin: `70f6277a609fb80fa18b431dccd04b9f09c876e0`
+- 1,477 rows / 3,997 boxes / 7 categories
+- mirror 전체 크기 약 6.75GB
+- `huggingface_hub.snapshot_download` 사용
+
+### DATA-RIP-003
+
+- AI-Hub dataset key: `596`
+- registry version: `1.2`
+- official `aihubshell` 사용
+- 다운로드 승인과 `AIHUB_API_KEY` 없이는 `AUTH_REQUIRED`
+- 인증 실패를 다른 공개 dataset으로 자동 대체하지 않는다.
 
 ## 5. 가격 데이터 Source 범주
 
@@ -83,19 +109,18 @@ DISCOVERED
 ```yaml
 source_id: DATA-RIP-001
 source_type: dataset
-provider: ...
-title: ...
+provider: mendeley
+title: Strawberry-DS
 original_url: ...
-retrieval_url: ...
-retrieval_method: ...
-version_or_revision: ...
-license: ...
-license_checked_at: ...
-original_labels: []
-nongtori_mapping: ...
-redistribution_allowed: unknown
-commercial_use: review_required
+version_or_revision: "1"
+license: CC-BY-4.0
+license_checked_at: YYYY-MM-DD
+redistribution_allowed: allowed_with_attribution
+commercial_use: allowed_with_attribution
 status: REVIEW_REQUIRED
+retrieval: {}
+original_labels: []
+nongtori_mapping: {}
 notes: ...
 ```
 
