@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from .farm_contract import validate_farm_code
+
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"}
 BLOCKING_STATUSES = {
     "SOURCE_ASSET_CONTEXT_CONFLICT",
@@ -65,7 +67,7 @@ def _active_metadata_rows(rows: Iterable[dict[str, Any]], *, farm_id: str) -> li
     for row in rows:
         if not _text(row.get("ID")):
             continue
-        if _text(row.get("Farm")) != farm_id:
+        if _text(row.get("Farm")).upper() != farm_id:
             continue
         if not _text(row.get("Original_No")) and not _text(row.get("Final_Name")):
             continue
@@ -82,6 +84,7 @@ def _context_signature(row: dict[str, Any]) -> tuple[str, str, str]:
 
 
 def preflight_rename(metadata_rows: Iterable[dict[str, Any]], source_dir: Path, *, farm_id: str, capture_session_id: str) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    farm_id = validate_farm_code(farm_id, field_name="farm_id")
     rows = _active_metadata_rows(metadata_rows, farm_id=farm_id)
     assets = list_assets(source_dir)
     statuses: list[str] = []
