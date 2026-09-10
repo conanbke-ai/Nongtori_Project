@@ -7,13 +7,14 @@
 - Branch budget: `main` 포함 최대 5개
 - Active workstream: 최대 3개
 - Validation branch: 최대 1개
-- 현재 remote branch 확인 기준: `main` = 1/5
+- 현재 remote branch 확인 기준: `main`, `feat/ai-data-pipeline-v1` = 2/5
 
 | Workstream | Canonical branch / PR | 상태 | Owner / Lease 경로 | 시작/최근 활동 | Acceptance Criteria / 다음 단계 |
 |---|---|---|---|---|---|
 | TORI UI System v1 | `main` / merged PR #1 | MERGED_BASELINE | owner 없음 / lease 없음 | 2026-09-08 | theme/token, 모바일 접근성, cat jelly paw cursor contract를 baseline으로 유지. 동일 foundation 재구현 금지. |
 | Nongtori Design Freeze v1 | `main` | DESIGN_FROZEN / DATA_WIP | owner 없음 / canonical docs | 2026-09-10 | `DESIGN_FREEZE_V1.md` 및 연결 정책 문서 반영·재조회 검증 완료. 구조적 정책 변경 시 Design Review 재오픈. |
 | Canonical application source 편입 | `main` / merged PR #2 | MERGED_BASELINE | owner 없음 / lease 종료 | 2026-09-08 / 2026-09-10 | 운영센터 application source, 병해충 확장, 수확일지/판독 협업, 공통 커서, DB/migration, tests, price-forecast scaffold를 main baseline으로 편입 완료. 브라우저 visual/mobile/E2E·실사용자 왕복·모델 성능 검증은 별도 후속 검증 항목으로 유지. |
+| AI Data Pipeline v1 | `feat/ai-data-pipeline-v1` / PR TBD | ACTIVE / CANONICAL | 현재 세션 / `ml/data_pipeline/`, `tests/test_data_pipeline.py`, AI data docs | 2026-09-10 | Dataset Registry, HuggingFace/Mendeley/Direct HTTP/Kaggle/AI-Hub provider adapter, streamed download/checksum, audit manifest, immutable snapshot, CLI, source records, unit tests를 구현한다. raw dataset은 Git에 넣지 않는다. Baseline Model/Optuna는 이 workstream 후속 단계로 남긴다. |
 
 ## 다음 canonical workstream
 
@@ -26,6 +27,8 @@ Dataset Registry
 → Baseline Model
 → Optuna
 ```
+
+현재 `Dataset Registry → 외부 표본 자동수집 → Audit → Snapshot` 구간은 `feat/ai-data-pipeline-v1`에서 진행한다.
 
 새 AI/data 구현은 `docs/DESIGN_FREEZE_V1.md`와 연결 정책 문서를 기준으로 한다.
 
