@@ -7,8 +7,7 @@
 - Branch budget: `main` 포함 최대 5개
 - Active workstream: 최대 3개
 - Validation branch: 최대 1개
-- 현재 remote branch 확인 기준: `main`, `feat/application-source-integration`, `ui/tori-design-system-v1` = 3/5
-- `feat/application-source-integration`은 PR #2 merge 완료 후 `CLEANUP_CANDIDATE`
+- 현재 remote branch 확인 기준: `main` = 1/5
 
 | Workstream | Canonical branch / PR | 상태 | Owner / Lease 경로 | 시작/최근 활동 | Acceptance Criteria / 다음 단계 |
 |---|---|---|---|---|---|
