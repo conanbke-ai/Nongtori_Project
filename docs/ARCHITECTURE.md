@@ -10,6 +10,8 @@
 2. 새 작물/분석 규칙이 추가되어도 기존 코드 수정이 최소화된다.
 3. AI 결과와 실제 농작업 의사결정 정책을 분리한다.
 4. 현재 수기 위치/영상 방식과 미래 Robot 연계를 Adapter 경계로 분리한다.
+5. 현장 원본 데이터는 read-only source로 보존하고 ingestion/rename/학습은 Working Copy와 immutable snapshot에서 수행한다.
+6. 데이터 관리 경계는 최소 `farm_id + capture_session_id`로 유지한다.
 
 ## 2. 전체 구조
 
@@ -30,7 +32,7 @@ Sensor / Weather / RGB / Thermal / Manual / Dataset / Video
                           ↓
                       API / DTO
                           ↓
-               Farmer UI / Future Robot Adapter
+      Farmer UI / Operator Data Center / Future Robot Adapter
 ```
 
 ## 3. 계층 책임
@@ -41,12 +43,13 @@ Sensor / Weather / RGB / Thermal / Manual / Dataset / Video
 - Service 호출
 - DTO 응답 변환
 
-금지: 모델 직접 실행, DB 직접 조회, 작물 판정 규칙 구현.
+금지: 모델 직접 실행, DB 직접 조회, 작물 판정 규칙 구현, 파일 rename 직접 수행.
 
 ### Service
 - use case 처리 순서
 - Adapter/Repository/Strategy 호출
 - 분석 세션·tracking 결과 조합
+- ingestion preflight → manifest → working copy → rename → post-audit orchestration
 
 금지: UI 의존, SQL 직접 작성, 외부 API 응답 구조 직접 의존.
 
@@ -54,13 +57,13 @@ Sensor / Weather / RGB / Thermal / Manual / Dataset / Video
 
 후보:
 
-`Crop`, `Observation`, `Environment`, `Growth`, `Quality`, `Disease`, `Pest`, `Harvest`, `Alert`, `AnalysisResult`, `FruitTrack`, `RipenessResult`, `QualityResult`, `UsageDecision`, `LocationContext`, `MarketPriceObservation`, `PriceForecastResult`, `SettlementEstimateResult`.
+`Crop`, `Observation`, `Environment`, `Growth`, `Quality`, `Disease`, `Pest`, `Harvest`, `Alert`, `AnalysisResult`, `FruitTrack`, `RipenessResult`, `QualityResult`, `UsageDecision`, `LocationContext`, `MarketPriceObservation`, `PriceForecastResult`, `SettlementEstimateResult`, `DataIngestionJob`, `SourceSnapshot`, `AssetMatch`, `RenameManifest`, `IngestionAuditResult`.
 
 Domain은 framework, DB, model filename, 외부 API를 모른다.
 
 ### Repository
 
-저장/조회만 담당한다. `응애 의심`, `수확 적기`, `JM`, `JAM` 같은 비즈니스 판단은 금지한다.
+저장/조회만 담당한다. `응애 의심`, `수확 적기`, `JM`, `JAM`, 파일 match/rename 정책 같은 비즈니스 판단은 금지한다.
 
 ### Infrastructure / Adapter
 
@@ -71,6 +74,9 @@ Domain은 framework, DB, model filename, 외부 API를 모른다.
 - `ManualInputAdapter`
 - `FieldSpreadsheetAdapter`
 - `DatasetAdapter`
+- `FileSystemAssetAdapter`
+- `ExifMetadataAdapter`
+- `SourceExportAdapter`
 - `ModelInferenceAdapter`
 - `TrackerAdapter`
 - `LocationContextProvider`
@@ -126,9 +132,12 @@ Robot Navigation / Localization
 ## 7. Data pipeline architecture
 
 ```text
-Google Sheet (WORKING SOURCE)       External Dataset Providers
-          ↓ FieldSpreadsheetAdapter          ↓ Provider Adapters
-          └──────────────────┬────────────────┘
+Google Sheet / Raw Field Assets      External Dataset Providers
+          ↓ READ ONLY                         ↓ Provider Adapters
+ Source Export / Working Copy                  Raw
+          ↓                                     ↓
+ Farm + Capture Session Boundary          Source/License Audit
+          └──────────────────┬──────────────────┘
                              ↓
                        Data Audit
                              ↓
@@ -136,14 +145,42 @@ Google Sheet (WORKING SOURCE)       External Dataset Providers
                              ↓
                     Dataset Manifest
                              ↓
+                   Dedup / Split
+                             ↓
                   Immutable Snapshot
                              ↓
-                 Split / Train / Evaluate
+                    Train / Evaluate
 ```
 
-live Sheet와 raw external dataset을 직접 학습 입력으로 사용하지 않는다.
+live Sheet와 raw field/external dataset을 직접 학습 입력으로 사용하지 않는다.
 
-## 8. Market price / settlement
+Field ingestion 상세 규칙은 `DATA_INGESTION_MANAGEMENT.md`를 canonical 기준으로 사용한다.
+
+핵심 경계:
+
+```text
+Farm
+└─ Capture Session
+   └─ Assets / Metadata / Working Copy / Ingestion Audit
+```
+
+다른 농가 또는 다른 capture session의 파일을 하나의 rename/audit job에 혼합하지 않는다.
+
+## 8. 사용자 영역 경계
+
+### Farmer / Worker UI
+수집/분석 결과와 현장 행동 중심으로 구성한다. Original_No, rename manifest, dedup/split hash 등 내부 데이터 엔지니어링 요소를 기본 노출하지 않는다.
+
+### Operator Data Center
+운영자/데이터 관리자 전용 영역에서 다음을 관리한다.
+- 농가별 수집 현황
+- capture session별 사진/영상/센서 asset
+- file ↔ metadata preflight audit
+- working copy / canonical rename
+- 누락/초과/중복/충돌
+- dataset/snapshot 상태
+
+## 9. Market price / settlement
 
 ```text
 Official Market API
@@ -157,7 +194,7 @@ Official Market API
 
 원본 단위/포장 정보를 보존한 뒤 `KRW/kg`로 정규화한다. 예측 input cutoff와 actual market reference를 분리해 leakage를 막는다.
 
-## 9. 의존성 규칙
+## 10. 의존성 규칙
 
 ```text
 UI → API → Service → Domain/Port
@@ -167,12 +204,13 @@ UI → API → Service → Domain/Port
 
 - UI → Repository 직접 접근 금지
 - Controller → Repository 직접 접근 금지
-- Repository → 비즈니스/작물 판정 금지
+- Repository → 비즈니스/작물/rename 판단 금지
 - Domain → Framework/DB/API 의존 금지
 - Strategy/Decision Policy → UI 의존 금지
 - model weight/framework → Infrastructure
+- filesystem/EXIF/Google export 세부 구현 → Infrastructure Adapter
 
-## 10. 리팩토링 신호
+## 11. 리팩토링 신호
 
 - 동일 조건문 3곳 이상 → Strategy/Decision Policy
 - 동일 Query 2곳 이상 → Repository
@@ -181,8 +219,9 @@ UI → API → Service → Domain/Port
 - 작물별 `if crop` 반복 → Crop Strategy
 - AI 지원 여부가 UI에 하드코딩 → Capability Registry
 - 모델 loading/inference/postprocess 혼합 → Inference Pipeline
+- 파일 매칭/rename 정책이 Controller/UI에 존재 → Ingestion Strategy/Service로 이동
 
-## 11. 환경
+## 12. 환경
 
 ```text
 local → simulation → staging → field/production

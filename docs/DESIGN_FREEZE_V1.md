@@ -15,6 +15,8 @@ Freeze 대상:
 - field label semantics
 - automation/decision policy
 - provenance/source lifecycle
+- farm/capture-session ingestion boundary
+- raw source protection / working-copy policy
 - split/leakage
 - failure/exception
 - model acceptance
@@ -102,11 +104,111 @@ Harvest Decision 학습에서 Grade는 target 생성 근거로만 사용하며 i
 
 `JM`은 `PROCESSING_JAM`과 동의어가 아니다. `JM→JAM`, `FULL→JAM` 자동 매핑을 금지한다.
 
-## 4. Location
+## 4. Field ingestion / source protection freeze
+
+Google Sheet, 원본 사진, 원본 영상은 canonical source로 보존하고 자동으로 수정하지 않는다.
+
+```text
+Canonical Source
+→ immutable export snapshot / Working Copy
+→ preflight audit
+→ rename / metadata manifest
+→ validated working assets
+→ normalize / dedup / split
+→ training snapshot
+```
+
+기본 정책:
+- Google Sheet 자동 수정/역동기화 금지
+- 원본 사진/영상 기본 직접 rename 금지
+- Working Copy를 생성해 복사본에서 rename/정리
+- 실제 private source snapshot/raw asset은 Git에 커밋하지 않음
+- source snapshot ID/checksum/schema/aggregate audit만 Git 기록 가능
+
+상세 규칙은 `DATA_INGESTION_MANAGEMENT.md`를 따른다.
+
+## 5. Multi-farm ingestion boundary
+
+현장 데이터 정리의 최소 관리 경계는 다음이다.
+
+```text
+farm_id + capture_session_id
+```
+
+구조:
+
+```text
+Farm
+└─ Capture Session
+   ├─ Date / Time
+   ├─ House / Bed / Zone
+   ├─ Crop / Variety
+   ├─ DataType
+   └─ Assets / Metadata
+```
+
+금지:
+- 서로 다른 농가를 하나의 rename/audit job에 혼합
+- 서로 다른 capture session을 count만 맞는다는 이유로 순서 매칭
+- filename의 Farm 코드만으로 데이터 소유 경계를 대신함
+
+## 6. Photo rename / audit freeze
+
+Google Sheet의 `Final_Name`은 validated target filename으로 사용할 수 있다.
+
+기본 매칭 우선순위:
+
+```text
+1. Original_No exact
+2. EXIF/capture timestamp 보조
+3. natural order fallback
+```
+
+`ORDER_ONLY`는 fallback이며 기본값이 아니다.
+
+rename 전 blocking audit:
+- file/row count mismatch
+- missing/extra source file
+- empty/duplicate Final_Name
+- duplicate/unmatched Original_No
+- unsupported extension
+- target collision
+- invalid metadata
+
+blocking error가 하나라도 있으면 rename job 전체를 중단한다.
+
+안전한 rename은 temporary name을 거쳐 수행하고 manifest/rollback 정보를 남긴다.
+
+## 7. UI role boundary freeze
+
+### Farmer / Worker UI
+결과와 현장 행동 중심으로 노출한다.
+- 수집 건수
+- 분석 완료/대기/오류
+- 수확/병해충/생육 결과
+- 재촬영/확인 필요 알림
+
+기본 비노출:
+- Original_No
+- rename manifest
+- dedup/split hash
+- source path
+- dataset engineering 내부 상태
+
+### Operator / Data Manager UI
+`데이터 관리센터`에서 다음을 관리한다.
+- 농가별 수집 현황
+- capture session별 사진/영상/센서
+- file ↔ metadata 검증
+- Working Copy / rename preview
+- 누락/초과/중복/충돌
+- source/training snapshot
+
+## 8. Location
 
 원본 `Farm` + `Zone`을 보존하고 내부에서만 `farm/house/bed/zone`을 derive한다. 철파이프는 Zone 내부 relative anchor이며 공통 거리 하드코딩을 금지한다.
 
-## 5. Decision Policy
+## 9. Decision Policy
 
 - 병해충: `ALERT_AND_VERIFY`
 - 숙도/등급/용도: `AUTO_DECIDE`
@@ -114,7 +216,7 @@ Harvest Decision 학습에서 Grade는 target 생성 근거로만 사용하며 i
 
 숙도/등급은 사람이 과실마다 재검수하는 흐름으로 만들지 않는다.
 
-## 6. Fruit pipeline
+## 10. Fruit pipeline
 
 ```text
 Fruit Detection
@@ -127,7 +229,7 @@ Fruit Detection
 
 `FULL = JAM` 같은 단순 mapping 금지.
 
-## 7. Tracking
+## 11. Tracking
 
 V1:
 - 동일 연속 영상/scan session 내 identity
@@ -138,7 +240,7 @@ Future:
 - custom persistent ReID
 - session 간 global fruit ID
 
-## 8. Split / leakage
+## 12. Split / leakage
 
 - 동일 Group_ID cross-split 금지
 - 동일 video/capture session cross-split 금지
@@ -147,18 +249,27 @@ Future:
 - target date 이후 정보 사용 금지
 - FIELD_TEST tuning 사용 시 pristine holdout 지위 상실
 
-## 9. Failure
+## 13. Failure
 
 숙도/등급 low confidence는 추가 frame → temporal aggregation → system exception 순서다. 병해충 risk/ambiguous는 `VERIFY_ZONE`. 가격/외부 source failure는 명시 상태 코드로 반환한다.
 
-## 10. Model acceptance
+Ingestion mismatch는 정상 처리로 덮지 않는다.
+
+```text
+blocking mismatch
+→ PREFLIGHT_BLOCKED
+→ raw/working file 변경 없음
+→ operator notification
+```
+
+## 14. Model acceptance
 
 임의 숫자 threshold를 사전 발명하지 않는다. baseline 대비 개선 + operational metric + independent test/field validation으로 판단한다.
 
 상태:
 `REFERENCE / REPRODUCED / CANDIDATE / VALIDATED / FIELD_VALIDATED / REJECTED`.
 
-## 11. Market price / settlement
+## 15. Market price / settlement
 
 - 범용 item/variety 구조
 - 첫 검증 설향
@@ -173,7 +284,7 @@ scenario_date       = 테스트/예측 대상일
 
 `SCENARIO_BACKTEST`는 scenario_date 이전 사용 가능 정보만 input으로 사용하고 실제 target price는 사후 reference로 분리한다.
 
-## 12. External data pipeline
+## 16. External data pipeline
 
 ```text
 Dataset Registry
@@ -191,7 +302,7 @@ Dataset Registry
 
 raw external/private field data는 Git에 넣지 않는다.
 
-## 13. V1 제외
+## 17. V1 제외
 
 - 미래 수확량 AI forecast
 - 실제 Robot navigation/SLAM
@@ -201,7 +312,7 @@ raw external/private field data는 Git에 넣지 않는다.
 - 모든 병해충 완전자동지원
 - 근거 없는 개인화 실수령액 주장
 
-## 14. Freeze 후 실험 조정 가능
+## 18. Freeze 후 실험 조정 가능
 
 - ByteTrack vs BoT-SORT 최종 선택
 - FPS/stride/confidence threshold
@@ -211,12 +322,16 @@ raw external/private field data는 Git에 넣지 않는다.
 - 지원 병해충 capability
 - UI 카드/그래프 세부 표현
 - 검증된 source별 label mapping 세부값 및 mapping confidence
+- EXIF fallback 상세 scoring/threshold
 
-## 15. Design Review 재오픈 조건
+## 19. Design Review 재오픈 조건
 
 - Maturity 0~4 자체 변경
 - Grade의 field harvest semantics(`NA=미수확`, 나머지 Grade=수확)를 변경
 - `JM/MAL/Usage`의 의미축을 합침
+- 원본 Google Sheet/사진/영상에 자동 write를 기본 동작으로 변경
+- farm/capture-session 데이터 경계를 제거
+- 운영자 전용 ingestion 기능을 농민 필수 조작 흐름으로 변경
 - 숙도/등급을 정상 사람확인 필수 흐름으로 변경
 - 병해충을 검증 없이 완전자동 방제 결정으로 변경
 - persistent fruit ID를 V1 필수로 승격
@@ -225,13 +340,15 @@ raw external/private field data는 Git에 넣지 않는다.
 - field holdout/test를 train/tuning에 혼합
 - 외부 source provenance 제거
 
-## 16. Implementation Gate
+## 20. Implementation Gate
 
 - [x] PROJECT_SCOPE 일치
 - [x] ARCHITECTURE 일치
 - [x] DATA_STRATEGY 일치
 - [x] FIELD_DATA_CONTRACT 일치
 - [x] LABEL_MAPPING_POLICY 일치
+- [x] DATA_INGESTION_MANAGEMENT 일치
+- [x] MULTI_FARM_DATA_MODEL 일치
 - [x] AI_DECISION_POLICY 일치
 - [x] DATA_SPLIT_POLICY 일치
 - [x] FAILURE_EXCEPTION_POLICY 일치
@@ -243,4 +360,4 @@ raw external/private field data는 Git에 넣지 않는다.
 
 Implementation Gate: **PASS**
 
-다음 canonical workstream은 `Normalize → Dedup → Split → Training Snapshot → Baseline Model → Optuna` 순서다.
+다음 canonical workstream은 `Field Task Audit + Farm-scoped Ingestion/Rename Manifest + External Annotation Audit → Training Snapshot v001 → Baseline Model → Optuna` 순서다.
