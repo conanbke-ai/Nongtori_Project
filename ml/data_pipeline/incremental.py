@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from .farm_contract import validate_farm_code
+
 LEDGER_COLUMNS = [
     "source_key", "revision", "event_type", "state_after", "row_hash",
     "previous_revision", "changed_fields_json", "source_payload_json", "recorded_at",
@@ -18,6 +20,8 @@ def _text(value: Any) -> str:
 
 
 def build_source_key(row: dict[str, Any], key_fields: tuple[str, ...] = ("Farm", "ID")) -> str:
+    if "Farm" in key_fields:
+        validate_farm_code(row.get("Farm"))
     values = [_text(row.get(field)) for field in key_fields]
     if any(not value for value in values):
         raise ValueError(f"source key fields required: {key_fields}")
