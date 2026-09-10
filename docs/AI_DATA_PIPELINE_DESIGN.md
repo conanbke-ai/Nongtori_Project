@@ -1,6 +1,6 @@
 # Nongtori AI Data Pipeline Design
 
-Status: **READY_FOR_IMPLEMENTATION_AFTER_DESIGN_FREEZE**
+Status: **IMPLEMENTED_V1_CORE / NORMALIZATION_PENDING**
 
 ## 1. 목표
 
@@ -18,6 +18,7 @@ DatasetRegistry
    ├─ Kaggle
    └─ AIHub
 → Raw
+→ Safe Extract
 → Source / License Audit
 → Integrity / Label Audit
 → Normalize
@@ -41,19 +42,51 @@ Google Sheet (WORKING SOURCE)
 → Immutable Snapshot
 ```
 
-## 3. Source lifecycle
+## 3. 현재 구현 상태
+
+`ml/data_pipeline/`에 V1 core가 구현되어 있다.
+
+구현 완료:
+- JSON source record 기반 `DatasetRegistry`
+- Provider Adapter: Mendeley / Hugging Face / Direct HTTP / Kaggle / AI-Hub
+- version/revision 고정 source record
+- streaming download + SHA-256 checksum
+- 안전한 ZIP/TAR extraction(path traversal 차단)
+- file manifest(`manifest.csv`)
+- empty file / exact duplicate checksum audit
+- immutable snapshot metadata 생성 및 같은 snapshot ID overwrite 차단
+- CLI: `list`, `download`, `extract`, `audit`, `snapshot`
+- raw/audit/snapshot Git ignore
+- core unit test 및 PR CI
+
+다음 구현 Gate:
+- source별 annotation/class audit
+- Nongtori label mapping version
+- Normalize
+- Dedup semantic policy
+- Split manifest
+- `APPROVED / NORMALIZED / SNAPSHOT_READY` 승격
+
+따라서 현재 snapshot 기능은 **audit provenance snapshot**을 만들 수 있지만, source를 학습용 `SNAPSHOT_READY`로 자동 승격하지 않는다.
+
+## 4. Source lifecycle
 
 - `DISCOVERED`
+- `REVIEW_REQUIRED`
+- `AUTH_REQUIRED`
 - `DOWNLOADED`
 - `AUDITED`
 - `APPROVED`
 - `NORMALIZED`
 - `SNAPSHOT_READY`
+- `IN_USE`
 - `REJECTED`
+- `RETIRED`
+- `SUPERSEDED`
 
-Registry에서는 `RETIRED`, `SUPERSEDED`, `AUTH_REQUIRED`도 영구 기록한다.
+`DOWNLOADED != APPROVED`.
 
-## 4. Downloader interface
+## 5. Downloader interface
 
 ```text
 DatasetRegistry
@@ -61,42 +94,52 @@ DatasetRegistry
 DatasetDownloader
   → provider adapter
 ProviderAdapter
-  → discover/version/download/verify
+  → version-pinned download
 ```
 
-Downloader는 provider-specific 인증/URL/파일구조를 숨기고 pipeline은 표준 manifest만 본다.
+Provider별 동작:
+- Mendeley: public dataset file API
+- Hugging Face: `snapshot_download` + pinned revision
+- Direct HTTP: streamed download
+- Kaggle: authenticated CLI
+- AI-Hub: official `aihubshell` + approval/API key
 
-## 5. Raw / Git 정책
+## 6. Raw / Git 정책
 
 raw 외부 데이터와 private field 원본은 Git에 넣지 않는다.
 
 Git에 저장:
-- `SOURCE.json` 또는 source YAML
-- `README_SOURCE.md`
-- `manifest.csv`
-- checksum
-- label mapping
-- split manifest
+- source JSON
+- README/source notes
+- manifest/checksum
+- label mapping/split manifest
 - audit result
 - config/script
 
-## 6. Audit gate
+Git에 저장하지 않음:
+- raw image/video/archive
+- private field data
+- 재배포 제한 원본
+- 대용량 model weights
 
-다운로드 후 최소 확인:
+## 7. Audit gate
 
-- source/version/license
-- 파일 integrity/checksum
-- 이미지/영상 decode 가능 여부
-- annotation 존재/형식
+V1 core audit:
+- file count/size
+- SHA-256
+- empty file
+- exact duplicate hash
+- extension distribution
+
+승격 전 추가 audit:
+- image/video decode
+- annotation format
 - class distribution
-- duplicate/near-duplicate
-- corrupt/empty file
-- label mapping ambiguity
-- commercial/redistribution constraint
+- near duplicate
+- label ambiguity
+- license/commercial/redistribution constraint
 
-`DOWNLOADED != APPROVED`.
-
-## 7. Normalize
+## 8. Normalize
 
 원본 label은 보존하고 normalized field를 별도 생성한다.
 
@@ -106,9 +149,9 @@ original_label
 → nongtori_label
 ```
 
-mapping은 source/version과 함께 관리한다.
+DATA-RIP-001의 6단계와 DATA-RIP-002의 7 category를 Nongtori Maturity 0~4에 임의로 합치지 않는다. 실제 annotation audit 후 mapping version을 별도 확정한다.
 
-## 8. Dedup / Split
+## 9. Dedup / Split
 
 split 전에 dedup한다.
 
@@ -125,9 +168,9 @@ External:
 Price:
 - chronological split
 
-## 9. Snapshot
+## 10. Snapshot
 
-Snapshot은 immutable이다.
+Snapshot ID overwrite는 금지한다.
 
 ```yaml
 snapshot_id: ...
@@ -136,13 +179,12 @@ source_versions: []
 schema_version: ...
 label_mapping_version: ...
 manifest_hash: ...
-split_manifest_hash: ...
 created_at: ...
 ```
 
-같은 snapshot ID의 내용 변경을 금지한다.
+최종 학습 snapshot에는 Normalize/Dedup/Split 완료 후 split manifest hash를 추가한다.
 
-## 10. Experiment linkage
+## 11. Experiment linkage
 
 모든 baseline/Optuna/final run은 다음을 기록한다.
 
@@ -156,18 +198,15 @@ created_at: ...
 - metric artifact
 - checkpoint hash
 
-## 11. 구현 우선순위
-
-Design Freeze 이후:
+## 12. 구현 우선순위
 
 ```text
-Dataset Registry
-→ Provider Adapter / Downloader
-→ Audit
-→ Normalize
-→ Snapshot
-→ Baseline
-→ Optuna
-```
+V1 Core (현재)
+Dataset Registry → Download → Extract → Audit → provenance snapshot
 
-UI/API 확장보다 재현 가능한 데이터 pipeline을 먼저 만든다.
+다음
+Annotation Audit → Normalize → Dedup → Split → training Snapshot
+
+그 다음
+Baseline Model → Optuna → Evaluation
+```
