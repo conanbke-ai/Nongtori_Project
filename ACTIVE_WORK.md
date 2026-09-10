@@ -12,20 +12,24 @@
 | Workstream | Canonical branch / PR | 상태 | Owner / Lease 경로 | 시작/최근 활동 | Acceptance Criteria / 다음 단계 |
 |---|---|---|---|---|---|
 | TORI UI System v1 | `main` / merged PR #1 | MERGED_BASELINE | owner 없음 / lease 없음 | 2026-09-08 | theme/token, 모바일 접근성, cat jelly paw cursor contract를 baseline으로 유지. 동일 foundation 재구현 금지. |
-| Canonical application source 편입 | `feat/application-source-integration` / Draft PR #2 | ACTIVE / CANONICAL | 기존 PR #2 writer 유지 / `app/`, `db/`, `drizzle/`, `public/`, `configs/`, `ml/`, `tests/`, `vendor/tori-ui/`, application build config 및 관련 docs | 2026-09-08 / 2026-09-09 | 병해충 종류 확장·농장관리 수확일지·판독 기록 협업·운영 현황 UI를 같은 workstream에서 이어간다. API/권한/SQL 통합, overview 표시, type/lint/build 근거는 PR #2에 기록. browser/mobile/E2E·실사용자 왕복·모델 성능 검증은 미실행 항목을 그대로 유지. 새 병해충/운영센터 branch를 만들지 않는다. |
+| Nongtori Design Freeze v1 | `main` | DESIGN_FROZEN / DATA_WIP | owner 없음 / canonical docs | 2026-09-10 | `DESIGN_FREEZE_V1.md` 및 연결 정책 문서 반영·재조회 검증 완료. 다음 AI/data workstream은 Dataset Registry → Downloader → Audit → Normalize → Snapshot → Baseline → Optuna. 구조적 정책 변경 시 Design Review 재오픈. |
+| Canonical application source 편입 | `feat/application-source-integration` / Draft PR #2 | ACTIVE / CANONICAL | 기존 PR #2 writer 유지 / `app/`, `db/`, `drizzle/`, `public/`, `configs/`, `ml/`, `tests/`, `vendor/tori-ui/`, application build config 및 관련 docs | 2026-09-08 / 2026-09-10 | 병해충 종류 확장·농장관리 수확일지·판독 기록 협업·운영 현황 UI를 같은 workstream에서 이어간다. PR #2의 `docs/AI_DATA_MODEL_SOURCES.md`는 main Design Freeze 문서를 canonical로 보고 merge 전에 rebase/reconcile 필요. 새 병해충/운영센터 branch를 만들지 않는다. |
 
 ## 작업 시작 체크
 
 1. `main` 실제 구현 확인
-2. 이 파일 확인
-3. open PR 검색
-4. 실제 remote branch 수와 ACTIVE workstream 수 확인
-5. docs/설계와 기존 asset 확인
-6. 수정 예정 경로에 active lease가 있는지 확인
-7. `ALREADY_DONE / IN_PROGRESS / NEW / BLOCKED` 판정
-8. NEW일 때만 Acceptance Criteria 작성 후 branch/lease 확보
+2. `docs/DESIGN_FREEZE_V1.md` 상태 확인
+3. 이 파일 확인
+4. open PR 검색
+5. 실제 remote branch 수와 ACTIVE workstream 수 확인
+6. docs/설계와 기존 asset 확인
+7. 수정 예정 경로에 active lease가 있는지 확인
+8. `ALREADY_DONE / IN_PROGRESS / NEW / BLOCKED` 판정
+9. NEW일 때만 Acceptance Criteria 작성 후 branch/lease 확보
 
 현재 `feat/application-source-integration` 범위와 겹치는 앱/병해충/판독/운영센터 작업은 `IN_PROGRESS`로 판정하고 PR #2를 이어간다.
+
+AI/data pipeline 신규 구현은 Design Freeze 계약을 기준으로 하고, 구조적 의미를 바꾸는 변경이면 코드보다 먼저 Design Review를 다시 연다.
 
 ## Branch hygiene
 
@@ -58,4 +62,4 @@
 
 ## 데이터 안전
 
-Google Sheets/외부 원본 데이터는 기존 read-only 원칙을 유지하며, 새 세션에서 임의 더미/대체 데이터 구조를 다시 만들지 않는다.
+Google Sheets/외부 원본 데이터는 read-only working source로 유지하며, 새 세션에서 임의 더미/대체 데이터 구조를 다시 만들지 않는다. 학습/평가는 immutable snapshot만 사용한다.
