@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from ml.data_pipeline.annotation_audit import audit_kgcv_json, audit_strawberry_ds_yolo
+from ml.data_pipeline.audit_expectations import verify_audit_expectation
 
 
 class ExternalAnnotationAuditTest(unittest.TestCase):
@@ -47,6 +48,30 @@ class ExternalAnnotationAuditTest(unittest.TestCase):
             report = audit_kgcv_json(root)
             self.assertEqual(report["status"], "REVIEW_REQUIRED")
             self.assertEqual(report["errors"][0]["error"], "DECIMAL_STAGE_OUT_OF_RANGE")
+
+    def test_expectation_gate_detects_source_derivative_mismatch(self):
+        expectation = {
+            "expectation_id": "EXPECT-X-v1",
+            "source_id": "DATA-RIP-001",
+            "raw_audit_expectation": {
+                "file_count_field": "label_files",
+                "file_count": 247,
+                "annotation_count": 1062,
+                "class_counts": {"Green": 455},
+            },
+        }
+        matching = {
+            "source_id": "DATA-RIP-001",
+            "label_files": 247,
+            "annotation_count": 1062,
+            "class_counts": {"Green": 455},
+        }
+        self.assertEqual(verify_audit_expectation(matching, expectation)["status"], "MATCH")
+        derivative = dict(matching)
+        derivative["annotation_count"] = 1083
+        result = verify_audit_expectation(derivative, expectation)
+        self.assertEqual(result["status"], "MISMATCH")
+        self.assertEqual(result["mismatches"][0]["name"], "annotation_count")
 
 
 if __name__ == "__main__":
