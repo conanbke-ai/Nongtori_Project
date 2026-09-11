@@ -7,6 +7,7 @@
   "mapping_version": "MAP-RIP-002-v2",
   "manifest_artifact_name": "kgcv_snapshot_candidate.csv",
   "manifest_sha256": "4a99618d7024a960f4f2431b17feaca2088415c2d14149be859df758f8985b9f",
+  "eligible_assignment_sha256": "5e2424f7c26d84e4f8d43ca90ba60b46806eb9d7bb361669c8b42ad27f2040ea",
   "physical_image_rows": 1477,
   "unique_content_sha256": 1477,
   "duplicate_content_hash_groups": 0,
