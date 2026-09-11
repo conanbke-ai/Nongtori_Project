@@ -1,0 +1,34 @@
+name: Ripeness V002 LR Confirmation
+
+on:
+  pull_request:
+    paths:
+      - 'ml/ripeness_baseline/run_lr_pair_seed.py'
+      - 'ml/ripeness_baseline/confirm_lr_v002.py'
+      - 'ml/ripeness_baseline/screen_lr_v002.py'
+      - '.github/workflows/ripeness-v002-lr-confirmation.yml'
+  workflow_dispatch:
+
+jobs:
+  pair:
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260911, 20260912, 20260913]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision && pip install pillow numpy scikit-learn
+      - name: Run paired validation
+        run: python -u -m ml.ripeness_baseline.run_lr_pair_seed --seed ${{ matrix.seed }} --workdir artifacts/seed-${{ matrix.seed }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lr-confirm-seed-${{ matrix.seed }}
+          path: artifacts/seed-${{ matrix.seed }}/
+          retention-days: 90

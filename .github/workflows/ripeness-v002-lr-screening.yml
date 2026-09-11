@@ -1,0 +1,36 @@
+name: Ripeness V002 LR Screening
+
+on:
+  pull_request:
+    paths:
+      - 'ml/ripeness_baseline/screen_lr_v002.py'
+      - '.github/workflows/ripeness-v002-lr-screening.yml'
+      - 'ml/ripeness_baseline/train_v001.py'
+      - 'ml/observability.py'
+      - 'snapshots/KGCV_RIPENESS_V001.json'
+  workflow_dispatch:
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install screening dependencies
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision && pip install pillow numpy scikit-learn
+      - name: Run controlled LR screening
+        run: python -m ml.ripeness_baseline.screen_lr_v002 --workdir artifacts/ripeness-v002-lr-screening
+      - name: Show screening summary
+        if: always()
+        run: |
+          test -f artifacts/ripeness-v002-lr-screening/comparison.json && cat artifacts/ripeness-v002-lr-screening/comparison.json || true
+          test -f artifacts/ripeness-v002-lr-screening/summaries/run_summary.json && cat artifacts/ripeness-v002-lr-screening/summaries/run_summary.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ripeness-v002-lr-screening
+          path: artifacts/ripeness-v002-lr-screening/
+          retention-days: 90
