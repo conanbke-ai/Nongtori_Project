@@ -16,9 +16,9 @@
 | Design Freeze / ingestion / source relation | `main`, PR #1~#12 | MERGED / DESIGN_FROZEN | 정책 유지 |
 | KGCV live metadata audit | `main`, PR #13 | MERGED | evidence 유지 |
 | KGCV normalized manifest | `main`, PR #14 | MERGED | v001 mapping 유지 |
-| KGCV asset SHA-256 + atomic split | `main`, PR #15 | MERGED | snapshot identity 입력 |
-| KGCV Ripeness Training Snapshot v001 | `feat/training-snapshot-v001` | FROZEN_CANDIDATE | descriptor/contract CI 후 merge |
-| Ripeness Baseline v001 | `configs/ripeness-baseline-v001.json` | REFERENCE_CONFIG | snapshot merge 후 실제 baseline run |
+| KGCV asset SHA-256 + atomic split | `main`, PR #15 | MERGED | snapshot identity 유지 |
+| KGCV Ripeness Training Snapshot v001 | `main`, PR #16 | FROZEN | immutable descriptor/checksum 유지 |
+| Ripeness Baseline v001 | `feat/ripeness-baseline-v001-run`, PR #17 | REPRODUCED | result 문서 고정 후 merge → failure analysis / candidate optimization |
 
 ## KGCV-RIPENESS-V001 frozen facts
 
@@ -32,21 +32,45 @@
 - Maturity distribution: M0 1,571 / M1 731 / M4 860
 - Split: train 2,243 / valid 486 / test 433
 - Manifest SHA-256: `4a99618d7024a960f4f2431b17feaca2088415c2d14149be859df758f8985b9f`
+- Eligible assignment SHA-256: `5e2424f7c26d84e4f8d43ca90ba60b46806eb9d7bb361669c8b42ad27f2040ea`
 - Snapshot descriptor: `snapshots/KGCV_RIPENESS_V001.json`
 - Snapshot documentation: `docs/TRAINING_SNAPSHOT_KGCV_V001.md`
 
 `turning red`는 field calibration 전까지 v001에 편입하지 않는다. 이후 정책 변경은 v001 수정이 아니라 v002+ snapshot으로 생성한다.
 
+## RIPENESS-BASELINE-V001 reproduced result
+
+- Model: ImageNet-pretrained ResNet-18
+- Best epoch: 1
+- Best validation Macro F1: `0.9536944102`
+- Test Accuracy: `0.9422632794`
+- Test Macro F1: `0.9402391674`
+- Test Ordinal MAE: `0.0900692841`
+- Test Weighted Kappa: `0.9419644636`
+- Per-class F1: M0 `0.9368421053` / M1 `0.9023255814` / M4 `0.9815498155`
+- Checkpoint SHA-256: `e9a746113d6d28edb481665ae23b59d9bf542dc9f9da3fb7465488cb2aea8a17`
+- Run duration: 22m 24s
+- Errors: 0
+- Result doc: `docs/RIPENESS_BASELINE_V001_RESULT_20260911.md`
+
+Interpretation:
+- `REFERENCE → REPRODUCED` 조건 충족
+- M1 precision/F1이 상대적으로 약하고 M0→M1 오분류가 주요 실패 패턴
+- epoch 1 이후 validation 성능이 지속적으로 개선되지 않아 현재 full fine-tuning LR/schedule이 빠르게 과적합하는 신호
+- external KGCV domain + M0/M1/M4만 포함하므로 production reliability / `FIELD_VALIDATED` 주장 금지
+
 ## 다음 canonical workstream
 
 ```text
-KGCV-RIPENESS-V001 merge
-→ Baseline Model v001 실제 학습
-→ Macro F1 / Ordinal MAE / Weighted Kappa / confusion matrix 기록
-→ REFERENCE → REPRODUCED 판정
+PR #17 merge
 → baseline failure analysis
-→ Optuna candidate search
-→ fixed test final evaluation
+→ small high-value candidate experiments
+   - lower LR
+   - frozen-head warm-up + gradual unfreeze
+   - scheduler
+   - stronger efficient backbone comparison
+→ validation-only candidate selection
+→ frozen test final evaluation
 → 향후 independent FIELD_TEST
 ```
 
@@ -61,6 +85,14 @@ KGCV-RIPENESS-V001 merge
 - primary metrics: Macro F1 / Ordinal MAE / Weighted Kappa
 - 임의 accuracy 목표값 금지
 - field data 미포함이므로 `FIELD_VALIDATED` 주장 금지
+
+## Logging / Observability
+
+- `docs/LOGGING_OBSERVABILITY_STANDARD.md` canonical 적용
+- console / run.log: human-readable progress/metric/checkpoint/error 중심
+- `events.jsonl`: structured machine-readable detail
+- run summary / metrics / checkpoint hash / retry / stack trace 기본 기록
+- regression은 R²/MAE/RMSE, classification/ordinal은 task-specific metric을 기본 기록
 
 ## Field data 상태
 
