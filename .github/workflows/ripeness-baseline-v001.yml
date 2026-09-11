@@ -1,0 +1,43 @@
+name: Ripeness Baseline V001
+
+on:
+  pull_request:
+    paths:
+      - 'ml/ripeness_baseline/**'
+      - 'ml/observability.py'
+      - 'docs/LOGGING_OBSERVABILITY_STANDARD.md'
+      - 'configs/ripeness-baseline-v001.json'
+      - 'snapshots/KGCV_RIPENESS_V001.json'
+      - '.github/workflows/ripeness-baseline-v001.yml'
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install baseline dependencies
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision && pip install pillow numpy scikit-learn
+      - name: Train and evaluate frozen baseline
+        run: python -u -m ml.ripeness_baseline.train_v001 --workdir artifacts/ripeness-baseline-v001
+      - name: Show run summary
+        if: always()
+        run: |
+          echo '===== RUN SUMMARY ====='
+          cat artifacts/ripeness-baseline-v001/summaries/run_summary.json 2>/dev/null || true
+          echo '===== LAST 100 LOG LINES ====='
+          tail -n 100 artifacts/ripeness-baseline-v001/run.log 2>/dev/null || true
+          echo '===== ERROR LOG ====='
+          cat artifacts/ripeness-baseline-v001/error.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ripeness-baseline-v001
+          path: artifacts/ripeness-baseline-v001/
+          retention-days: 90
