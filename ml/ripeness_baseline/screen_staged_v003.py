@@ -12,6 +12,7 @@ from typing import Any
 from PIL import Image
 
 from ml.observability import RunLogger
+from ml.ripeness_baseline.screen_lr_v002 import train_validation_only
 from ml.ripeness_baseline.train_v001 import (
     CLASS_TO_INDEX,
     CLASS_VALUES,
@@ -25,32 +26,64 @@ from ml.ripeness_baseline.train_v001 import (
     seed_all,
 )
 
-BASELINE_VALID = {
-    "learning_rate": 3e-4,
-    "best_epoch": 1,
-    "macro_f1": 0.9536944102033728,
-    "accuracy": 0.9567901234567902,
-    "ordinal_mae": 0.06790123456790123,
-    "weighted_kappa": 0.9603116512313006,
-    "m1_f1": 0.9177489177489178,
-    "confusion_matrix": [[237, 12, 1], [4, 106, 1], [1, 2, 122]],
-}
-CANDIDATE_LRS = [1e-4, 5e-5]
+LR = 5e-5
+WARMUP_EPOCHS = 2
+MAX_EPOCHS = 15
 
 
-def _num_workers() -> int:
-    # Dataset is intentionally local to the experiment function. Windows uses
-    # spawn multiprocessing and therefore cannot pickle a local class.
-    # Keep workers at 0 on Windows; Linux CI may still use background workers.
-    return 0 if os.name == "nt" else 2
+def _load_verified_cache(root: Path, logger: RunLogger) -> dict[str, Any] | None:
+    manifest = root / "cache_manifest.json"
+    if not manifest.exists():
+        return None
+    try:
+        cache = json.loads(manifest.read_text(encoding="utf-8"))
+        records = cache.get("records") or []
+        valid = (
+            not cache.get("errors")
+            and cache.get("physical_images") == EXPECTED_PHYSICAL_IMAGES
+            and cache.get("samples") == EXPECTED_SAMPLES
+            and cache.get("split_counts") == EXPECTED_SPLIT_COUNTS
+            and cache.get("assignment_sha256") == EXPECTED_ASSIGNMENT_SHA256
+            and len(records) == EXPECTED_SAMPLES
+            and all(Path(record["path"]).exists() for record in records)
+        )
+        if valid:
+            logger.emit(
+                "INFO",
+                "CACHE_REUSED",
+                "reusing previously verified crop cache",
+                phase="CACHE_BUILD",
+                physical_images=cache["physical_images"],
+                samples=cache["samples"],
+                assignment_sha256=cache["assignment_sha256"],
+            )
+            return cache
+        logger.emit(
+            "WARNING",
+            "CACHE_REUSE_REJECTED",
+            "existing crop cache failed verification and will be rebuilt",
+            phase="CACHE_BUILD",
+        )
+    except Exception as exc:
+        logger.emit(
+            "WARNING",
+            "CACHE_REUSE_REJECTED",
+            "existing crop cache could not be loaded and will be rebuilt",
+            phase="CACHE_BUILD",
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+        )
+    return None
 
 
-def train_validation_only(
+def train_staged_validation_only(
     cache: dict[str, Any],
     out: Path,
     logger: RunLogger,
-    learning_rate: float,
-    max_epochs: int,
+    *,
+    learning_rate: float = LR,
+    warmup_epochs: int = WARMUP_EPOCHS,
+    max_epochs: int = MAX_EPOCHS,
     seed: int = SEED,
 ) -> dict[str, Any]:
     import torch
@@ -92,7 +125,7 @@ def train_validation_only(
         [len(train_records) / (len(CLASS_VALUES) * train_counts[c]) for c in CLASS_VALUES],
         dtype=torch.float32,
     )
-    workers = _num_workers()
+    workers = 0 if os.name == "nt" else 2
 
     def loader(records_: list[dict[str, Any]], train_mode: bool) -> DataLoader:
         generator = torch.Generator().manual_seed(seed)
@@ -106,7 +139,7 @@ def train_validation_only(
         )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    exp_name = f"LR-{learning_rate:.0e}-seed-{seed}"
+    exp_name = f"STAGED-{warmup_epochs}ep-LR-{learning_rate:.0e}-seed-{seed}"
     exp_out = out / exp_name
     checkpoint = exp_out / "checkpoints" / "best.pt"
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
@@ -114,7 +147,7 @@ def train_validation_only(
     logger.emit(
         "INFO",
         "DATALOADER_CONFIGURED",
-        "configured validation dataloader",
+        "configured staged dataloader",
         phase="SCREENING",
         platform=os.name,
         num_workers=workers,
@@ -125,7 +158,15 @@ def train_validation_only(
     model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
     model.fc = nn.Linear(model.fc.in_features, len(CLASS_VALUES))
     model.to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+
+    for name, parameter in model.named_parameters():
+        parameter.requires_grad = name.startswith("fc.")
+
+    optimizer = torch.optim.AdamW(
+        [p for p in model.parameters() if p.requires_grad],
+        lr=learning_rate,
+        weight_decay=1e-4,
+    )
     criterion = nn.CrossEntropyLoss(weight=weights.to(device))
 
     best_f1 = -1.0
@@ -134,6 +175,7 @@ def train_validation_only(
     best_valid_loss = 0.0
     patience = 0
     history: list[dict[str, Any]] = []
+    full_unfrozen = False
 
     def evaluate() -> tuple[float, dict[str, Any]]:
         model.eval()
@@ -156,17 +198,31 @@ def train_validation_only(
     logger.emit(
         "INFO",
         "SCREENING_STARTED",
-        "controlled validation-only LR run started",
+        "staged fine-tuning validation screening started",
         phase="SCREENING",
         experiment=exp_name,
         learning_rate=learning_rate,
+        warmup_epochs=warmup_epochs,
         seed=seed,
-        train_samples=len(train_records),
-        valid_samples=len(valid_records),
         test_evaluated=False,
+        controlled_change="trainable_parameter_schedule_only",
     )
 
     for epoch in range(1, max_epochs + 1):
+        if epoch == warmup_epochs + 1 and not full_unfrozen:
+            for parameter in model.parameters():
+                parameter.requires_grad = True
+            optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+            full_unfrozen = True
+            logger.emit(
+                "INFO",
+                "BACKBONE_UNFROZEN",
+                "backbone unfrozen after head-only warm-up",
+                phase="SCREENING",
+                epoch=epoch,
+                learning_rate=learning_rate,
+            )
+
         started = time.monotonic()
         model.train()
         running_loss = 0.0
@@ -178,7 +234,7 @@ def train_validation_only(
             logits = model(images)
             loss = criterion(logits, labels)
             if not torch.isfinite(loss):
-                raise RuntimeError(f"non-finite loss at lr={learning_rate} seed={seed} epoch={epoch}")
+                raise RuntimeError(f"non-finite loss seed={seed} epoch={epoch}")
             loss.backward()
             optimizer.step()
             running_loss += loss.item() * len(labels)
@@ -196,7 +252,7 @@ def train_validation_only(
             logger.emit(
                 "INFO",
                 "CHECKPOINT_SAVED",
-                "validation checkpoint improved",
+                "staged validation checkpoint improved",
                 phase="SCREENING",
                 experiment=exp_name,
                 epoch=epoch,
@@ -212,6 +268,7 @@ def train_validation_only(
             "epoch": epoch,
             "learning_rate": learning_rate,
             "seed": seed,
+            "stage": "HEAD_ONLY" if epoch <= warmup_epochs else "FULL_UNFROZEN",
             "train_loss": running_loss / seen,
             "valid_loss": valid_loss,
             "best_epoch": best_epoch,
@@ -231,13 +288,15 @@ def train_validation_only(
             break
 
     if best_metrics is None or not checkpoint.exists():
-        raise RuntimeError(f"no valid checkpoint created for {exp_name}")
+        raise RuntimeError("no valid staged checkpoint created")
 
     result = {
         "experiment": exp_name,
         "learning_rate": learning_rate,
+        "warmup_epochs": warmup_epochs,
         "seed": seed,
         "test_evaluated": False,
+        "controlled_change": "trainable_parameter_schedule_only",
         "best_epoch": best_epoch,
         "best_valid_loss": best_valid_loss,
         "best_valid_metrics": best_metrics,
@@ -252,36 +311,53 @@ def train_validation_only(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--workdir", type=Path, default=Path("artifacts/ripeness-v002-lr-screening"))
-    parser.add_argument("--epochs", type=int, default=15)
+    parser.add_argument("--workdir", type=Path, default=Path("artifacts/ripeness-v003-staged"))
+    parser.add_argument("--epochs", type=int, default=MAX_EPOCHS)
+    parser.add_argument("--warmup-epochs", type=int, default=WARMUP_EPOCHS)
+    parser.add_argument("--seed", type=int, default=SEED)
     args = parser.parse_args()
-    logger = RunLogger(args.workdir, "ripeness_v002_lr_screening")
+
+    logger = RunLogger(args.workdir, "ripeness_v003_staged_screening")
     try:
         logger.emit(
             "INFO",
             "RUN_STARTED",
-            "RIPENESS-V002 LR screening started",
+            "RIPENESS-V003 staged fine-tuning screening started",
             phase="INIT",
-            experiment_id="RIPENESS-V002-LR-SCREENING",
+            experiment_id="RIPENESS-V003-STAGED-SCREENING",
             snapshot_id="KGCV-RIPENESS-V001",
-            seed=SEED,
+            seed=args.seed,
             test_evaluated=False,
         )
-        cache = build_crop_cache(args.workdir / "crops", logger)
+        cache_root = args.workdir / "crops"
+        cache = _load_verified_cache(cache_root, logger)
+        if cache is None:
+            cache = build_crop_cache(cache_root, logger)
         if cache["errors"]:
             raise RuntimeError(f"cache errors={len(cache['errors'])}")
         if cache["physical_images"] != EXPECTED_PHYSICAL_IMAGES or cache["samples"] != EXPECTED_SAMPLES:
             raise RuntimeError("snapshot count contract failed")
-        if cache["split_counts"] != EXPECTED_SPLIT_COUNTS:
-            raise RuntimeError(f"split contract failed: {cache['split_counts']}")
-        if cache["assignment_sha256"] != EXPECTED_ASSIGNMENT_SHA256:
-            raise RuntimeError("assignment checksum mismatch")
-        results = [train_validation_only(cache, args.workdir, logger, lr, args.epochs, SEED) for lr in CANDIDATE_LRS]
+        if cache["split_counts"] != EXPECTED_SPLIT_COUNTS or cache["assignment_sha256"] != EXPECTED_ASSIGNMENT_SHA256:
+            raise RuntimeError("frozen split contract failed")
+
+        full = train_validation_only(cache, args.workdir, logger, LR, args.epochs, args.seed)
+        staged = train_staged_validation_only(
+            cache,
+            args.workdir,
+            logger,
+            learning_rate=LR,
+            warmup_epochs=args.warmup_epochs,
+            max_epochs=args.epochs,
+            seed=args.seed,
+        )
         comparison = {
             "status": "SCREENING_COMPLETE",
             "test_evaluated": False,
-            "baseline_validation": BASELINE_VALID,
-            "candidates": results,
+            "change_category": "OPTIMIZATION",
+            "controlled_change": "trainable_parameter_schedule_only",
+            "execution_environment": "LOCAL_GPU_CANONICAL",
+            "baseline": full,
+            "candidate": staged,
         }
         (args.workdir / "comparison.json").write_text(
             json.dumps(comparison, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -289,23 +365,13 @@ def main() -> None:
         logger.finish_summary(
             status="SUCCESS",
             summary_path=args.workdir / "summaries" / "run_summary.json",
-            input_count=cache["physical_images"],
-            processed_count=cache["physical_images"],
-            success_count=cache["samples"],
-            failed_count=0,
             final_metrics={
-                r["experiment"]: {
-                    "best_epoch": r["best_epoch"],
-                    "macro_f1": r["best_valid_metrics"]["macro_f1"],
-                    "m1_f1": r["best_valid_metrics"]["per_class"]["1"]["f1"],
-                    "ordinal_mae": r["best_valid_metrics"]["ordinal_mae"],
-                    "weighted_kappa": r["best_valid_metrics"]["weighted_kappa"],
-                }
-                for r in results
+                "full_5e-5": full["best_valid_metrics"],
+                "staged_5e-5": staged["best_valid_metrics"],
             },
         )
     except Exception as exc:
-        logger.exception("RUN_FAILED", "LR screening failed", exc, phase="FAILED")
+        logger.exception("RUN_FAILED", "staged fine-tuning screening failed", exc, phase="FAILED")
         logger.finish_summary(
             status="FAILED",
             summary_path=args.workdir / "summaries" / "run_summary.json",

@@ -1,0 +1,41 @@
+name: Ripeness V003 Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'ml/ripeness_baseline/screen_staged_v003.py'
+      - 'ml/ripeness_baseline/smoke_v003.py'
+      - 'ml/observability.py'
+      - '.github/workflows/ripeness-v003-staged.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install smoke dependencies
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+      - name: Run synthetic staged fine-tuning smoke test
+        run: python -u -m ml.ripeness_baseline.smoke_v003
+      - name: Show smoke summary
+        if: always()
+        run: |
+          echo '===== SMOKE RESULT ====='
+          cat artifacts/ripeness-v003-smoke/smoke-result.json 2>/dev/null || true
+          echo '===== RUN SUMMARY ====='
+          cat artifacts/ripeness-v003-smoke/summaries/run_summary.json 2>/dev/null || true
+          echo '===== ERROR LOG ====='
+          cat artifacts/ripeness-v003-smoke/error.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ripeness-v003-smoke
+          path: artifacts/ripeness-v003-smoke/
+          retention-days: 30
