@@ -134,116 +134,103 @@ M1 Recall은 0.9417로 높지만 Precision이 0.8661로 낮다. 즉 실제 M1을
 
 ---
 
-# EXP-RIP-002 — Lower Full-Fine-Tuning LR Screening
+# EXP-RIP-002 — Lower Full-Fine-Tuning LR
 
-Status: **SCREENING / MEANINGFUL EVIDENCE / NOT YET CONFIRMED**
+Status: **CONFIRMED OPTIMIZATION IMPROVEMENT / VALIDATION ONLY**
 
-## Evidence
+## Screening Evidence
 
-- GitHub Actions run: `34561786597`
+- Initial GitHub Actions run: `34561786597`
 - Structured run id: `f7a06f1bd8bd`
-- Artifact: `ripeness-v002-lr-screening`
 - Snapshot: `KGCV-RIPENESS-V001`
-- Assignment SHA-256: `5e2424f7c26d84e4f8d43ca90ba60b46806eb9d7bb361669c8b42ad27f2040ea`
 - Seed: `20260910`
 - Test evaluated: **NO**
 - Compared variable: learning rate only
-- Fixed: model, optimizer family, weight decay, batch size, augmentation, snapshot, split, seed, class weighting, early-stopping rule
+- Fixed: model, optimizer family, weight decay, batch size, augmentation, snapshot, split, class weighting, early-stopping rule
 
 ## Observed Problem
 
-Baseline LR `3e-4`에서 validation best가 epoch 1에 발생한 뒤 개선되지 않았다.
-
-이는 pretrained backbone을 처음부터 full fine-tuning할 때 LR이 과도해 유용한 pretrained feature를 빠르게 훼손하거나, validation optimum을 너무 일찍 지나칠 가능성을 시사했다.
+Baseline LR `3e-4`에서 validation best가 지나치게 빠르게 발생하고 M0/M1 경계 혼동이 컸다.
 
 ## Hypothesis
 
-**full-backbone learning rate를 낮추면 optimization이 안정화되고 M0/M1 경계 성능이 개선될 수 있다.**
+**full-backbone learning rate를 낮추면 optimization이 안정화되고 숙도 경계 성능 및 seed 안정성이 개선될 수 있다.**
 
-이 가설만 검증하기 위해 `1e-4`, `5e-5` 두 조건만 비교했다.
+## Initial Screening Result
 
-## Actual Validation Result
+| Metric | Baseline `3e-4` | `1e-4` | `5e-5` |
+|---|---:|---:|---:|
+| Macro F1 | 0.953694 | 0.969563 | **0.971656** |
+| M1 F1 | 0.917749 | 0.946903 | **0.951111** |
+| Ordinal MAE ↓ | 0.067901 | 0.045267 | **0.043210** |
+| Weighted Kappa | 0.960312 | 0.970794 | **0.972190** |
+| Best epoch | 1 | 3 | 2 |
 
-| Metric | Baseline `3e-4` | `1e-4` | Δ vs Base | `5e-5` | Δ vs Base |
+Failure pattern도 `M0 → M1: 12 → 7`로 감소했다. 이 결과를 근거로 `1e-4` 추가 탐색은 중단하고 `5e-5`만 confirmation 대상으로 승격했다.
+
+## Paired Multi-seed Confirmation
+
+GitHub Actions run: `34605181173`
+
+Seeds:
+- `20260911`
+- `20260912`
+- `20260913`
+
+각 seed에서 `3e-4`와 `5e-5`를 동일한 snapshot/split/augmentation/optimizer 조건으로 paired 비교했고, test set은 열지 않았다.
+
+### Seed별 best validation 결과
+
+| Seed | LR | Macro F1 | Ordinal MAE ↓ | Weighted Kappa | Best Epoch |
 |---|---:|---:|---:|---:|---:|
-| Macro F1 | 0.953694 | 0.969563 | +0.015868 | **0.971656** | **+0.017961** |
-| M1 F1 | 0.917749 | 0.946903 | +0.029154 | **0.951111** | **+0.033362** |
-| Ordinal MAE ↓ | 0.067901 | 0.045267 | -0.022634 | **0.043210** | **-0.024691** |
-| Weighted Kappa | 0.960312 | 0.970794 | +0.010482 | **0.972190** | **+0.011879** |
-| Best epoch | 1 | 3 | +2 | 2 | +1 |
+| 20260911 | 3e-4 | 0.9596 | 0.0453 | 0.9677 | 5 |
+| 20260911 | 5e-5 | **0.9644** | **0.0432** | **0.9724** | 6 |
+| 20260912 | 3e-4 | **0.9653** | **0.0453** | 0.9680 | 12 |
+| 20260912 | 5e-5 | 0.9607 | 0.0473 | **0.9693** | 9 |
+| 20260913 | 3e-4 | 0.9528 | 0.0556 | 0.9632 | 6 |
+| 20260913 | 5e-5 | **0.9624** | **0.0453** | **0.9710** | 5 |
 
-상대적으로 `5e-5`는 baseline 대비:
+`5e-5`가 모든 seed에서 모든 metric을 이긴 것은 아니다. seed `20260912`에서는 Macro F1과 MAE가 `3e-4`에 소폭 뒤졌다. 따라서 이 실험을 "모든 실행에서 절대 우세"라고 해석하지 않는다.
 
-- Macro F1: 약 **+1.88%**
-- M1 F1: 약 **+3.64%**
-- Ordinal MAE: 약 **36.36% 감소**
-- Weighted Kappa: 약 **+1.24%**
+### 3-seed aggregate
 
-으로 개선되었다.
+| Metric | `3e-4` mean ± std | `5e-5` mean ± std | Mean Δ |
+|---|---:|---:|---:|
+| Macro F1 | 0.9592 ± 0.0063 | **0.9625 ± 0.0019** | **+0.0033** |
+| Ordinal MAE ↓ | 0.0487 ± 0.0059 | **0.0453 ± 0.0021** | **-0.0035** |
+| Weighted Kappa | 0.9663 ± 0.0027 | **0.9709 ± 0.0016** | **+0.0046** |
 
-## Failure Pattern Comparison
+## Interpretation
 
-Baseline best validation confusion matrix:
+이 confirmation에서 가장 중요한 정보는 단순 평균 상승만이 아니다.
 
-```text
-[[237, 12, 1],
- [  4,106, 1],
- [  1,  2,122]]
-```
+1. Macro F1 평균이 상승했다.
+2. Ordinal MAE 평균이 감소했다.
+3. Weighted Kappa 평균이 상승했다.
+4. Macro F1 표준편차가 약 `0.0063 → 0.0019`로 크게 감소했다.
+5. MAE와 Kappa의 seed 간 변동도 감소했다.
+6. 즉 `5e-5`는 baseline보다 **평균적으로 조금 더 좋고, 훨씬 더 안정적인 optimization recipe**였다.
 
-`5e-5` best validation confusion matrix:
+따라서 초기 screening에서 관찰한 개선 방향이 단일 seed 우연만으로 설명되지는 않는다.
 
-```text
-[[243, 7, 0],
- [  3,107, 1],
- [  2, 0,123]]
-```
-
-주요 관찰:
-
-- M0 → M1: `12 → 7`
-- M1 → M0: `4 → 3`
-- M4 → M1: `2 → 0`
-- M1 F1: `0.9177 → 0.9511`
-
-즉 전체 점수만 오른 것이 아니라 **실제로 개선하려던 M0/M1 경계 오류가 감소했다.**
-
-## Learning Behavior
-
-- Baseline best epoch: 1
-- `1e-4` best epoch: 3
-- `5e-5` best epoch: 2
-
-낮은 LR에서 validation optimum이 epoch 1 이후로 이동했다. 따라서 "기존 LR이 다소 공격적이었다"는 가설을 지지하는 방향이다.
-
-다만 두 후보 모두 이후 train loss가 매우 낮아지는 동안 validation 개선은 지속되지 않았으므로, LR 감소만으로 일반화 문제가 완전히 해결됐다고 보지는 않는다.
-
-## Why This Is Meaningful Evidence
-
-이 실험을 기록하는 이유는 단순히 metric이 조금 올랐기 때문이 아니다.
-
-1. 변경 변수는 LR 하나뿐이었다.
-2. 개선 방향이 Macro F1 / M1 F1 / Ordinal MAE / Kappa에서 동시에 일치했다.
-3. 목표 failure인 M0↔M1 confusion이 실제로 줄었다.
-4. best epoch가 1에서 2~3으로 이동해 optimization behavior도 가설과 같은 방향으로 변했다.
-
-따라서 다음 실험의 방향을 실제로 바꾸는 evidence다.
+다만 이 confirmation은 validation-only이고 KGCV M0/M1/M4 외부 데이터에 한정되어 있다. 이 결과만으로 production reliability 또는 field reliability를 주장하지 않는다.
 
 ## Reliability
 
-- 실제 실행 완료: YES
+- 실제 screening 실행: YES
+- paired 3-seed confirmation: YES
 - frozen split checksum: VERIFIED
 - test tuning: NO
-- structured artifact: YES
-- single seed screening: YES
-- multi-seed confirmation: **NO**
-
-한 seed의 결과이므로 아직 `검증된 개선` 또는 `PROMOTE_CANDIDATE`로 표현하지 않는다.
+- structured artifacts: YES
+- aggregate mean/std: YES
+- field validation: NO
 
 ## Decision
 
-`KEEP 5e-5 FOR CONFIRMATION`
+`CONFIRMED: USE LR 5e-5 AS CURRENT RESNET-18 FULL-FINETUNING RECIPE`
 
-`1e-4`도 baseline보다 개선되었지만 `5e-5`가 주요 metric과 M1 boundary에서 일관되게 더 좋았다. 따라서 다음 단계에서는 더 많은 LR 값을 추가 탐색하지 않고 **`3e-4` baseline과 `5e-5`만 paired multi-seed로 재검증**한다.
+`5e-5`를 현재 ResNet-18 full fine-tuning의 기본 LR로 승격한다.
 
-`1e-4`는 별도 추가 실험하지 않는다. 이미 다음 의사결정에 필요한 정보가 충분하기 때문이다.
+이 결정은 "최종 숙도 모델 확정"이 아니라 **optimization recipe 하나가 baseline 대비 검증되었다**는 의미다.
+
+다음 개선 실험은 LR을 더 촘촘하게 스윕하지 않는다. 이미 의사결정에 충분한 evidence가 있으므로, 다음에는 다른 원인 축을 하나만 선택해 통제 실험한다.
