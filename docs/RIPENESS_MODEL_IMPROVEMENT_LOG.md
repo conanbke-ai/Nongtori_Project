@@ -47,25 +47,22 @@ Paired confirmation on seeds `20260911/12/13`:
 
 Decision: `CONFIRMED — USE LR 5e-5 AS CURRENT RESNET-18 FULL-FINETUNING RECIPE`.
 
-No further fine-grained LR sweep is justified.
-
 ---
 
 # EXP-RIP-003 — Two-epoch Head-only Staged Fine-tuning
 
-Status: **REJECTED / MEANINGFUL GPU EVIDENCE / VALIDATION ONLY**
+Status: **REJECTED / VALIDATION ONLY**
 
 Detailed evidence: `docs/experiments/ripeness/EXP-RIP-003_STAGED_FINETUNING.md`
 
-| Metric | Full 5e-5 | Staged 5e-5 | Staged Δ |
-|---|---:|---:|---:|
-| Macro F1 | **0.9683** | 0.9654 | -0.0029 |
-| Accuracy | **0.9691** | 0.9671 | -0.0020 |
-| Ordinal MAE ↓ | **0.0432** | 0.0494 | +0.0062 |
-| Weighted Kappa | **0.9692** | 0.9677 | -0.0015 |
-| Best epoch | 2 | 8 | +6 |
+| Metric | Full 5e-5 | Staged 5e-5 |
+|---|---:|---:|
+| Macro F1 | **0.9683** | 0.9654 |
+| Accuracy | **0.9691** | 0.9671 |
+| Ordinal MAE ↓ | **0.0432** | 0.0494 |
+| Weighted Kappa | **0.9692** | 0.9677 |
 
-Decision: `REJECT STAGED FINE-TUNING FOR CURRENT RESNET-18 RECIPE`.
+Decision: `REJECT STAGED FINE-TUNING`.
 
 ---
 
@@ -75,18 +72,16 @@ Status: **REJECTED AFTER PAIRED 3-SEED GPU CONFIRMATION / VALIDATION ONLY**
 
 Detailed evidence: `docs/experiments/ripeness/EXP-RIP-004_COSINE_SCHEDULER.md`
 
-Initial seed `20260910` screening was slightly positive, but paired confirmation on seeds `20260911/12/13` did not reproduce the gain.
+Initial screening was slightly positive, but paired confirmation on seeds `20260911/12/13` did not reproduce the gain.
 
-| Metric | Constant `5e-5` mean ± std | Cosine mean ± std | Mean Delta |
-|---|---:|---:|---:|
-| Macro F1 | **0.9628 ± 0.0047** | 0.9613 ± 0.0057 | -0.0015 |
-| Accuracy | **0.9657 ± 0.0043** | 0.9636 ± 0.0063 | -0.0021 |
-| Ordinal MAE ↓ | **0.0405 ± 0.0047** | 0.0425 ± 0.0059 | +0.0021 |
-| Weighted Kappa | **0.9744 ± 0.0034** | 0.9727 ± 0.0070 | -0.0016 |
+| Metric | Constant `5e-5` mean ± std | Cosine mean ± std |
+|---|---:|---:|
+| Macro F1 | **0.9628 ± 0.0047** | 0.9613 ± 0.0057 |
+| Accuracy | **0.9657 ± 0.0043** | 0.9636 ± 0.0063 |
+| Ordinal MAE ↓ | **0.0405 ± 0.0047** | 0.0425 ± 0.0059 |
+| Weighted Kappa | **0.9744 ± 0.0034** | 0.9727 ± 0.0070 |
 
-Decision: `REJECT COSINEANNEALINGLR FOR CURRENT RESNET-18 RECIPE`.
-
-Do not micro-tune `eta_min`, `T_max`, or neighboring cosine settings.
+Decision: `REJECT COSINEANNEALINGLR`.
 
 ---
 
@@ -96,32 +91,46 @@ Status: **REJECTED / LOCAL GPU SCREENING / VALIDATION ONLY**
 
 Detailed evidence: `docs/experiments/ripeness/EXP-RIP-005_LABEL_SMOOTHING.md`
 
-## Hypothesis tested
+| Metric | Baseline | Smoothing 0.05 |
+|---|---:|---:|
+| Macro F1 | **0.9683** | 0.9631 |
+| Accuracy | **0.9691** | 0.9650 |
+| Ordinal MAE ↓ | **0.0432** | 0.0514 |
+| Weighted Kappa | **0.9692** | 0.9663 |
 
-After exhausting the first optimization axes, test whether mild label smoothing reduces over-confident adjacent maturity-boundary decisions.
+Decision: `REJECT LABEL_SMOOTHING=0.05`.
 
-Only the loss smoothing parameter changed:
+---
+
+# EXP-RIP-006 — Expected Ordinal Distance Regularization
+
+Status: **REJECTED / LOCAL GPU SCREENING / VALIDATION ONLY**
+
+Detailed evidence: `docs/experiments/ripeness/EXP-RIP-006_ORDINAL_LOSS.md`
+
+Controlled change:
 
 ```text
-Baseline  : weighted CrossEntropy, label_smoothing=0
-Candidate : weighted CrossEntropy, label_smoothing=0.05
+Baseline  : weighted CrossEntropy
+Candidate : weighted CrossEntropy + 0.20 × expected normalized maturity distance
+Values    : [0, 1, 4]
 ```
 
-Actual local GPU screening (`RTX 4060`, seed `20260910`, run `bc8ce459c1b6`):
+Actual local GPU paired screening (`RTX 4060`, seed `20260910`, run `a62b466f71e3`):
 
-| Metric | Baseline | Smoothing 0.05 | Delta |
+| Metric | Baseline | Ordinal-aware | Delta |
 |---|---:|---:|---:|
-| Macro F1 | **0.9683** | 0.9631 | -0.0052 |
-| Accuracy | **0.9691** | 0.9650 | -0.0041 |
-| Ordinal MAE ↓ | **0.0432** | 0.0514 | +0.0082 |
-| Weighted Kappa | **0.9692** | 0.9663 | -0.0029 |
-| Best epoch | 2 | 6 | +4 |
+| Macro F1 | **0.9703** | 0.9683 | -0.0020 |
+| Accuracy | **0.9712** | 0.9691 | -0.0021 |
+| Ordinal MAE ↓ | **0.0412** | 0.0432 | +0.0020 |
+| Weighted Kappa | **0.9707** | 0.9692 | -0.0015 |
+| Best epoch | 2 | 2 | 0 |
 
-The candidate delayed the best epoch but degraded every reported primary/ordinal metric. Raw CE loss values are not compared across the two objectives because smoothing changes the target distribution and therefore the loss scale.
+The candidate failed to improve the ordinal-sensitive metrics it explicitly targeted. No lambda micro-sweep is justified.
 
-Decision: `REJECT LABEL_SMOOTHING=0.05 FOR CURRENT RESNET-18 RECIPE`.
+Decision: `REJECT EXPECTED-ORDINAL-DISTANCE REGULARIZATION λ=0.20`.
 
-Do not micro-sweep neighboring smoothing values. Move to a genuinely different loss mechanism if continuing the LOSS axis.
+Reproducibility note: exact same-seed scores show small variation across separate CUDA runs because deterministic algorithms are not currently enforced. V006 is interpreted as a same-run paired screening result; future confirmation/acceptance must explicitly account for stochastic variance.
 
 ---
 
@@ -144,5 +153,6 @@ Rejected branches:
 - 2-epoch head-only staged warm-up
 - CosineAnnealingLR (`eta_min=5e-6`, `T_max=15`)
 - label smoothing `0.05`
+- expected ordinal-distance regularizer `λ=0.20`
 
-Next experiments must move to a genuinely different evidence-backed mechanism rather than repeating LR, warm-up, cosine, or label-smoothing micro-variations.
+Next experiments should move away from LR/scheduler/warm-up/small loss-coefficient tuning. Architecture/backbone comparison is now the preferred next axis unless a genuinely different ordinal formulation is justified.
