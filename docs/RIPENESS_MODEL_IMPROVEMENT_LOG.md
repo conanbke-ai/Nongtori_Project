@@ -24,17 +24,11 @@ Status: **REPRODUCED BASELINE**
 
 Decision: `KEEP AS REPRODUCED BASELINE`.
 
-The baseline established the reproducible comparison point and showed that M1 boundary behavior and very early validation saturation were the first useful optimization targets.
-
 ---
 
 # EXP-RIP-002 — Lower Full-Fine-Tuning LR
 
 Status: **CONFIRMED OPTIMIZATION IMPROVEMENT / VALIDATION ONLY**
-
-## Actual evidence
-
-Initial controlled screening compared only LR while keeping snapshot, split, model, augmentation, optimizer family, class weighting and checkpoint rule fixed.
 
 | Metric | `3e-4` | `1e-4` | `5e-5` |
 |---|---:|---:|---:|
@@ -43,17 +37,13 @@ Initial controlled screening compared only LR while keeping snapshot, split, mod
 | Ordinal MAE ↓ | 0.0679 | 0.0453 | **0.0432** |
 | Weighted Kappa | 0.9603 | 0.9708 | **0.9722** |
 
-The target failure pattern also improved (`M0 → M1: 12 → 7`).
-
-Paired confirmation on seeds `20260911/12/13` showed:
+Paired confirmation on seeds `20260911/12/13`:
 
 | Metric | `3e-4` mean ± std | `5e-5` mean ± std |
 |---|---:|---:|
 | Macro F1 | 0.9592 ± 0.0063 | **0.9625 ± 0.0019** |
 | Ordinal MAE ↓ | 0.0487 ± 0.0059 | **0.0453 ± 0.0021** |
 | Weighted Kappa | 0.9663 ± 0.0027 | **0.9709 ± 0.0016** |
-
-`5e-5` did not win every metric on every seed, but improved the aggregate and substantially reduced seed variance.
 
 Decision: `CONFIRMED — USE LR 5e-5 AS CURRENT RESNET-18 FULL-FINETUNING RECIPE`.
 
@@ -67,33 +57,14 @@ Status: **REJECTED / MEANINGFUL GPU EVIDENCE / VALIDATION ONLY**
 
 Detailed evidence: `docs/experiments/ripeness/EXP-RIP-003_STAGED_FINETUNING.md`
 
-## Observed problem
-
-Even after LR `5e-5` was confirmed, train loss continued to fall rapidly while validation performance saturated early.
-
-## Hypothesis tested
-
-Head-only training for epochs 1-2 followed by full backbone unfreeze could preserve pretrained features and improve generalization.
-
-## Controlled change
-
-Only the trainable-parameter schedule changed.
+Controlled change:
 
 ```text
 Current:   full backbone from epoch 1, LR 5e-5
 Candidate: head-only epoch 1-2 → full backbone from epoch 3, LR 5e-5
 ```
 
-The test set remained closed.
-
-## Actual local GPU result
-
-Execution environment:
-- NVIDIA GeForce RTX 4060 8GB
-- PyTorch `2.5.1+cu121`
-- CUDA runtime `12.1`
-- seed `20260910`
-- structured run id `35c5b0b463fd`
+Actual local GPU result:
 
 | Metric | Full 5e-5 | Staged 5e-5 | Staged Δ |
 |---|---:|---:|---:|
@@ -103,25 +74,61 @@ Execution environment:
 | Weighted Kappa | **0.9692** | 0.9677 | -0.0015 |
 | Best epoch | 2 | 8 | +6 |
 
-Staged training changed the optimization trajectory and delayed the best epoch, but it did not improve the primary validation metric. A staged epoch reached a slightly higher Kappa (`0.9707` at epoch 6), but that checkpoint had lower Macro F1 (`0.9631`) and therefore did not constitute a superior overall candidate.
+Decision: `REJECT STAGED FINE-TUNING FOR CURRENT RESNET-18 RECIPE`.
 
-The first two head-only epochs were also weak (`Macro F1 0.4660 → 0.5672`). Performance recovered immediately after backbone unfreeze, but never exceeded the simpler full-fine-tuning recipe.
+The staged recipe changed the optimization trajectory but did not improve the primary metric. Do not repeatedly retune warm-up length.
+
+---
+
+# EXP-RIP-004 — CosineAnnealingLR
+
+Status: **REJECTED AFTER PAIRED 3-SEED GPU CONFIRMATION / VALIDATION ONLY**
+
+Detailed evidence: `docs/experiments/ripeness/EXP-RIP-004_COSINE_SCHEDULER.md`
+
+## Hypothesis tested
+
+After LR `5e-5` was confirmed and staged warm-up was rejected, test whether cosine LR decay improves generalization while keeping model, data, optimizer, augmentation, starting LR and selection rule fixed.
+
+## Initial screening
+
+Seed `20260910` was directionally positive:
+
+| Metric | Constant 5e-5 | Cosine | Delta |
+|---|---:|---:|---:|
+| Macro F1 | 0.9683 | **0.9703** | +0.0020 |
+| Accuracy | 0.9691 | **0.9712** | +0.0021 |
+| Ordinal MAE ↓ | 0.0432 | **0.0412** | -0.0020 |
+| Weighted Kappa | 0.9692 | **0.9707** | +0.0015 |
+
+Because the effect was small, it was not promoted and instead advanced to paired multi-seed confirmation.
+
+## Paired confirmation — seeds 20260911/12/13
+
+Seed-level primary results:
+
+| Seed | Constant Macro F1 | Cosine Macro F1 | Winner |
+|---|---:|---:|---|
+| 20260911 | **0.9662** | 0.9624 | Constant |
+| 20260912 | 0.9647 | **0.9664** | Cosine |
+| 20260913 | **0.9574** | 0.9551 | Constant |
+
+Aggregate:
+
+| Metric | Constant `5e-5` mean ± std | Cosine mean ± std | Mean Delta |
+|---|---:|---:|---:|
+| Macro F1 | **0.9628 ± 0.0047** | 0.9613 ± 0.0057 | -0.0015 |
+| Accuracy | **0.9657 ± 0.0043** | 0.9636 ± 0.0063 | -0.0021 |
+| Ordinal MAE ↓ | **0.0405 ± 0.0047** | 0.0425 ± 0.0059 | +0.0021 |
+| Weighted Kappa | **0.9744 ± 0.0034** | 0.9727 ± 0.0070 | -0.0016 |
+
+The initial positive screening did not reproduce. Cosine won only one of three confirmation seeds, aggregate performance was slightly worse on every reported metric, and variance increased.
 
 ## Decision
 
-`REJECT STAGED FINE-TUNING FOR CURRENT RESNET-18 RECIPE`
+`REJECT COSINEANNEALINGLR FOR CURRENT RESNET-18 RECIPE`
 
-Keep:
-
-```text
-ResNet-18
-full fine-tuning from epoch 1
-LR 5e-5
-```
-
-Do not repeatedly retune warm-up length. This experiment already changed the decision by ruling out the staged-warm-up branch.
-
-The earlier Windows DataLoader multiprocessing error is excluded from this model-improvement record because it was an execution-environment compatibility issue rather than model evidence.
+Do not micro-tune `eta_min`, `T_max`, or neighboring cosine settings. The experiment has already produced decision-changing evidence.
 
 ---
 
@@ -130,10 +137,17 @@ The earlier Windows DataLoader multiprocessing error is excluded from this model
 ```text
 Model      : ImageNet-pretrained ResNet-18
 Training   : full fine-tuning from epoch 1
-Base LR    : 5e-5
+Base LR    : constant 5e-5
 Optimizer  : AdamW
 Selection  : validation Macro F1
 Test usage : closed during optimization
 ```
 
-Next experiments must move to a genuinely different evidence-backed axis rather than repeating LR or warm-up variations.
+Confirmed optimization changes:
+- lower full-fine-tuning LR (`5e-5`)
+
+Rejected optimization branches:
+- 2-epoch head-only staged warm-up
+- CosineAnnealingLR (`eta_min=5e-6`, `T_max=15`)
+
+Next experiments must move to a genuinely different evidence-backed mechanism rather than repeating LR, warm-up, or cosine-scheduler variations.
