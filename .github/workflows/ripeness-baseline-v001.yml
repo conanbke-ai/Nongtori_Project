@@ -3,7 +3,7 @@ name: Ripeness Baseline V001
 on:
   pull_request:
     paths:
-      - 'ml/ripeness_baseline/**'
+      - 'ml/ripeness_baseline/train_v001.py'
       - 'ml/observability.py'
       - 'docs/LOGGING_OBSERVABILITY_STANDARD.md'
       - 'configs/ripeness-baseline-v001.json'
