@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import time
 from collections import Counter
 from pathlib import Path
@@ -28,6 +29,51 @@ from ml.ripeness_baseline.train_v001 import (
 LR = 5e-5
 WARMUP_EPOCHS = 2
 MAX_EPOCHS = 15
+
+
+def _load_verified_cache(root: Path, logger: RunLogger) -> dict[str, Any] | None:
+    manifest = root / "cache_manifest.json"
+    if not manifest.exists():
+        return None
+    try:
+        cache = json.loads(manifest.read_text(encoding="utf-8"))
+        records = cache.get("records") or []
+        valid = (
+            not cache.get("errors")
+            and cache.get("physical_images") == EXPECTED_PHYSICAL_IMAGES
+            and cache.get("samples") == EXPECTED_SAMPLES
+            and cache.get("split_counts") == EXPECTED_SPLIT_COUNTS
+            and cache.get("assignment_sha256") == EXPECTED_ASSIGNMENT_SHA256
+            and len(records) == EXPECTED_SAMPLES
+            and all(Path(record["path"]).exists() for record in records)
+        )
+        if valid:
+            logger.emit(
+                "INFO",
+                "CACHE_REUSED",
+                "reusing previously verified crop cache",
+                phase="CACHE_BUILD",
+                physical_images=cache["physical_images"],
+                samples=cache["samples"],
+                assignment_sha256=cache["assignment_sha256"],
+            )
+            return cache
+        logger.emit(
+            "WARNING",
+            "CACHE_REUSE_REJECTED",
+            "existing crop cache failed verification and will be rebuilt",
+            phase="CACHE_BUILD",
+        )
+    except Exception as exc:
+        logger.emit(
+            "WARNING",
+            "CACHE_REUSE_REJECTED",
+            "existing crop cache could not be loaded and will be rebuilt",
+            phase="CACHE_BUILD",
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+        )
+    return None
 
 
 def train_staged_validation_only(
@@ -79,6 +125,7 @@ def train_staged_validation_only(
         [len(train_records) / (len(CLASS_VALUES) * train_counts[c]) for c in CLASS_VALUES],
         dtype=torch.float32,
     )
+    workers = 0 if os.name == "nt" else 2
 
     def loader(records_: list[dict[str, Any]], train_mode: bool) -> DataLoader:
         generator = torch.Generator().manual_seed(seed)
@@ -87,8 +134,8 @@ def train_staged_validation_only(
             batch_size=32,
             shuffle=train_mode,
             generator=generator if train_mode else None,
-            num_workers=2,
-            pin_memory=False,
+            num_workers=workers,
+            pin_memory=torch.cuda.is_available(),
         )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -97,12 +144,21 @@ def train_staged_validation_only(
     checkpoint = exp_out / "checkpoints" / "best.pt"
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
 
+    logger.emit(
+        "INFO",
+        "DATALOADER_CONFIGURED",
+        "configured staged dataloader",
+        phase="SCREENING",
+        platform=os.name,
+        num_workers=workers,
+        pin_memory=torch.cuda.is_available(),
+        device=str(device),
+    )
+
     model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
     model.fc = nn.Linear(model.fc.in_features, len(CLASS_VALUES))
     model.to(device)
 
-    # Controlled change: same 5e-5 LR as the confirmed recipe. Only the
-    # trainable-parameter schedule changes: head-only warm-up, then full unfreeze.
     for name, parameter in model.named_parameters():
         parameter.requires_grad = name.startswith("fc.")
 
@@ -129,8 +185,8 @@ def train_staged_validation_only(
         count = 0
         with torch.no_grad():
             for images, labels in loader(valid_records, False):
-                images = images.to(device)
-                labels = labels.to(device)
+                images = images.to(device, non_blocking=True)
+                labels = labels.to(device, non_blocking=True)
                 logits = model(images)
                 total_loss += criterion(logits, labels).item() * len(labels)
                 count += len(labels)
@@ -172,8 +228,8 @@ def train_staged_validation_only(
         running_loss = 0.0
         seen = 0
         for images, labels in loader(train_records, True):
-            images = images.to(device)
-            labels = labels.to(device)
+            images = images.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
             optimizer.zero_grad()
             logits = model(images)
             loss = criterion(logits, labels)
@@ -273,7 +329,10 @@ def main() -> None:
             seed=args.seed,
             test_evaluated=False,
         )
-        cache = build_crop_cache(args.workdir / "crops", logger)
+        cache_root = args.workdir / "crops"
+        cache = _load_verified_cache(cache_root, logger)
+        if cache is None:
+            cache = build_crop_cache(cache_root, logger)
         if cache["errors"]:
             raise RuntimeError(f"cache errors={len(cache['errors'])}")
         if cache["physical_images"] != EXPECTED_PHYSICAL_IMAGES or cache["samples"] != EXPECTED_SAMPLES:
@@ -296,6 +355,7 @@ def main() -> None:
             "test_evaluated": False,
             "change_category": "OPTIMIZATION",
             "controlled_change": "trainable_parameter_schedule_only",
+            "execution_environment": "LOCAL_GPU_CANONICAL",
             "baseline": full,
             "candidate": staged,
         }
@@ -312,7 +372,10 @@ def main() -> None:
         )
     except Exception as exc:
         logger.exception("RUN_FAILED", "staged fine-tuning screening failed", exc, phase="FAILED")
-        logger.finish_summary(status="FAILED", summary_path=args.workdir / "summaries" / "run_summary.json")
+        logger.finish_summary(
+            status="FAILED",
+            summary_path=args.workdir / "summaries" / "run_summary.json",
+        )
         raise
 
 
