@@ -1,0 +1,41 @@
+name: Ripeness V003 Staged Fine-tuning
+
+on:
+  pull_request:
+    paths:
+      - 'ml/ripeness_baseline/screen_staged_v003.py'
+      - '.github/workflows/ripeness-v003-staged.yml'
+  workflow_dispatch:
+
+jobs:
+  screening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision && pip install pillow numpy scikit-learn
+      - name: Run controlled staged fine-tuning screening
+        run: python -u -m ml.ripeness_baseline.screen_staged_v003 --workdir artifacts/ripeness-v003-staged
+      - name: Show summary
+        if: always()
+        run: |
+          echo '===== RUN SUMMARY ====='
+          cat artifacts/ripeness-v003-staged/summaries/run_summary.json 2>/dev/null || true
+          echo '===== COMPARISON ====='
+          cat artifacts/ripeness-v003-staged/comparison.json 2>/dev/null || true
+          echo '===== LAST 120 LOG LINES ====='
+          tail -n 120 artifacts/ripeness-v003-staged/run.log 2>/dev/null || true
+          echo '===== ERROR LOG ====='
+          cat artifacts/ripeness-v003-staged/error.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ripeness-v003-staged
+          path: artifacts/ripeness-v003-staged/
+          retention-days: 90
