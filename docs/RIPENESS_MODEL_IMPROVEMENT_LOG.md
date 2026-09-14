@@ -57,15 +57,6 @@ Status: **REJECTED / MEANINGFUL GPU EVIDENCE / VALIDATION ONLY**
 
 Detailed evidence: `docs/experiments/ripeness/EXP-RIP-003_STAGED_FINETUNING.md`
 
-Controlled change:
-
-```text
-Current:   full backbone from epoch 1, LR 5e-5
-Candidate: head-only epoch 1-2 → full backbone from epoch 3, LR 5e-5
-```
-
-Actual local GPU result:
-
 | Metric | Full 5e-5 | Staged 5e-5 | Staged Δ |
 |---|---:|---:|---:|
 | Macro F1 | **0.9683** | 0.9654 | -0.0029 |
@@ -76,8 +67,6 @@ Actual local GPU result:
 
 Decision: `REJECT STAGED FINE-TUNING FOR CURRENT RESNET-18 RECIPE`.
 
-The staged recipe changed the optimization trajectory but did not improve the primary metric. Do not repeatedly retune warm-up length.
-
 ---
 
 # EXP-RIP-004 — CosineAnnealingLR
@@ -86,34 +75,7 @@ Status: **REJECTED AFTER PAIRED 3-SEED GPU CONFIRMATION / VALIDATION ONLY**
 
 Detailed evidence: `docs/experiments/ripeness/EXP-RIP-004_COSINE_SCHEDULER.md`
 
-## Hypothesis tested
-
-After LR `5e-5` was confirmed and staged warm-up was rejected, test whether cosine LR decay improves generalization while keeping model, data, optimizer, augmentation, starting LR and selection rule fixed.
-
-## Initial screening
-
-Seed `20260910` was directionally positive:
-
-| Metric | Constant 5e-5 | Cosine | Delta |
-|---|---:|---:|---:|
-| Macro F1 | 0.9683 | **0.9703** | +0.0020 |
-| Accuracy | 0.9691 | **0.9712** | +0.0021 |
-| Ordinal MAE ↓ | 0.0432 | **0.0412** | -0.0020 |
-| Weighted Kappa | 0.9692 | **0.9707** | +0.0015 |
-
-Because the effect was small, it was not promoted and instead advanced to paired multi-seed confirmation.
-
-## Paired confirmation — seeds 20260911/12/13
-
-Seed-level primary results:
-
-| Seed | Constant Macro F1 | Cosine Macro F1 | Winner |
-|---|---:|---:|---|
-| 20260911 | **0.9662** | 0.9624 | Constant |
-| 20260912 | 0.9647 | **0.9664** | Cosine |
-| 20260913 | **0.9574** | 0.9551 | Constant |
-
-Aggregate:
+Initial seed `20260910` screening was slightly positive, but paired confirmation on seeds `20260911/12/13` did not reproduce the gain.
 
 | Metric | Constant `5e-5` mean ± std | Cosine mean ± std | Mean Delta |
 |---|---:|---:|---:|
@@ -122,13 +84,44 @@ Aggregate:
 | Ordinal MAE ↓ | **0.0405 ± 0.0047** | 0.0425 ± 0.0059 | +0.0021 |
 | Weighted Kappa | **0.9744 ± 0.0034** | 0.9727 ± 0.0070 | -0.0016 |
 
-The initial positive screening did not reproduce. Cosine won only one of three confirmation seeds, aggregate performance was slightly worse on every reported metric, and variance increased.
+Decision: `REJECT COSINEANNEALINGLR FOR CURRENT RESNET-18 RECIPE`.
 
-## Decision
+Do not micro-tune `eta_min`, `T_max`, or neighboring cosine settings.
 
-`REJECT COSINEANNEALINGLR FOR CURRENT RESNET-18 RECIPE`
+---
 
-Do not micro-tune `eta_min`, `T_max`, or neighboring cosine settings. The experiment has already produced decision-changing evidence.
+# EXP-RIP-005 — Label Smoothing 0.05
+
+Status: **REJECTED / LOCAL GPU SCREENING / VALIDATION ONLY**
+
+Detailed evidence: `docs/experiments/ripeness/EXP-RIP-005_LABEL_SMOOTHING.md`
+
+## Hypothesis tested
+
+After exhausting the first optimization axes, test whether mild label smoothing reduces over-confident adjacent maturity-boundary decisions.
+
+Only the loss smoothing parameter changed:
+
+```text
+Baseline  : weighted CrossEntropy, label_smoothing=0
+Candidate : weighted CrossEntropy, label_smoothing=0.05
+```
+
+Actual local GPU screening (`RTX 4060`, seed `20260910`, run `bc8ce459c1b6`):
+
+| Metric | Baseline | Smoothing 0.05 | Delta |
+|---|---:|---:|---:|
+| Macro F1 | **0.9683** | 0.9631 | -0.0052 |
+| Accuracy | **0.9691** | 0.9650 | -0.0041 |
+| Ordinal MAE ↓ | **0.0432** | 0.0514 | +0.0082 |
+| Weighted Kappa | **0.9692** | 0.9663 | -0.0029 |
+| Best epoch | 2 | 6 | +4 |
+
+The candidate delayed the best epoch but degraded every reported primary/ordinal metric. Raw CE loss values are not compared across the two objectives because smoothing changes the target distribution and therefore the loss scale.
+
+Decision: `REJECT LABEL_SMOOTHING=0.05 FOR CURRENT RESNET-18 RECIPE`.
+
+Do not micro-sweep neighboring smoothing values. Move to a genuinely different loss mechanism if continuing the LOSS axis.
 
 ---
 
@@ -139,15 +132,17 @@ Model      : ImageNet-pretrained ResNet-18
 Training   : full fine-tuning from epoch 1
 Base LR    : constant 5e-5
 Optimizer  : AdamW
+Loss       : weighted CrossEntropy, label_smoothing=0
 Selection  : validation Macro F1
 Test usage : closed during optimization
 ```
 
-Confirmed optimization changes:
+Confirmed changes:
 - lower full-fine-tuning LR (`5e-5`)
 
-Rejected optimization branches:
+Rejected branches:
 - 2-epoch head-only staged warm-up
 - CosineAnnealingLR (`eta_min=5e-6`, `T_max=15`)
+- label smoothing `0.05`
 
-Next experiments must move to a genuinely different evidence-backed mechanism rather than repeating LR, warm-up, or cosine-scheduler variations.
+Next experiments must move to a genuinely different evidence-backed mechanism rather than repeating LR, warm-up, cosine, or label-smoothing micro-variations.
