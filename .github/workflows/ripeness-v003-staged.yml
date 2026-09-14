@@ -1,16 +1,18 @@
-name: Ripeness V003 Staged Fine-tuning
+name: Ripeness V003 Smoke
 
 on:
   pull_request:
     paths:
       - 'ml/ripeness_baseline/screen_staged_v003.py'
+      - 'ml/ripeness_baseline/smoke_v003.py'
+      - 'ml/observability.py'
       - '.github/workflows/ripeness-v003-staged.yml'
   workflow_dispatch:
 
 jobs:
-  screening:
+  smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 15
     env:
       PYTHONUNBUFFERED: '1'
     steps:
@@ -18,24 +20,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install dependencies
-        run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision && pip install pillow numpy scikit-learn
-      - name: Run controlled staged fine-tuning screening
-        run: python -u -m ml.ripeness_baseline.screen_staged_v003 --workdir artifacts/ripeness-v003-staged
-      - name: Show summary
+      - name: Install smoke dependencies
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+      - name: Run synthetic staged fine-tuning smoke test
+        run: python -u -m ml.ripeness_baseline.smoke_v003
+      - name: Show smoke summary
         if: always()
         run: |
+          echo '===== SMOKE RESULT ====='
+          cat artifacts/ripeness-v003-smoke/smoke-result.json 2>/dev/null || true
           echo '===== RUN SUMMARY ====='
-          cat artifacts/ripeness-v003-staged/summaries/run_summary.json 2>/dev/null || true
-          echo '===== COMPARISON ====='
-          cat artifacts/ripeness-v003-staged/comparison.json 2>/dev/null || true
-          echo '===== LAST 120 LOG LINES ====='
-          tail -n 120 artifacts/ripeness-v003-staged/run.log 2>/dev/null || true
+          cat artifacts/ripeness-v003-smoke/summaries/run_summary.json 2>/dev/null || true
           echo '===== ERROR LOG ====='
-          cat artifacts/ripeness-v003-staged/error.log 2>/dev/null || true
+          cat artifacts/ripeness-v003-smoke/error.log 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ripeness-v003-staged
-          path: artifacts/ripeness-v003-staged/
-          retention-days: 90
+          name: ripeness-v003-smoke
+          path: artifacts/ripeness-v003-smoke/
+          retention-days: 30
