@@ -1,7 +1,7 @@
 # Nongtori Ripeness Tuning Backlog
 
-Status: **CANONICAL BACKLOG / DO NOT BLIND-SWEEP**
-Updated: **2026-09-15 — after V008 residual-error audit**
+Status: **PAUSED AFTER V008 / DATA-LABEL FREEZE REQUIRED BEFORE NEXT TRAINING**
+Updated: **2026-09-15 — benchmark frozen after V008**
 
 ## Purpose
 
@@ -36,64 +36,61 @@ Selected paired checkpoint audit on 486 validation samples:
 - EfficientNet M1 F1: `0.9478`
 - EfficientNet M4 F1: `1.0000`
 
-Conclusion: the current residual problem is highly localized at the **M0/M1 boundary**, not a broad maturity-classification failure. Eight shared errors require source/crop/label review before additional model tuning.
+Conclusion: the current residual problem is highly localized at the **M0/M1 boundary**, not a broad maturity-classification failure.
 
-## Priority A — current work
+## Benchmark freeze decision
 
-### A1. M0/M1 boundary hard-example review — NEXT
+The current photo/video/field inventory is still being organized, and part of the present material is explicitly development/testing data. Therefore V001–V008 are frozen as a **development benchmark line**, not as final field-model optimization.
 
-Review all 12 EfficientNet errors plus model-disagreement samples against original crop/source context.
+See:
 
-Assign review taxonomy:
-- `LABEL_AMBIGUITY`
-- `CROP_QUALITY`
-- `DOMAIN_VARIATION`
-- `LIKELY_MODEL_LIMIT`
-- `MODEL_DISAGREEMENT`
-- `REVIEW_REQUIRED`
+- `RIPENESS_BENCHMARK_FREEZE_20260915.md`
+- `RIPENESS_DATA_LABEL_BACKLOG.md`
+- `LABEL_MAPPING_POLICY.md`
 
-Required analysis:
-- inspect original crop and, when available, source image context;
-- true/predicted maturity and confidence;
-- M0→M1 vs M1→M0 direction;
-- shared vs architecture-specific error;
-- lighting/exposure/viewpoint/occlusion/crop framing indicators;
-- repeated source/farm/session concentration;
-- whether the human label is visually defensible.
+### Why tuning is paused
 
-**Stop condition:** do not launch another training experiment until the dominant residual-error category is identified.
+1. the future field dataset distribution is not frozen;
+2. the final field annotation guideline is not frozen;
+3. external benchmark mapping and final field visual criteria are intentionally separated;
+4. further score chasing on the current 486 validation samples may optimize a temporary benchmark;
+5. the model already provides sufficient evidence to retain EfficientNet-B0 as the current preferred benchmark candidate.
 
-### A2. EfficientNet resource acceptance
+Accordingly **do not launch V009 training yet**.
 
-Record and compare parameter count, peak VRAM, epoch runtime, checkpoint size, and inference latency/FPS where service inference matters.
+## Re-open conditions
 
-### A3. Independent test/field gate — after tuning freeze
+At least the following must be materially complete before a new ripeness optimization experiment is promoted:
 
-Evaluate the selected frozen candidate once according to `MODEL_ACCEPTANCE_POLICY.md`. Do not repeatedly tune against test/field results.
+- representative real photo/video data organized;
+- flower / fruit-set / NOT_APPLICABLE handling decided;
+- Maturity 0–4 annotation criteria versioned;
+- M0/M1 ambiguous-boundary rule defined;
+- video/frame grouping and duplicate policy defined;
+- adjudication workflow defined;
+- new normalized immutable snapshot frozen;
+- leakage-safe split regenerated for that snapshot.
 
-## Priority B — conditional tuning selected by A1 evidence
+Then run a clean baseline on the new snapshot before deciding which historical tuning choices should be reused.
 
-### B1. Targeted augmentation
-Run only if residual errors cluster by illumination, exposure, occlusion, framing, scale, or viewpoint. Tune the observed acquisition failure, not generic augmentation strength.
+## Deferred experiment candidates
 
-### B2. M0/M1 boundary formulation
-Run only if labels/crops are clean and the boundary remains model-limited. Research candidates may include a genuinely ordinal head/objective, boundary-aware/cost-sensitive classification, or calibrated abstention for ambiguous samples.
+These remain candidates only, not active work:
 
-V005 label smoothing and V006 additive expected-distance regularization are already rejected and must not be repeated as coefficient micro-sweeps.
+### Targeted augmentation
+Use only if the new field dataset shows repeated illumination, exposure, occlusion, framing, scale, or viewpoint errors.
 
-### B3. Architecture follow-up
-ConvNeXt-Tiny remains a literature-grounded candidate only if residual representation evidence or EfficientNet operational cost justifies it. Do not run an architecture tournament merely to chase `0.98`.
+### M0/M1 boundary formulation
+Use only if final labels/crops are clean and an adjacent-stage model error remains. Possible directions include structural ordinal classification, boundary-aware/cost-sensitive objectives, or uncertainty/abstention.
 
-### B4. EfficientNet-specific optimization
-Only after A1 identifies a model-side bottleneck. Potential isolated dimensions: architecture-appropriate LR confirmation, discriminative LR/layer-wise decay, input resolution, or batch/gradient accumulation if resource-bound.
+### Architecture follow-up
+ConvNeXt-Tiny remains available if future representation evidence or operational constraints justify comparison. Do not run an architecture tournament simply to chase `0.98`.
 
-## Priority C — later / stronger evidence required
+### EfficientNet-specific optimization
+Architecture-specific LR, discriminative LR/layer-wise decay, input resolution, batch size, or gradient accumulation may be evaluated one variable at a time after the new snapshot baseline.
 
-- calibration (ECE/Brier/temperature scaling) if confidence is consumed by decision policy;
-- lightweight ensemble only if clean-label complementary errors justify inference cost;
-- TTA only if latency permits and error evidence supports it;
-- targeted field-data acquisition for observed failure conditions;
-- label adjudication protocol if human ambiguity is a measurable ceiling.
+### Later candidates
+Calibration, ensemble, TTA, targeted field-data acquisition, or label adjudication automation require stronger evidence and/or service need.
 
 ## Already tested — do not casually repeat
 
@@ -105,7 +102,7 @@ Only after A1 identifies a model-side bottleneck. Potential isolated dimensions:
 
 ## Promotion rule
 
-A backlog item becomes an experiment only when the plan states:
+A deferred item becomes an experiment only when the plan states:
 
 ```text
 Observed evidence
@@ -119,4 +116,4 @@ Acceptance threshold / rejection condition
 Stop condition
 ```
 
-The goal is not `Macro F1 >= 0.98` by itself. On 486 validation samples, EfficientNet currently makes 12 errors and `>=0.98` accuracy would require at most 9; only three corrected samples separate those headline values. The goal is therefore to reduce **explainable, operationally meaningful residual error** without leakage, cherry-picking, or unjustified complexity.
+Current stop condition: **no additional ripeness training until a successor data/label snapshot is frozen.**
