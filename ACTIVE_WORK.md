@@ -18,7 +18,10 @@
 | KGCV normalized manifest | `main`, PR #14 | MERGED | v001 mapping 유지 |
 | KGCV asset SHA-256 + atomic split | `main`, PR #15 | MERGED | snapshot identity 유지 |
 | KGCV Ripeness Training Snapshot v001 | `main`, PR #16 | FROZEN | immutable descriptor/checksum 유지 |
-| Ripeness Baseline v001 | `feat/ripeness-baseline-v001-run`, PR #17 | REPRODUCED | result 문서 고정 후 merge → failure analysis / candidate optimization |
+| Ripeness Baseline v001~v006 | `main` + historical experiment branches/PRs | EXECUTED / RECORDED | rejected directions 반복 금지 |
+| Ripeness V007 EfficientNet-B0 | `feat/ripeness-v007-efficientnet-b0`, PR #23 | CONFIRMED / READY_TO_CLOSE | final docs → merge → branch cleanup |
+| Ripeness V008 residual audit | PR #23 branch | COMPLETE / VALIDATION ONLY | benchmark evidence 유지 |
+| Ripeness further tuning | none | PAUSED | field/photo/video + label freeze 후 successor snapshot에서 재개 |
 
 ## KGCV-RIPENESS-V001 frozen facts
 
@@ -38,53 +41,87 @@
 
 `turning red`는 field calibration 전까지 v001에 편입하지 않는다. 이후 정책 변경은 v001 수정이 아니라 v002+ snapshot으로 생성한다.
 
-## RIPENESS-BASELINE-V001 reproduced result
+## Ripeness benchmark current conclusion
 
-- Model: ImageNet-pretrained ResNet-18
-- Best epoch: 1
-- Best validation Macro F1: `0.9536944102`
-- Test Accuracy: `0.9422632794`
-- Test Macro F1: `0.9402391674`
-- Test Ordinal MAE: `0.0900692841`
-- Test Weighted Kappa: `0.9419644636`
-- Per-class F1: M0 `0.9368421053` / M1 `0.9023255814` / M4 `0.9815498155`
-- Checkpoint SHA-256: `e9a746113d6d28edb481665ae23b59d9bf542dc9f9da3fb7465488cb2aea8a17`
-- Run duration: 22m 24s
-- Errors: 0
-- Result doc: `docs/RIPENESS_BASELINE_V001_RESULT_20260911.md`
+### V007 paired confirmation
 
-Interpretation:
-- `REFERENCE → REPRODUCED` 조건 충족
-- M1 precision/F1이 상대적으로 약하고 M0→M1 오분류가 주요 실패 패턴
-- epoch 1 이후 validation 성능이 지속적으로 개선되지 않아 현재 full fine-tuning LR/schedule이 빠르게 과적합하는 신호
-- external KGCV domain + M0/M1/M4만 포함하므로 production reliability / `FIELD_VALIDATED` 주장 금지
+EfficientNet-B0 vs ResNet-18, paired seeds `20260911/12/13`:
 
-## 다음 canonical workstream
+| Metric | ResNet-18 | EfficientNet-B0 |
+|---|---:|---:|
+| Macro F1 mean | 0.9614 | **0.9686** |
+| Accuracy mean | 0.9643 | **0.9698** |
+| Ordinal MAE ↓ | 0.0418 | **0.0322** |
+| Weighted Kappa | 0.9734 | **0.9771** |
+
+EfficientNet-B0 won Macro F1 on 2/3 paired seeds and improved all aggregate primary/supporting metrics.
+
+### V008 residual audit
+
+Seed `20260912`, 486 validation samples:
+
+- EfficientNet errors: 12
+- ResNet errors: 18
+- shared same error: 8
+- EfficientNet M0→M1: 10
+- EfficientNet M1→M0: 2
+- M4 errors: 0
+
+Interpretation: current residual error is highly localized at the M0/M1 boundary.
+
+### Status
 
 ```text
-PR #17 merge
-→ baseline failure analysis
-→ small high-value candidate experiments
-   - lower LR
-   - frozen-head warm-up + gradual unfreeze
-   - scheduler
-   - stronger efficient backbone comparison
-→ validation-only candidate selection
-→ frozen test final evaluation
-→ 향후 independent FIELD_TEST
+Snapshot      : KGCV-RIPENESS-V001
+Role          : development benchmark
+Preferred net : EfficientNet-B0
+Test tuning   : prohibited
+Field status  : NOT FIELD VALIDATED
+Production    : NOT APPROVED
 ```
 
-## Baseline v001 계약
+The current experiment line is frozen in `docs/RIPENESS_BENCHMARK_FREEZE_20260915.md`.
 
-- ResNet-18 ImageNet transfer learning reference
-- object crop classification
-- classes: Maturity 0 / 1 / 4
-- train augmentation only
-- valid: early stopping/model selection
-- test: configuration freeze 후 최종 평가만
-- primary metrics: Macro F1 / Ordinal MAE / Weighted Kappa
-- 임의 accuracy 목표값 금지
-- field data 미포함이므로 `FIELD_VALIDATED` 주장 금지
+## Field data / label status
+
+Canonical Google Sheet: `딸기_프로젝트`
+
+Observed current source structure:
+- tabs: `컬럼정보`, `농가_딸기데이터`, `농가_베드길이`
+- field columns include `ID`, `Group_ID`, `Original_No`, `Farm`, `Zone`, `Class`, `DataType`, `View_Type`, `Occlusion`, `Maturity`, `Grade`, `Health`, `Final_Name`
+- `Maturity` source guide currently describes `0~4 (Green, White, Turning, Mature, Full)`
+- this description is **working field metadata guidance**, not yet a frozen visual annotation standard
+- existing external-source mapping (`GREEN/WHITE/TURNING/RED_RIPE`) is normalization policy and must not be silently treated as final field-label acceptance criteria
+
+Current field Sheet also contains partially filled rows after the currently complete ID sequence. These WIP rows are source data under organization and must not be promoted into a training snapshot merely because a generated `Final_Name` exists.
+
+Drive source folders confirmed:
+- `남자친구농가(M)`
+- `응애피해농가(C)` — grouped scope only; canonical stored farm code is never `C`
+- `외부플랫폼(U)`
+
+The currently connected Drive listing returned no directly enumerable child media in those grouping folders, so physical field asset materialization/hash audit remains blocked from this session. Do not fabricate file inventory counts.
+
+## Current next work — DATA / LABEL readiness
+
+No V009 training yet.
+
+Proceed in this order:
+
+1. Continue organizing field photos/videos and Sheet metadata.
+2. Separate rows into `READY / PARTIAL / INVALID_FOR_TRAINING` readiness rather than treating non-empty rows as training-ready.
+3. Define and version final Maturity 0–4 visual annotation criteria.
+4. Explicitly decide flower / fruit-set / non-fruit handling.
+5. Define ambiguous boundary / adjudication rules.
+6. Define video frame sampling, duplicate and `Group_ID`/session leakage rules.
+7. Once the data revision is materially stable, build a new immutable normalized snapshot (v002+).
+8. Re-run a clean baseline on that successor snapshot before reusing historical tuning choices.
+
+Canonical docs:
+- `docs/RIPENESS_BENCHMARK_FREEZE_20260915.md`
+- `docs/RIPENESS_DATA_LABEL_BACKLOG.md`
+- `docs/LABEL_MAPPING_POLICY.md`
+- `docs/RIPENESS_TUNING_BACKLOG.md`
 
 ## Logging / Observability
 
@@ -93,15 +130,6 @@ PR #17 merge
 - `events.jsonl`: structured machine-readable detail
 - run summary / metrics / checkpoint hash / retry / stack trace 기본 기록
 - regression은 R²/MAE/RMSE, classification/ordinal은 task-specific metric을 기본 기록
-
-## Field data 상태
-
-- canonical Farm: `M / C1 / C2 / U`
-- Farm scope `C`는 C1+C2 그룹 조회/작업 범위로 허용
-- live Sheet active ID row: 110 (STR 98 / LEF 12)
-- shared `Original_No` 및 context-conflict 사례 확인
-- 현재 Drive source 분류 폴더에 physical field image가 없어 field asset SHA-256/materialization은 대기
-- field data가 들어오면 external KGCV snapshot을 덮어쓰지 않고 별도 revision/snapshot으로 관리
 
 ## 데이터 안전
 

@@ -1,8 +1,14 @@
 # Nongtori Label Mapping Policy
 
-Status: **CANONICAL / FIELD_SEMANTICS_CLARIFIED**
+Status: **CANONICAL / FIELD_SEMANTICS_CLARIFIED / FIELD_ANNOTATION_GUIDE_NOT_FINAL**
 
 이 문서는 Google Sheet `딸기_프로젝트`의 현장 라벨과 외부 공개 데이터셋의 라벨을 Nongtori 학습용 canonical label로 변환하는 규칙을 정의한다. 원본 Google Sheet schema는 유지하고, 파생 라벨은 Normalize/Manifest 계층에서 생성한다.
+
+> **중요한 범위 구분**
+>
+> 아래 `Canonical phenology`와 외부 source mapping은 현재 외부/개발용 데이터셋을 일관된 task label로 정규화하기 위한 **mapping policy**다. 이것을 곧바로 최종 현장 annotator가 따라야 하는 `0~4 육안 판정 기준`으로 해석하지 않는다.
+>
+> 실제 농가 사진·영상 데이터의 정리가 진행 중이므로 최종 field annotation handbook은 별도 버전으로 확정한다. 특히 꽃/착과 극초기, M0↔M1 경계, 색/표면비율, 조명/가림/부분 crop 기준은 field sample 검토 후 확정한다.
 
 ## 1. 기본 원칙
 
@@ -11,6 +17,8 @@ Status: **CANONICAL / FIELD_SEMANTICS_CLARIFIED**
 3. 현장 데이터의 명시적 의미를 외부 데이터에 무조건 확장하지 않는다.
 4. `Grade`로 Harvest target을 만들 수 있지만 Harvest 모델 입력 feature로 `Grade`를 사용하지 않는다. 이는 target leakage다.
 5. `JM`, `MAL`, `PROCESSING_JAM`은 서로 다른 의미다.
+6. 외부 benchmark mapping과 최종 field annotation criteria를 동일시하지 않는다.
+7. validation/test error를 보고 원본 label을 즉석 수정하지 않는다. 수정 제안은 별도 adjudication/versioning 절차를 거친다.
 
 ## 2. Field Grade semantics
 
@@ -71,7 +79,7 @@ Maturity=3 + Grade=NA          → 미수확
 
 동일하게 `Maturity=4 → JM`도 금지한다. 정상 완숙 과실은 SP/HI/MD가 될 수 있다.
 
-## 5. Canonical phenology
+## 5. Canonical phenology — external/development normalization
 
 외부 데이터 라벨 정규화를 위해 다음 중간 stage를 사용한다.
 
@@ -85,7 +93,7 @@ Maturity=3 + Grade=NA          → 미수확
 - `RED_RIPE`
 - `OVERRIPE`
 
-Nongtori Maturity 0~4 매핑 기본값:
+현재 **외부/개발 데이터 정규화 기본값**은 다음과 같다.
 
 | Canonical stage | Maturity |
 |---|---:|
@@ -100,6 +108,19 @@ Nongtori Maturity 0~4 매핑 기본값:
 | `FLOWER` | `null` |
 
 `TURNING_LATE`는 Maturity 3으로 정규화하지만 Harvest 여부는 별도다.
+
+### 5.1 이 표가 의미하지 않는 것
+
+이 표만으로 다음을 확정하지 않는다.
+
+- 현장 annotator가 육안으로 M0/M1을 나누는 최종 색상 임계값
+- 꽃 직후 fruit-set을 M0로 볼지 별도 상태로 둘지
+- cultivar별 색 차이 처리
+- 조명/화이트밸런스/그림자 허용범위
+- 과실 일부만 보일 때의 annotation rule
+- 수확 적기와 숙도 단계의 일대일 대응
+
+이 항목은 `RIPENESS_DATA_LABEL_BACKLOG.md`에서 관리하고, 충분한 실제 field sample이 정리된 후 `RIPENESS_ANNOTATION_GUIDE_V1`로 별도 Freeze한다.
 
 ## 6. OVERRIPE 정책
 
@@ -204,3 +225,20 @@ mapping_version: MAP-RIP-002-v1
 이 필드들은 immutable normalized manifest/snapshot에 생성한다.
 
 Google Sheet schema 변경은 현장 원본만으로 표현할 수 없는 새로운 ground truth가 실제로 필요할 때만 검토한다.
+
+## 11. Field annotation policy lifecycle
+
+최종 현장 숙도 기준은 다음 순서로만 확정한다.
+
+```text
+field/photo/video 정리
+→ 대표/경계 sample 축적
+→ annotation guideline draft
+→ 복수 sample 육안 검토
+→ ambiguity / NOT_APPLICABLE rule 확정
+→ versioned annotation guide
+→ normalized snapshot freeze
+→ clean baseline 재학습
+```
+
+현재 `KGCV-RIPENESS-V001`의 benchmark score는 이 lifecycle 완료 전의 개발 실험 증거이며, 최종 현장 정확도로 표시하지 않는다.
