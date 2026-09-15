@@ -1,23 +1,19 @@
 # Nongtori Ripeness Tuning Backlog
 
 Status: **CANONICAL BACKLOG / DO NOT BLIND-SWEEP**
-Updated: **2026-09-15**
+Updated: **2026-09-15 — after V008 residual-error audit**
 
 ## Purpose
 
 This backlog separates **things worth investigating** from **things already tested and rejected**. It exists to prevent repeated parameter tweaking and to keep the improvement path evidence-driven.
 
-A backlog item is not permission to run a grid search. Before execution it must have:
-
-1. observed project evidence;
-2. literature/technical basis where applicable;
-3. one clear hypothesis;
-4. controlled variables;
-5. acceptance/rejection criteria.
+A backlog item is not permission to run a grid search. Before execution it must have observed project evidence, literature/technical basis where applicable, one clear hypothesis, controlled variables, and acceptance/rejection criteria.
 
 ## Current evidence
 
-V007 paired 3-seed confirmation (`20260911/12/13`) produced:
+### V007 — architecture confirmation
+
+EfficientNet-B0 improved aggregate validation performance over ResNet-18 across paired seeds `20260911/12/13`:
 
 | Metric | ResNet-18 mean ± std | EfficientNet-B0 mean ± std | EfficientNet Δ |
 |---|---:|---:|---:|
@@ -26,103 +22,90 @@ V007 paired 3-seed confirmation (`20260911/12/13`) produced:
 | Ordinal MAE ↓ | 0.0418 ± 0.0063 | **0.0322 ± 0.0097** | **-0.0096** |
 | Weighted Kappa | 0.9734 ± 0.0045 | **0.9771 ± 0.0070** | **+0.0037** |
 
-EfficientNet-B0 won Macro F1 on 2/3 paired seeds and improved every aggregate primary/ordinal metric. It is therefore the preferred architecture candidate, subject to final resource/test/field gates.
+### V008 — residual error audit
 
-## Priority A — do before further hyperparameter tuning
+Selected paired checkpoint audit on 486 validation samples:
 
-### A1. Validation hard-example / error-ceiling audit
+- EfficientNet errors: **12**
+- ResNet errors: 18
+- both correct: 464
+- EfficientNet-only correct: 10
+- ResNet-only correct: 4
+- shared same error: **8**
+- EfficientNet residual transitions: **M0→M1 = 10, M1→M0 = 2, M4 errors = 0**
+- EfficientNet M1 F1: `0.9478`
+- EfficientNet M4 F1: `1.0000`
 
-**Question:** Are the remaining errors caused mainly by model capacity, label ambiguity, crop quality, or domain variation?
+Conclusion: the current residual problem is highly localized at the **M0/M1 boundary**, not a broad maturity-classification failure. Eight shared errors require source/crop/label review before additional model tuning.
 
-Required outputs:
-- prediction export for selected ResNet and EfficientNet checkpoints;
-- error intersection and model-specific error sets;
-- true/predicted class, confidence, source asset, bbox, source/farm context;
-- confusion transition counts;
-- repeated hard-sample ranking;
-- review buckets: `LABEL_AMBIGUITY`, `CROP_QUALITY`, `DOMAIN_VARIATION`, `MODEL_DISAGREEMENT`, `LIKELY_MODEL_LIMIT`, `REVIEW_REQUIRED`.
+## Priority A — current work
 
-**Why first:** a validation set of 486 samples is already in the high-accuracy regime, so a few samples materially change headline metrics. The next improvement mechanism should be selected from residual-error evidence rather than from a target such as `0.98`.
+### A1. M0/M1 boundary hard-example review — NEXT
+
+Review all 12 EfficientNet errors plus model-disagreement samples against original crop/source context.
+
+Assign review taxonomy:
+- `LABEL_AMBIGUITY`
+- `CROP_QUALITY`
+- `DOMAIN_VARIATION`
+- `LIKELY_MODEL_LIMIT`
+- `MODEL_DISAGREEMENT`
+- `REVIEW_REQUIRED`
+
+Required analysis:
+- inspect original crop and, when available, source image context;
+- true/predicted maturity and confidence;
+- M0→M1 vs M1→M0 direction;
+- shared vs architecture-specific error;
+- lighting/exposure/viewpoint/occlusion/crop framing indicators;
+- repeated source/farm/session concentration;
+- whether the human label is visually defensible.
+
+**Stop condition:** do not launch another training experiment until the dominant residual-error category is identified.
 
 ### A2. EfficientNet resource acceptance
 
-Record and compare:
-- parameter count;
-- peak VRAM;
-- epoch runtime;
-- inference latency/FPS where service inference matters;
-- checkpoint size.
+Record and compare parameter count, peak VRAM, epoch runtime, checkpoint size, and inference latency/FPS where service inference matters.
 
-Do not promote an architecture solely on validation score if the operational cost is disproportionate.
+### A3. Independent test/field gate — after tuning freeze
 
-### A3. Independent test/field gate
+Evaluate the selected frozen candidate once according to `MODEL_ACCEPTANCE_POLICY.md`. Do not repeatedly tune against test/field results.
 
-After architecture and tuning decisions are frozen, evaluate the selected candidate on the untouched test/field holdout according to `MODEL_ACCEPTANCE_POLICY.md`. Do not repeatedly tune against this result.
-
-## Priority B — conditional tuning, only after A1
+## Priority B — conditional tuning selected by A1 evidence
 
 ### B1. Targeted augmentation
+Run only if residual errors cluster by illumination, exposure, occlusion, framing, scale, or viewpoint. Tune the observed acquisition failure, not generic augmentation strength.
 
-Run only if the error audit shows concentration in specific acquisition conditions such as illumination, occlusion, framing, scale, or viewpoint.
+### B2. M0/M1 boundary formulation
+Run only if labels/crops are clean and the boundary remains model-limited. Research candidates may include a genuinely ordinal head/objective, boundary-aware/cost-sensitive classification, or calibrated abstention for ambiguous samples.
 
-Candidate dimensions to design deliberately:
-- brightness/contrast/exposure;
-- crop/scale;
-- occlusion;
-- viewpoint robustness.
-
-Do **not** blindly increase augmentation strength.
-
-### B2. Class/boundary treatment
-
-Run only if errors remain concentrated at a specific maturity boundary and label audit confirms the labels are reliable.
-
-Possible research directions:
-- genuinely ordinal heads/objectives rather than a small additive penalty;
-- boundary-aware or cost-sensitive classification;
-- calibrated uncertainty / abstention for ambiguous samples.
-
-V005 label smoothing and V006 additive expected-distance regularization are already rejected; do not repeat nearby coefficients without a new structural hypothesis.
+V005 label smoothing and V006 additive expected-distance regularization are already rejected and must not be repeated as coefficient micro-sweeps.
 
 ### B3. Architecture follow-up
-
-ConvNeXt-Tiny remains a literature-grounded architecture candidate, but should be tested only if:
-- EfficientNet resource/field acceptance is insufficient; or
-- A1 shows residual representation errors that justify another backbone.
-
-Do not run architecture tournaments simply to chase a higher validation number.
+ConvNeXt-Tiny remains a literature-grounded candidate only if residual representation evidence or EfficientNet operational cost justifies it. Do not run an architecture tournament merely to chase `0.98`.
 
 ### B4. EfficientNet-specific optimization
+Only after A1 identifies a model-side bottleneck. Potential isolated dimensions: architecture-appropriate LR confirmation, discriminative LR/layer-wise decay, input resolution, or batch/gradient accumulation if resource-bound.
 
-Only after EfficientNet-B0 is confirmed as the architecture to retain and A1 provides a reason to tune it.
-
-Potential dimensions:
-- architecture-appropriate LR confirmation;
-- discriminative LR / layer-wise decay;
-- input resolution;
-- batch size/gradient accumulation if resource-bound.
-
-Each must be isolated. No combined tuning bundle.
-
-## Priority C — later / only with stronger evidence
+## Priority C — later / stronger evidence required
 
 - calibration (ECE/Brier/temperature scaling) if confidence is consumed by decision policy;
-- lightweight ensemble only if complementary model-error sets justify the added inference cost;
-- TTA only if deployment latency permits and error audit shows augmentation-consistent gains;
-- additional field-data acquisition targeted at known failure conditions;
+- lightweight ensemble only if clean-label complementary errors justify inference cost;
+- TTA only if latency permits and error evidence supports it;
+- targeted field-data acquisition for observed failure conditions;
 - label adjudication protocol if human ambiguity is a measurable ceiling.
 
 ## Already tested — do not casually repeat
 
-- full fine-tuning LR micro-sweep around the ResNet recipe;
+- ResNet LR micro-sweep beyond the confirmed `5e-5` decision;
 - 2-epoch head-only staged warm-up;
-- CosineAnnealingLR parameter micro-tuning;
+- CosineAnnealingLR micro-tuning;
 - label smoothing around `0.05`;
 - additive expected ordinal-distance lambda micro-tuning.
 
 ## Promotion rule
 
-A tuning item moves from backlog to experiment only when the experiment plan states:
+A backlog item becomes an experiment only when the plan states:
 
 ```text
 Observed evidence
@@ -136,4 +119,4 @@ Acceptance threshold / rejection condition
 Stop condition
 ```
 
-The goal is not `Macro F1 >= 0.98` by itself. The goal is to reduce **explainable, operationally meaningful residual error** without leakage, cherry-picking, or unjustified complexity.
+The goal is not `Macro F1 >= 0.98` by itself. On 486 validation samples, EfficientNet currently makes 12 errors and `>=0.98` accuracy would require at most 9; only three corrected samples separate those headline values. The goal is therefore to reduce **explainable, operationally meaningful residual error** without leakage, cherry-picking, or unjustified complexity.
