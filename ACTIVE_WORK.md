@@ -19,8 +19,8 @@
 | KGCV asset SHA-256 + atomic split | `main`, PR #15 | MERGED | snapshot identity 유지 |
 | KGCV Ripeness Training Snapshot v001 | `main`, PR #16 | FROZEN | immutable descriptor/checksum 유지 |
 | Ripeness Baseline v001~v006 | `main` + historical experiment branches/PRs | EXECUTED / RECORDED | rejected directions 반복 금지 |
-| Ripeness V007 EfficientNet-B0 | `feat/ripeness-v007-efficientnet-b0`, PR #23 | CONFIRMED / READY_TO_CLOSE | final docs → merge → branch cleanup |
-| Ripeness V008 residual audit | PR #23 branch | COMPLETE / VALIDATION ONLY | benchmark evidence 유지 |
+| Ripeness V007 + V008 benchmark | `main`, PR #23 | MERGED / BENCHMARK_FROZEN | field/data-label successor snapshot 대기 |
+| Field data readiness v001 | `feat/field-data-readiness-v001` | IN_PROGRESS | readiness validator + tests → PR/CI → merge |
 | Ripeness further tuning | none | PAUSED | field/photo/video + label freeze 후 successor snapshot에서 재개 |
 
 ## KGCV-RIPENESS-V001 frozen facts
@@ -93,7 +93,14 @@ Observed current source structure:
 - this description is **working field metadata guidance**, not yet a frozen visual annotation standard
 - existing external-source mapping (`GREEN/WHITE/TURNING/RED_RIPE`) is normalization policy and must not be silently treated as final field-label acceptance criteria
 
-Current field Sheet also contains partially filled rows after the currently complete ID sequence. These WIP rows are source data under organization and must not be promoted into a training snapshot merely because a generated `Final_Name` exists.
+Current field Sheet audit:
+- contiguous identified block: ID `0001`~`0110`
+- current observed composition: STR `98`, LEF `12`
+- rows after `0110` contain WIP/partial records with missing identity/task fields
+- formula-generated `Final_Name` may still exist on incomplete rows, so `Final_Name != null` is not an active-row gate
+- duplicate/context-reused `Original_No` exists, so `Original_No` alone is not a unique key
+- Date vs embedded Original_No timestamp mismatch exists and is warning-only; source is not auto-corrected
+- Group_ID groups multiple views and remains a cross-split leakage boundary
 
 Drive source folders confirmed:
 - `남자친구농가(M)`
@@ -102,26 +109,41 @@ Drive source folders confirmed:
 
 The currently connected Drive listing returned no directly enumerable child media in those grouping folders, so physical field asset materialization/hash audit remains blocked from this session. Do not fabricate file inventory counts.
 
-## Current next work — DATA / LABEL readiness
+## Current active work — Field data readiness v001
 
-No V009 training yet.
+Branch: `feat/field-data-readiness-v001`
 
-Proceed in this order:
+Canonical draft docs/code:
+- `docs/FIELD_DATA_READINESS_POLICY.md`
+- `docs/FIELD_DATA_READINESS_AUDIT_20260915.md`
+- `ml/data_pipeline/field_readiness.py`
+- `scripts/audit_field_sheet_readiness.py`
+- `tests/test_field_readiness.py`
 
-1. Continue organizing field photos/videos and Sheet metadata.
-2. Separate rows into `READY / PARTIAL / INVALID_FOR_TRAINING` readiness rather than treating non-empty rows as training-ready.
-3. Define and version final Maturity 0–4 visual annotation criteria.
-4. Explicitly decide flower / fruit-set / non-fruit handling.
-5. Define ambiguous boundary / adjudication rules.
-6. Define video frame sampling, duplicate and `Group_ID`/session leakage rules.
-7. Once the data revision is materially stable, build a new immutable normalized snapshot (v002+).
-8. Re-run a clean baseline on that successor snapshot before reusing historical tuning choices.
+Readiness states:
 
-Canonical docs:
-- `docs/RIPENESS_BENCHMARK_FREEZE_20260915.md`
-- `docs/RIPENESS_DATA_LABEL_BACKLOG.md`
-- `docs/LABEL_MAPPING_POLICY.md`
-- `docs/RIPENESS_TUNING_BACKLOG.md`
+```text
+READY_METADATA
+PARTIAL
+INVALID_FOR_TRAINING
+TRAINING_READY   # physical media/hash/label/split/snapshot gates까지 모두 통과한 경우만
+```
+
+Current stop condition:
+- metadata gate can be implemented/tested now;
+- `TRAINING_READY` and successor snapshot cannot be claimed until physical media verification and final label policy are available;
+- no V009 ripeness training before successor snapshot freeze.
+
+## 다음 canonical 순서
+
+1. Field readiness validator unit test/CI 통과.
+2. PR merge 후 metadata readiness gate를 canonical ingestion policy로 승격.
+3. 실제 사진/영상 정리를 계속하고 media listing/materialization이 가능해지면 source↔asset match + SHA-256 audit 수행.
+4. 대표 field example이 충분해지면 Maturity 0~4 visual annotation guideline versioning.
+5. flower / fruit-set / non-fruit 처리와 ambiguous boundary/adjudication rule 확정.
+6. video frame sampling / duplicate / Group_ID·session leakage policy 확정.
+7. successor immutable snapshot(v002+) 생성.
+8. 새 snapshot에서 clean baseline 재측정 후 historical tuning 재사용 여부 결정.
 
 ## Logging / Observability
 
