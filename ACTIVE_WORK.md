@@ -19,9 +19,21 @@
 | KGCV asset SHA-256 + atomic split | `main`, PR #15 | MERGED | snapshot identity 유지 |
 | KGCV Ripeness Training Snapshot v001 | `main`, PR #16 | FROZEN | immutable descriptor/checksum 유지 |
 | Ripeness Baseline v001~v006 | `main` + historical experiment branches/PRs | EXECUTED / RECORDED | rejected directions 반복 금지 |
-| Ripeness V007 + V008 benchmark | `main`, PR #23 | MERGED / BENCHMARK_FROZEN | field/data-label successor snapshot 대기 |
-| Field data readiness v001 | `feat/field-data-readiness-v001` | IN_PROGRESS | readiness validator + tests → PR/CI → merge |
-| Ripeness further tuning | none | PAUSED | field/photo/video + label freeze 후 successor snapshot에서 재개 |
+| Ripeness V007 + V008 benchmark | `main`, PR #23 | MERGED / BENCHMARK_FROZEN | downloaded-data benchmark evidence 유지 |
+| Field data readiness v001 | `main`, PR #24 | MERGED | Drive/field 정리와 독립적으로 readiness gate 유지 |
+| Ripeness V009 ordinal head | `feat/ripeness-v009-ordinal-head`, PR #25 | EXECUTED / REJECTED | 결과 문서화 후 merge → ConvNeXt-Tiny screening |
+
+## Downloaded benchmark scope
+
+Current model research may continue on the already downloaded and frozen `KGCV-RIPENESS-V001` snapshot even while Drive/field data is still being organized.
+
+Rules:
+- Drive/field data: excluded from current benchmark experiments;
+- field inventory incompleteness does not block downloaded-data research;
+- test split remains closed during screening/tuning;
+- results are development-benchmark evidence only;
+- no field/production claim;
+- no silent reuse of field-label assumptions.
 
 ## KGCV-RIPENESS-V001 frozen facts
 
@@ -69,81 +81,67 @@ Seed `20260912`, 486 validation samples:
 
 Interpretation: current residual error is highly localized at the M0/M1 boundary.
 
-### Status
+### V009 ordered cumulative ordinal head — REJECTED
+
+Seed `20260910`, validation only:
+
+| Metric | EfficientNet softmax | Ordinal head |
+|---|---:|---:|
+| Macro F1 | **0.9741** | 0.9464 |
+| Accuracy | **0.9753** | 0.9527 |
+| Ordinal MAE ↓ | **0.0309** | 0.0514 |
+| Weighted Kappa | **0.9781** | 0.9670 |
+| M1 F1 | **0.9502** | 0.8856 |
+
+Ordinal-head failure pattern:
+- M0→M1 reduced from 5 to 1;
+- but M1→M0 increased from 6 to 21;
+- M1 recall fell from `0.9459` to `0.8018`;
+- broad primary/ordinal metrics all regressed.
+
+Decision:
+- reject current ordered cumulative threshold formulation;
+- no paired multi-seed confirmation;
+- no threshold/BCE-weight micro-sweep;
+- do not generalize this rejection to all ordinal methods.
+
+Canonical result: `docs/experiments/ripeness/EXP-RIP-009_ORDINAL_HEAD_RESULT.md`
+
+## Current model status
 
 ```text
 Snapshot      : KGCV-RIPENESS-V001
 Role          : development benchmark
-Preferred net : EfficientNet-B0
+Preferred net : EfficientNet-B0 softmax
 Test tuning   : prohibited
 Field status  : NOT FIELD VALIDATED
 Production    : NOT APPROVED
 ```
 
-The current experiment line is frozen in `docs/RIPENESS_BENCHMARK_FREEZE_20260915.md`.
+## Next downloaded-data experiment
+
+Candidate: **ConvNeXt-Tiny backbone screening** under the same frozen snapshot and validation-only policy.
+
+Reason:
+- V007 showed architecture representation is a productive axis;
+- V006 and V009 both failed to improve with ordinalization strategies;
+- V009 head-only structural change strongly regressed M1;
+- ConvNeXt-Tiny is a distinct modern convolutional backbone already retained in the backlog;
+- resource cost must be evaluated with validation score.
+
+Controlled plan:
+1. EfficientNet-B0 softmax baseline under the current recipe.
+2. ConvNeXt-Tiny, ImageNet pretrained.
+3. Same frozen snapshot, train/valid split, 224 input, augmentation, weighted CE, AdamW, LR `5e-5`, batch 32, validation Macro F1 selection.
+4. Record parameter count, VRAM, epoch runtime, Macro F1, M1 F1, Ordinal MAE, Kappa, confusion.
+5. Clear regression → reject; small/positive signal → paired 3-seed confirmation.
+6. Test split remains closed.
 
 ## Field data / label status
 
 Canonical Google Sheet: `딸기_프로젝트`
 
-Observed current source structure:
-- tabs: `컬럼정보`, `농가_딸기데이터`, `농가_베드길이`
-- field columns include `ID`, `Group_ID`, `Original_No`, `Farm`, `Zone`, `Class`, `DataType`, `View_Type`, `Occlusion`, `Maturity`, `Grade`, `Health`, `Final_Name`
-- `Maturity` source guide currently describes `0~4 (Green, White, Turning, Mature, Full)`
-- this description is **working field metadata guidance**, not yet a frozen visual annotation standard
-- existing external-source mapping (`GREEN/WHITE/TURNING/RED_RIPE`) is normalization policy and must not be silently treated as final field-label acceptance criteria
-
-Current field Sheet audit:
-- contiguous identified block: ID `0001`~`0110`
-- current observed composition: STR `98`, LEF `12`
-- rows after `0110` contain WIP/partial records with missing identity/task fields
-- formula-generated `Final_Name` may still exist on incomplete rows, so `Final_Name != null` is not an active-row gate
-- duplicate/context-reused `Original_No` exists, so `Original_No` alone is not a unique key
-- Date vs embedded Original_No timestamp mismatch exists and is warning-only; source is not auto-corrected
-- Group_ID groups multiple views and remains a cross-split leakage boundary
-
-Drive source folders confirmed:
-- `남자친구농가(M)`
-- `응애피해농가(C)` — grouped scope only; canonical stored farm code is never `C`
-- `외부플랫폼(U)`
-
-The currently connected Drive listing returned no directly enumerable child media in those grouping folders, so physical field asset materialization/hash audit remains blocked from this session. Do not fabricate file inventory counts.
-
-## Current active work — Field data readiness v001
-
-Branch: `feat/field-data-readiness-v001`
-
-Canonical draft docs/code:
-- `docs/FIELD_DATA_READINESS_POLICY.md`
-- `docs/FIELD_DATA_READINESS_AUDIT_20260915.md`
-- `ml/data_pipeline/field_readiness.py`
-- `scripts/audit_field_sheet_readiness.py`
-- `tests/test_field_readiness.py`
-
-Readiness states:
-
-```text
-READY_METADATA
-PARTIAL
-INVALID_FOR_TRAINING
-TRAINING_READY   # physical media/hash/label/split/snapshot gates까지 모두 통과한 경우만
-```
-
-Current stop condition:
-- metadata gate can be implemented/tested now;
-- `TRAINING_READY` and successor snapshot cannot be claimed until physical media verification and final label policy are available;
-- no V009 ripeness training before successor snapshot freeze.
-
-## 다음 canonical 순서
-
-1. Field readiness validator unit test/CI 통과.
-2. PR merge 후 metadata readiness gate를 canonical ingestion policy로 승격.
-3. 실제 사진/영상 정리를 계속하고 media listing/materialization이 가능해지면 source↔asset match + SHA-256 audit 수행.
-4. 대표 field example이 충분해지면 Maturity 0~4 visual annotation guideline versioning.
-5. flower / fruit-set / non-fruit 처리와 ambiguous boundary/adjudication rule 확정.
-6. video frame sampling / duplicate / Group_ID·session leakage policy 확정.
-7. successor immutable snapshot(v002+) 생성.
-8. 새 snapshot에서 clean baseline 재측정 후 historical tuning 재사용 여부 결정.
+Field/Drive data remains a separate workstream and is not required for the current downloaded-data benchmark. `FIELD_DATA_READINESS_POLICY.md` remains canonical for later field snapshot promotion.
 
 ## Logging / Observability
 
