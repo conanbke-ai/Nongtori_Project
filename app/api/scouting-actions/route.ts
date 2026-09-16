@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { NextResponse } from 'next/server';
 import { ensureSchema } from '@/db';
+import { ensureScoutingRuntime } from '@/db/scouting-runtime';
 import { recordScoutingAction } from '@/app/features/pests/application/scouting-service';
 import { ScoutingRepository } from '@/app/features/pests/infrastructure/scouting-repository';
 import { getFarmMember } from '@/app/lib/farm-auth';
@@ -16,6 +17,7 @@ function text(value: unknown, max = 300) {
 export async function POST(request: Request) {
   try {
     await ensureSchema();
+    await ensureScoutingRuntime();
     const body = await request.json() as Record<string, unknown>;
     const farmId = text(body.farmId, 100);
     const locationStateId = text(body.locationStateId, 100);
