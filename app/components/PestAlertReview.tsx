@@ -1,6 +1,8 @@
 'use client';
 
 import { pestLabel } from '@/app/features/pests/domain/catalog';
+import { ScoutingQueue } from '@/app/features/pests/presentation/ScoutingQueue';
+import '@/app/features/pests/presentation/scouting.css';
 import { pestText } from '@/app/features/pests/presentation/text';
 import { useState } from 'react';
 import { localeForLanguage, translate, type Language } from '@/app/lib/i18n';
@@ -142,81 +144,84 @@ export function PestAlertReview({
   }
 
   return (
-    <section className="alert-review-board">
-      <header className="alert-review-heading">
-        <div>
-          <span>{translate(language, 'alert.suspectIntro')}</span>
-          <h2>{translate(language, 'alert.title')}</h2>
-          <p>{translate(language, 'alert.explanation')}</p>
-        </div>
-        <div className="alert-review-tabs" role="tablist" aria-label={pestText(language, 'target')}>
-          <button aria-selected={tab === 'OPEN'} className={tab === 'OPEN' ? 'selected' : ''} onClick={() => selectTab('OPEN')} role="tab" type="button">{translate(language, 'alert.open')} <b>{pagination.openCount}</b></button>
-          <button aria-selected={tab === 'DONE'} className={tab === 'DONE' ? 'selected' : ''} onClick={() => selectTab('DONE')} role="tab" type="button">{translate(language, 'alert.done')} <b>{pagination.doneCount}</b></button>
-        </div>
-      </header>
-      {message && <div className="review-feedback success" role="status">{message}</div>}
-      {error && <div className="review-feedback error" role="alert">{error}</div>}
-      {rows.length === 0 ? (
-        <div className="screen-empty compact">
-          <strong>{tab === 'OPEN' ? translate(language, 'alert.noOpen') : translate(language, 'alert.noDone')}</strong>
-          <p>{pestText(language, 'description')}</p>
-        </div>
-      ) : (
-        <div className="alert-review-list">
-          {rows.map((alert) => {
-            const location = [alert.house_name, alert.bed_name, alert.zone_name].filter(Boolean).join(' · ') || translate(language, 'alert.locationRequired');
-            const itemName = alert.item_name || [alert.crop_name, alert.cultivar_name].filter(Boolean).join(' · ') || translate(language, 'management.notSet');
-            const showForm = editing === alert.id;
-            return (
-              <article className="alert-review-item" key={alert.id}>
-                <div className="alert-review-summary">
-                  <span className={`review-verdict ${alert.review_verdict?.toLowerCase() ?? 'open'}`}>{verdictName(alert.review_verdict, language)}</span>
-                  <div>
-                    <strong>{itemName} · {location}</strong>
-                    <p>{formatTime(alert.created_at, language)} · {pestLabel(alert.pest_code ?? 'MITE', language)} · {pestText(language, 'suspected')}</p>
-                  </div>
-                  {alert.confidence !== null && <b>{translate(language, 'alert.confidence', { percent: Math.round(alert.confidence * 100) })}</b>}
-                </div>
-                {alert.reviewed_at && (
-                  <div className="review-history-line">
-                    <strong>{visibleReviewerName(alert.reviewer_name, alert.reviewer_role, language)}</strong>
-                    <span>{roleName(alert.reviewer_role, language)} · {formatTime(alert.reviewed_at, language)}</span>
-                    {alert.review_quick_note_code && <p>{quickNoteName(alert.review_quick_note_code, language)}</p>}
-                    {alert.review_note && <p>{translate(language, 'alert.note')}: {alert.review_note}</p>}
-                  </div>
-                )}
-                {showForm && canReview ? (
-                  <div className="alert-review-form">
-                    <label>
-                      <span>{translate(language, 'alert.quickNote')}</span>
-                      <select onChange={(event) => setQuickNotes((current) => ({ ...current, [alert.id]: event.target.value }))} value={quickNotes[alert.id] ?? ''}>
-                        <option value="">{translate(language, 'alert.quickNone')}</option>
-                        <option value="LEAF_BACK_CHECKED">{translate(language, 'alert.leafBackChecked')}</option>
-                        {(!alert.pest_code || alert.pest_code === 'MITE') && <option value="WEBBING_SEEN">{translate(language, 'alert.webbingSeen')}</option>}
-                        <option value="LEAF_DAMAGE_ONLY">{translate(language, 'alert.leafDamageOnly')}</option>
-                        <option value="PHOTO_NEEDED">{translate(language, 'alert.photoNeeded')}</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>{translate(language, 'alert.note')} <small>{translate(language, 'common.optional')}</small></span>
-                      <textarea maxLength={300} onChange={(event) => setNotes((current) => ({ ...current, [alert.id]: event.target.value }))} placeholder={translate(language, 'alert.notePlaceholder')} rows={2} value={notes[alert.id] ?? ''} />
-                    </label>
+    <>
+      <ScoutingQueue farmId={farmId} canReview={canReview} language={language} onChanged={onReviewed} />
+      <section className="alert-review-board legacy-alert-review">
+        <header className="alert-review-heading">
+          <div>
+            <span>{translate(language, 'alert.suspectIntro')}</span>
+            <h2>{translate(language, 'alert.title')}</h2>
+            <p>{translate(language, 'alert.explanation')}</p>
+          </div>
+          <div className="alert-review-tabs" role="tablist" aria-label={pestText(language, 'target')}>
+            <button aria-selected={tab === 'OPEN'} className={tab === 'OPEN' ? 'selected' : ''} onClick={() => selectTab('OPEN')} role="tab" type="button">{translate(language, 'alert.open')} <b>{pagination.openCount}</b></button>
+            <button aria-selected={tab === 'DONE'} className={tab === 'DONE' ? 'selected' : ''} onClick={() => selectTab('DONE')} role="tab" type="button">{translate(language, 'alert.done')} <b>{pagination.doneCount}</b></button>
+          </div>
+        </header>
+        {message && <div className="review-feedback success" role="status">{message}</div>}
+        {error && <div className="review-feedback error" role="alert">{error}</div>}
+        {rows.length === 0 ? (
+          <div className="screen-empty compact">
+            <strong>{tab === 'OPEN' ? translate(language, 'alert.noOpen') : translate(language, 'alert.noDone')}</strong>
+            <p>{pestText(language, 'description')}</p>
+          </div>
+        ) : (
+          <div className="alert-review-list">
+            {rows.map((alert) => {
+              const location = [alert.house_name, alert.bed_name, alert.zone_name].filter(Boolean).join(' · ') || translate(language, 'alert.locationRequired');
+              const itemName = alert.item_name || [alert.crop_name, alert.cultivar_name].filter(Boolean).join(' · ') || translate(language, 'management.notSet');
+              const showForm = editing === alert.id;
+              return (
+                <article className="alert-review-item" key={alert.id}>
+                  <div className="alert-review-summary">
+                    <span className={`review-verdict ${alert.review_verdict?.toLowerCase() ?? 'open'}`}>{verdictName(alert.review_verdict, language)}</span>
                     <div>
-                      <button className="confirm-mite" disabled={sending === alert.id} onClick={() => void submit(alert, 'TARGET_CONFIRMED')} type="button">{pestText(language, 'confirmed')}</button>
-                      <button className="not-mite" disabled={sending === alert.id} onClick={() => void submit(alert, 'NOT_TARGET')} type="button">{pestText(language, 'notTarget')}</button>
-                      <button className="recheck" disabled={sending === alert.id} onClick={() => void submit(alert, 'RECHECK')} type="button">{translate(language, 'alert.recheck')}</button>
+                      <strong>{itemName} · {location}</strong>
+                      <p>{formatTime(alert.created_at, language)} · {pestLabel(alert.pest_code ?? 'MITE', language)} · {pestText(language, 'suspected')}</p>
                     </div>
+                    {alert.confidence !== null && <b>{translate(language, 'alert.confidence', { percent: Math.round(alert.confidence * 100) })}</b>}
                   </div>
-                ) : canReview ? (
-                  <button className="review-again" onClick={() => setEditing(alert.id)} type="button">{translate(language, tab === 'OPEN' ? 'alert.reviewNow' : 'alert.reviewAgain')}</button>
-                ) : null}
-                <RecordNotes canWrite={canReview} farmId={farmId} language={language} predictionId={alert.id} />
-              </article>
-            );
-          })}
-        </div>
-      )}
-      {pagination.pageCount > 1 && <div className="history-pagination alert-pagination"><button disabled={safePage <= 1} onClick={() => { onPageChange(tab, safePage - 1); setEditing(null); }} type="button">{translate(language, 'common.previous')}</button><span>{safePage} / {pageCount}</span><button disabled={safePage >= pageCount} onClick={() => { onPageChange(tab, safePage + 1); setEditing(null); }} type="button">{translate(language, 'common.next')}</button></div>}
-    </section>
+                  {alert.reviewed_at && (
+                    <div className="review-history-line">
+                      <strong>{visibleReviewerName(alert.reviewer_name, alert.reviewer_role, language)}</strong>
+                      <span>{roleName(alert.reviewer_role, language)} · {formatTime(alert.reviewed_at, language)}</span>
+                      {alert.review_quick_note_code && <p>{quickNoteName(alert.review_quick_note_code, language)}</p>}
+                      {alert.review_note && <p>{translate(language, 'alert.note')}: {alert.review_note}</p>}
+                    </div>
+                  )}
+                  {showForm && canReview ? (
+                    <div className="alert-review-form">
+                      <label>
+                        <span>{translate(language, 'alert.quickNote')}</span>
+                        <select onChange={(event) => setQuickNotes((current) => ({ ...current, [alert.id]: event.target.value }))} value={quickNotes[alert.id] ?? ''}>
+                          <option value="">{translate(language, 'alert.quickNone')}</option>
+                          <option value="LEAF_BACK_CHECKED">{translate(language, 'alert.leafBackChecked')}</option>
+                          {(!alert.pest_code || alert.pest_code === 'MITE') && <option value="WEBBING_SEEN">{translate(language, 'alert.webbingSeen')}</option>}
+                          <option value="LEAF_DAMAGE_ONLY">{translate(language, 'alert.leafDamageOnly')}</option>
+                          <option value="PHOTO_NEEDED">{translate(language, 'alert.photoNeeded')}</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>{translate(language, 'alert.note')} <small>{translate(language, 'common.optional')}</small></span>
+                        <textarea maxLength={300} onChange={(event) => setNotes((current) => ({ ...current, [alert.id]: event.target.value }))} placeholder={translate(language, 'alert.notePlaceholder')} rows={2} value={notes[alert.id] ?? ''} />
+                      </label>
+                      <div>
+                        <button className="confirm-mite" disabled={sending === alert.id} onClick={() => void submit(alert, 'TARGET_CONFIRMED')} type="button">{pestText(language, 'confirmed')}</button>
+                        <button className="not-mite" disabled={sending === alert.id} onClick={() => void submit(alert, 'NOT_TARGET')} type="button">{pestText(language, 'notTarget')}</button>
+                        <button className="recheck" disabled={sending === alert.id} onClick={() => void submit(alert, 'RECHECK')} type="button">{translate(language, 'alert.recheck')}</button>
+                      </div>
+                    </div>
+                  ) : canReview ? (
+                    <button className="review-again" onClick={() => setEditing(alert.id)} type="button">{translate(language, tab === 'OPEN' ? 'alert.reviewNow' : 'alert.reviewAgain')}</button>
+                  ) : null}
+                  <RecordNotes canWrite={canReview} farmId={farmId} language={language} predictionId={alert.id} />
+                </article>
+              );
+            })}
+          </div>
+        )}
+        {pagination.pageCount > 1 && <div className="history-pagination alert-pagination"><button disabled={safePage <= 1} onClick={() => { onPageChange(tab, safePage - 1); setEditing(null); }} type="button">{translate(language, 'common.previous')}</button><span>{safePage} / {pageCount}</span><button disabled={safePage >= pageCount} onClick={() => { onPageChange(tab, safePage + 1); setEditing(null); }} type="button">{translate(language, 'common.next')}</button></div>}
+      </section>
+    </>
   );
 }
