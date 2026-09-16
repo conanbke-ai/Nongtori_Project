@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { NextResponse } from 'next/server';
 import { ensureSchema } from '@/db';
+import { ensureScoutingRuntime } from '@/db/scouting-runtime';
 import { ScoutingRepository } from '@/app/features/pests/infrastructure/scouting-repository';
 import { getFarmMember } from '@/app/lib/farm-auth';
 
@@ -9,6 +10,7 @@ export const runtime = 'edge';
 export async function GET(request: Request) {
   try {
     await ensureSchema();
+    await ensureScoutingRuntime();
     const url = new URL(request.url);
     const farmId = url.searchParams.get('farmId')?.trim() ?? '';
     const locationStateId = url.searchParams.get('locationStateId')?.trim() ?? '';
