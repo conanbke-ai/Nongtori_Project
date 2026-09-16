@@ -33,6 +33,16 @@ const statements = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_scouting_cases_location_status
     ON scouting_cases(location_state_id, status, opened_at)`,
+  `CREATE TABLE IF NOT EXISTS scouting_case_links (
+    case_id TEXT PRIMARY KEY NOT NULL, previous_case_id TEXT, link_type TEXT NOT NULL DEFAULT 'RECURRENCE', created_at TEXT NOT NULL,
+    FOREIGN KEY (case_id) REFERENCES scouting_cases(id) ON DELETE CASCADE,
+    FOREIGN KEY (previous_case_id) REFERENCES scouting_cases(id) ON DELETE SET NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_scouting_case_links_previous ON scouting_case_links(previous_case_id)`,
+  `CREATE TABLE IF NOT EXISTS scouting_policy_profiles (
+    policy_version TEXT PRIMARY KEY NOT NULL, freshness_mode TEXT NOT NULL,
+    field_check_freshness_minutes INTEGER, status TEXT NOT NULL DEFAULT 'ACTIVE', created_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS scouting_observations (
     id TEXT PRIMARY KEY NOT NULL, farm_id TEXT NOT NULL, location_state_id TEXT NOT NULL, case_id TEXT,
     capture_session_id TEXT, frame_id TEXT, source_asset_id TEXT, observed_at TEXT NOT NULL, source_type TEXT NOT NULL,
@@ -58,6 +68,18 @@ const statements = [
     FOREIGN KEY (observation_id) REFERENCES scouting_observations(id) ON DELETE SET NULL,
     FOREIGN KEY (checker_member_id) REFERENCES farm_members(id) ON DELETE SET NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS scouting_field_check_corrections (
+    id TEXT PRIMARY KEY NOT NULL, farm_id TEXT NOT NULL, field_check_id TEXT NOT NULL, location_state_id TEXT NOT NULL,
+    case_id TEXT, correction_kind TEXT NOT NULL, replacement_evidence_code TEXT, reason_code TEXT NOT NULL,
+    note TEXT, actor_member_id TEXT, created_at TEXT NOT NULL,
+    FOREIGN KEY (farm_id) REFERENCES farms(id) ON DELETE CASCADE,
+    FOREIGN KEY (field_check_id) REFERENCES scouting_field_checks(id) ON DELETE CASCADE,
+    FOREIGN KEY (location_state_id) REFERENCES scouting_location_states(id) ON DELETE CASCADE,
+    FOREIGN KEY (case_id) REFERENCES scouting_cases(id) ON DELETE SET NULL,
+    FOREIGN KEY (actor_member_id) REFERENCES farm_members(id) ON DELETE SET NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_scouting_field_check_corrections_check_time
+    ON scouting_field_check_corrections(field_check_id, created_at)`,
   `CREATE TABLE IF NOT EXISTS scouting_actions (
     id TEXT PRIMARY KEY NOT NULL, farm_id TEXT NOT NULL, location_state_id TEXT NOT NULL, case_id TEXT,
     action_at TEXT NOT NULL, action_code TEXT NOT NULL, actor_member_id TEXT,
@@ -67,6 +89,15 @@ const statements = [
     FOREIGN KEY (case_id) REFERENCES scouting_cases(id) ON DELETE SET NULL,
     FOREIGN KEY (actor_member_id) REFERENCES farm_members(id) ON DELETE SET NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS scouting_case_events (
+    id TEXT PRIMARY KEY NOT NULL, farm_id TEXT NOT NULL, location_state_id TEXT NOT NULL, case_id TEXT NOT NULL,
+    event_type TEXT NOT NULL, reason_code TEXT, actor_member_id TEXT, detail_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
+    FOREIGN KEY (farm_id) REFERENCES farms(id) ON DELETE CASCADE,
+    FOREIGN KEY (location_state_id) REFERENCES scouting_location_states(id) ON DELETE CASCADE,
+    FOREIGN KEY (case_id) REFERENCES scouting_cases(id) ON DELETE CASCADE,
+    FOREIGN KEY (actor_member_id) REFERENCES farm_members(id) ON DELETE SET NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_scouting_case_events_case_time ON scouting_case_events(case_id, created_at)`,
   `CREATE TABLE IF NOT EXISTS scouting_alert_events (
     id TEXT PRIMARY KEY NOT NULL, farm_id TEXT NOT NULL, location_state_id TEXT NOT NULL, case_id TEXT,
     observation_id TEXT NOT NULL, created_at TEXT NOT NULL, alert_decision TEXT NOT NULL, alert_reason TEXT NOT NULL,
@@ -87,6 +118,8 @@ const statements = [
     ('UNKNOWN_DISEASE', 'DISEASE', '병해 의심·종류 미확인', 'RECORD_ONLY', 'ACTIVE', '2026-09-16T00:00:00.000Z', '2026-09-16T00:00:00.000Z'),
     ('ENVIRONMENTAL_STRESS', 'PHYSIOLOGICAL_ENVIRONMENTAL', '환경·생리 이상', 'ALERT_ONLY', 'ACTIVE', '2026-09-16T00:00:00.000Z', '2026-09-16T00:00:00.000Z'),
     ('UNKNOWN', 'UNKNOWN', '원인 미확인', 'RECORD_ONLY', 'ACTIVE', '2026-09-16T00:00:00.000Z', '2026-09-16T00:00:00.000Z')`,
+  `INSERT OR IGNORE INTO scouting_policy_profiles(policy_version, freshness_mode, field_check_freshness_minutes, status, created_at)
+    VALUES ('PEST-SCOUT-V2-20260916', 'CALIBRATION_PENDING', NULL, 'ACTIVE', '2026-09-16T00:00:00.000Z')`,
 ];
 
 export function ensureScoutingRuntime() {
