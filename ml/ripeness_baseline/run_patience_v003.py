@@ -8,16 +8,14 @@ from typing import Any
 from PIL import Image
 
 from ml.observability import RunLogger
+from ml.ripeness_baseline.cache_io import load_or_build_crop_cache
 from ml.ripeness_baseline.screen_lr_v002 import _num_workers
-from ml.ripeness_baseline.train_v001 import (
-    CLASS_TO_INDEX, CLASS_VALUES, EXPECTED_ASSIGNMENT_SHA256,
-    EXPECTED_PHYSICAL_IMAGES, EXPECTED_SAMPLES, EXPECTED_SPLIT_COUNTS,
-    build_crop_cache, metrics, seed_all,
-)
+from ml.ripeness_baseline.train_v001 import CLASS_TO_INDEX, CLASS_VALUES, metrics, seed_all
 
 LR = 5e-5
 PATIENCE = 12
 MAX_EPOCHS = 25
+DEFAULT_CACHE_ROOT = Path('artifacts/ripeness-v002-lr-screening/crops')
 
 
 def run(cache: dict[str, Any], out: Path, logger: RunLogger, seed: int) -> dict[str, Any]:
@@ -71,6 +69,8 @@ def run(cache: dict[str, Any], out: Path, logger: RunLogger, seed: int) -> dict[
                 yt.extend(CLASS_VALUES[i] for i in y.cpu().tolist()); yp.extend(CLASS_VALUES[i] for i in z.argmax(1).cpu().tolist())
         return loss_sum/n, metrics(yt,yp)
 
+    logger.emit('INFO','TRAINING_STARTED','patience diagnostic training started',phase='PATIENCE_DIAGNOSTIC',learning_rate=LR,patience=PATIENCE,max_epochs=MAX_EPOCHS,train_samples=len(train_records),valid_samples=len(valid_records),device=str(device))
+
     for epoch in range(1,MAX_EPOCHS+1):
         started=time.monotonic(); model.train(); loss_sum=0.; n=0
         for x,y in loader(train_records,True):
@@ -84,7 +84,9 @@ def run(cache: dict[str, Any], out: Path, logger: RunLogger, seed: int) -> dict[
         else: wait += 1
         row={'epoch':epoch,'train_loss':loss_sum/n,'valid_loss':vl,'macro_f1':vm['macro_f1'],'ordinal_mae':vm['ordinal_mae'],'weighted_kappa':vm['weighted_kappa'],'m1_f1':vm['per_class']['1']['f1'],'best_epoch':best_epoch,'no_improve_count':wait,'epoch_elapsed_sec':round(time.monotonic()-started,3)}
         history.append(row); logger.emit('INFO','EPOCH_COMPLETED','patience diagnostic epoch completed',phase='PATIENCE_DIAGNOSTIC',learning_rate=LR,early_stopping_counter=wait,**row)
-        if wait>=PATIENCE: break
+        if wait>=PATIENCE:
+            logger.emit('INFO','EARLY_STOPPING_TRIGGERED','extended patience exhausted',phase='PATIENCE_DIAGNOSTIC',epoch=epoch,best_epoch=best_epoch,best_valid_macro_f1=best,patience_limit=PATIENCE)
+            break
 
     result={'experiment':'RIPENESS-V003-PATIENCE-DIAGNOSTIC','seed':seed,'learning_rate':LR,'patience':PATIENCE,'max_epochs':MAX_EPOCHS,'test_evaluated':False,'best_epoch':best_epoch,'best_valid_metrics':best_metrics,'history':history,'stopped_epoch':history[-1]['epoch']}
     (out/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
@@ -92,13 +94,16 @@ def run(cache: dict[str, Any], out: Path, logger: RunLogger, seed: int) -> dict[
 
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument('--seed',type=int,default=20260910); ap.add_argument('--workdir',type=Path,default=Path('artifacts/ripeness-v003-patience')); a=ap.parse_args()
+    ap=argparse.ArgumentParser()
+    ap.add_argument('--seed',type=int,default=20260910)
+    ap.add_argument('--workdir',type=Path,default=Path('artifacts/ripeness-v003-patience'))
+    ap.add_argument('--cache-root',type=Path,default=DEFAULT_CACHE_ROOT)
+    ap.add_argument('--allow-download',action='store_true',help='build remote cache only when verified local cache is unavailable')
+    a=ap.parse_args()
     logger=RunLogger(a.workdir,'ripeness_v003_patience')
     try:
-        logger.emit('INFO','RUN_STARTED','patience diagnostic started',phase='INIT',experiment_id='RIPENESS-V003-PATIENCE-DIAGNOSTIC',snapshot_id='KGCV-RIPENESS-V001',seed=a.seed,test_evaluated=False)
-        cache=build_crop_cache(a.workdir/'crops',logger)
-        if cache['errors'] or cache['physical_images']!=EXPECTED_PHYSICAL_IMAGES or cache['samples']!=EXPECTED_SAMPLES: raise RuntimeError('snapshot count/error contract failed')
-        if cache['split_counts']!=EXPECTED_SPLIT_COUNTS or cache['assignment_sha256']!=EXPECTED_ASSIGNMENT_SHA256: raise RuntimeError('frozen split contract failed')
+        logger.emit('INFO','RUN_STARTED','patience diagnostic started',phase='INIT',experiment_id='RIPENESS-V003-PATIENCE-DIAGNOSTIC',snapshot_id='KGCV-RIPENESS-V001',seed=a.seed,test_evaluated=False,cache_root=str(a.cache_root),allow_download=a.allow_download)
+        cache=load_or_build_crop_cache(a.cache_root,logger,allow_download=a.allow_download)
         result=run(cache,a.workdir,logger,a.seed)
         logger.finish_summary(status='SUCCESS',summary_path=a.workdir/'summaries'/'run_summary.json',final_metrics={'best_epoch':result['best_epoch'],**result['best_valid_metrics']})
     except Exception as exc:
