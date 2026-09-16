@@ -7,9 +7,13 @@ import {
   type ScoutingSignals,
   type ScoutingState,
 } from '../domain/scouting-policy';
-import { ScoutingRepository, type ScoutingCaseRow } from '../infrastructure/scouting-repository';
+import {
+  ScoutingRepository,
+  type ScoutingCaseRow,
+  type ScoutingPolicyProfile,
+} from '../infrastructure/scouting-repository';
 
-export const SCOUTING_POLICY_VERSION = 'PEST-SCOUT-V1-20260916';
+export const SCOUTING_POLICY_VERSION = 'PEST-SCOUT-V2-20260916';
 
 export type ProcessScoutingObservationInput = {
   farmId: string;
@@ -58,9 +62,43 @@ function caseClassificationFromEvidence(evidence: FieldEvidenceCode): {
   }
 }
 
+function resolveFieldCheckFreshness(input: {
+  profile: ScoutingPolicyProfile | null;
+  lastFieldCheckAt: string | null;
+  observedAt: string;
+  upstreamFresh: boolean;
+}) {
+  const minutes = input.profile?.field_check_freshness_minutes;
+  if (input.profile?.freshness_mode === 'FIXED_WINDOW' && typeof minutes === 'number' && input.lastFieldCheckAt) {
+    const elapsedMs = new Date(input.observedAt).getTime() - new Date(input.lastFieldCheckAt).getTime();
+    const validTime = Number.isFinite(elapsedMs) && elapsedMs >= 0;
+    return {
+      fresh: validTime && elapsedMs <= minutes * 60_000,
+      source: 'VERSIONED_FIXED_WINDOW',
+    } as const;
+  }
+  return {
+    fresh: input.upstreamFresh,
+    source: 'UPSTREAM_SEMANTIC',
+  } as const;
+}
+
 export async function processScoutingObservation(repository: ScoutingRepository, input: ProcessScoutingObservationInput) {
   const location = await repository.resolveLocation(input.farmId, input.houseId, input.bedId, input.zoneId, input.observedAt);
+  const normalizedSessionId = await repository.validateObservationScope({
+    farmId: input.farmId,
+    location,
+    captureSessionId: input.captureSessionId,
+    frameId: input.frameId,
+  });
   let activeCase = await repository.activeCase(location.id);
+  const policyProfile = await repository.activePolicyProfile();
+  const freshness = resolveFieldCheckFreshness({
+    profile: policyProfile,
+    lastFieldCheckAt: location.last_field_check_at,
+    observedAt: input.observedAt,
+    upstreamFresh: input.signals.previousFieldCheckFresh,
+  });
   const exactKnownPattern = Boolean(
     input.patternFingerprint
     && location.recent_pattern_fingerprint
@@ -69,6 +107,7 @@ export async function processScoutingObservation(repository: ScoutingRepository,
   const effectiveSignals: ScoutingSignals = {
     ...input.signals,
     matchesRecentKnownPattern: input.signals.matchesRecentKnownPattern || exactKnownPattern,
+    previousFieldCheckFresh: freshness.fresh,
   };
   const decision = decideScoutingAlert({
     currentState: location.current_state as ScoutingState,
@@ -77,6 +116,7 @@ export async function processScoutingObservation(repository: ScoutingRepository,
   });
 
   if (decision.shouldOpenCase && !activeCase) {
+    const previousResolved = await repository.latestResolvedCase(location.id);
     const caseId = await repository.openCase({
       farmId: input.farmId,
       locationStateId: location.id,
@@ -84,6 +124,7 @@ export async function processScoutingObservation(repository: ScoutingRepository,
       issueCode: input.issueCode ?? null,
       openedReason: decision.alertReason,
       now: input.observedAt,
+      previousCaseId: previousResolved?.id ?? null,
     });
     activeCase = {
       id: caseId,
@@ -102,7 +143,7 @@ export async function processScoutingObservation(repository: ScoutingRepository,
     farmId: input.farmId,
     locationStateId: location.id,
     caseId: activeCase?.id ?? null,
-    captureSessionId: input.captureSessionId,
+    captureSessionId: normalizedSessionId,
     frameId: input.frameId,
     sourceAssetId: input.sourceAssetId,
     observedAt: input.observedAt,
@@ -121,9 +162,15 @@ export async function processScoutingObservation(repository: ScoutingRepository,
     trendSignal: input.trendSignal,
     spatialSignal: input.spatialSignal,
     patternFingerprint: input.patternFingerprint,
-    policyInputJson: safeJson(effectiveSignals),
+    policyInputJson: safeJson({
+      signals: effectiveSignals,
+      policyVersion: policyProfile?.policy_version ?? SCOUTING_POLICY_VERSION,
+      freshnessSource: freshness.source,
+      configuredFreshnessMinutes: policyProfile?.field_check_freshness_minutes ?? null,
+    }),
   });
 
+  const appliedPolicyVersion = policyProfile?.policy_version ?? SCOUTING_POLICY_VERSION;
   await repository.appendAlert({
     id: crypto.randomUUID(),
     farmId: input.farmId,
@@ -133,7 +180,7 @@ export async function processScoutingObservation(repository: ScoutingRepository,
     decision: decision.alertDecision,
     reason: decision.alertReason,
     suppressionReason: decision.suppressionReason,
-    policyVersion: SCOUTING_POLICY_VERSION,
+    policyVersion: appliedPolicyVersion,
     now: input.observedAt,
   });
 
@@ -169,6 +216,8 @@ export async function processScoutingObservation(repository: ScoutingRepository,
     suppressionReason: decision.suppressionReason,
     nextState: decision.nextState,
     notificationCount: notificationIds.length,
+    policyVersion: appliedPolicyVersion,
+    freshnessSource: freshness.source,
   };
 }
 
@@ -191,9 +240,10 @@ export async function recordScoutingFieldCheck(repository: ScoutingRepository, i
   const activeCase = await repository.activeCase(input.locationStateId);
   const nextState = stateAfterFieldEvidence(evidenceCode);
   const classification = caseClassificationFromEvidence(evidenceCode);
+  const fieldCheckId = crypto.randomUUID();
 
   await repository.appendFieldCheck({
-    id: crypto.randomUUID(),
+    id: fieldCheckId,
     farmId: input.farmId,
     locationStateId: input.locationStateId,
     caseId: activeCase?.id ?? null,
@@ -215,11 +265,61 @@ export async function recordScoutingFieldCheck(repository: ScoutingRepository, i
   });
 
   return {
+    fieldCheckId,
     locationStateId: input.locationStateId,
     caseId: activeCase?.id ?? null,
     evidenceCode,
     nextState,
     definitiveNegative: false,
+  };
+}
+
+export async function correctScoutingFieldCheck(repository: ScoutingRepository, input: {
+  farmId: string;
+  fieldCheckId: string;
+  memberId: string;
+  correctionKind: 'REPLACE' | 'VOID';
+  replacementEvidenceCode?: string | null;
+  reasonCode: 'MISCLICK' | 'WRONG_OBSERVATION' | 'DUPLICATE' | 'OTHER';
+  correctedAt: string;
+  note?: string | null;
+}) {
+  const original = await repository.fieldCheckForCorrection(input.farmId, input.fieldCheckId);
+  if (!original) throw new Error('수정할 현장 점검 기록을 찾을 수 없습니다.');
+
+  let replacement: FieldEvidenceCode | null = null;
+  if (input.correctionKind === 'REPLACE') {
+    if (!fieldEvidenceCodes.includes(input.replacementEvidenceCode as FieldEvidenceCode)) {
+      throw new Error('수정할 현장 점검 결과를 다시 선택해 주세요.');
+    }
+    replacement = input.replacementEvidenceCode as FieldEvidenceCode;
+  }
+  const nextState: ScoutingState = replacement ? stateAfterFieldEvidence(replacement) : 'WATCH';
+  const classification = replacement ? caseClassificationFromEvidence(replacement) : {};
+  const correctionId = crypto.randomUUID();
+  await repository.appendFieldCheckCorrection({
+    id: correctionId,
+    farmId: input.farmId,
+    fieldCheckId: original.id,
+    locationStateId: original.location_state_id,
+    caseId: original.case_id,
+    correctionKind: input.correctionKind,
+    replacementEvidenceCode: replacement,
+    reasonCode: input.reasonCode,
+    note: input.note,
+    actorMemberId: input.memberId,
+    now: input.correctedAt,
+    nextState,
+    issueFamily: classification.issueFamily,
+    issueCode: classification.issueCode,
+  });
+  return {
+    correctionId,
+    fieldCheckId: original.id,
+    locationStateId: original.location_state_id,
+    correctionKind: input.correctionKind,
+    replacementEvidenceCode: replacement,
+    nextState,
   };
 }
 
@@ -251,4 +351,28 @@ export async function recordScoutingAction(repository: ScoutingRepository, input
     nextState,
   });
   return { locationStateId: input.locationStateId, caseId: activeCase?.id ?? null, actionCode: input.actionCode, nextState };
+}
+
+export async function resolveScoutingCase(repository: ScoutingRepository, input: {
+  farmId: string;
+  locationStateId: string;
+  memberId: string;
+  reasonCode: string;
+  resolvedAt: string;
+}) {
+  const allowedReasons = new Set(['NO_FURTHER_ABNORMALITY', 'TREATMENT_COMPLETED', 'FALSE_ALARM_CLOSED', 'OTHER']);
+  if (!allowedReasons.has(input.reasonCode)) throw new Error('종료 사유를 다시 선택해 주세요.');
+  const history = await repository.locationHistory(input.farmId, input.locationStateId, 1);
+  if (!history) throw new Error('이 농장의 예찰 구역을 찾을 수 없습니다.');
+  const activeCase = await repository.activeCase(input.locationStateId);
+  if (!activeCase) throw new Error('종료할 진행 중 예찰 건이 없습니다.');
+  await repository.resolveCase({
+    farmId: input.farmId,
+    locationStateId: input.locationStateId,
+    caseId: activeCase.id,
+    reasonCode: input.reasonCode,
+    actorMemberId: input.memberId,
+    now: input.resolvedAt,
+  });
+  return { locationStateId: input.locationStateId, caseId: activeCase.id, state: 'RESOLVED' as const };
 }
