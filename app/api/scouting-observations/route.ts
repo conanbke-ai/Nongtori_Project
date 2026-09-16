@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { NextResponse } from 'next/server';
 import { ensureSchema } from '@/db';
+import { ensureScoutingRuntime } from '@/db/scouting-runtime';
 import { processScoutingObservation } from '@/app/features/pests/application/scouting-service';
 import { ScoutingRepository } from '@/app/features/pests/infrastructure/scouting-repository';
 import { getFarmMember } from '@/app/lib/farm-auth';
@@ -20,6 +21,7 @@ function flag(value: unknown) { return value === true; }
 export async function POST(request: Request) {
   try {
     await ensureSchema();
+    await ensureScoutingRuntime();
     const body = await request.json() as Record<string, unknown>;
     const farmId = text(body.farmId);
     const houseId = text(body.houseId);
@@ -28,8 +30,6 @@ export async function POST(request: Request) {
     if (!farmId || !houseId || !bedId || !zoneId) {
       return NextResponse.json({ error: '농장·동·베드·구역을 모두 선택해 주세요.' }, { status: 422 });
     }
-    // Semantic anomaly signals can create farm-wide alerts. Until a dedicated model-worker
-    // credential exists, only ADMIN-level farm management may submit this ingestion boundary.
     const member = await getFarmMember(request, farmId);
     if (!member?.permissions.manageFarm) {
       return NextResponse.json({ error: '예찰 분석 결과를 등록할 권한이 없습니다.' }, { status: 403 });
