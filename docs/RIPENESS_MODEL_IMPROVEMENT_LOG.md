@@ -153,6 +153,54 @@ Before final production/field promotion:
 
 ---
 
+# EXP-RIP-008 — Extended Early-Stopping Patience Diagnostic
+
+Status: **REJECTED AS IMPROVEMENT / MEANINGFUL DIAGNOSTIC / VALIDATION ONLY**
+
+Purpose: verify whether LR `5e-5` was being stopped prematurely because the existing `patience=5` window was too short.
+
+Controlled setup:
+- model: ResNet-18
+- snapshot: `KGCV-RIPENESS-V001`
+- seed: `20260910`
+- LR: `5e-5`
+- optimizer / augmentation / class weighting unchanged
+- patience: `5 → 12`
+- max epochs: `25`
+- test evaluated: **NO**
+- local run id: `c764f9022209`
+
+Observed best checkpoint:
+
+| Metric | Result |
+|---|---:|
+| Best epoch | **2** |
+| Macro F1 | **0.9725** |
+| Ordinal MAE ↓ | **0.0391** |
+| Weighted Kappa | **0.9722** |
+
+Learning behavior:
+- under the old patience=5 rule, the run would have stopped at epoch 7;
+- extended patience allowed observation through epoch 14;
+- no epoch after 2 exceeded the epoch-2 Macro F1 `0.9725`;
+- train loss continued falling from `0.1622` at epoch 2 to approximately `0.007–0.008` late in training;
+- validation Macro F1 remained below the best despite continued train-loss improvement.
+
+Interpretation:
+- the evidence does **not** support the hypothesis that LR `5e-5` merely required more epochs and was being cut off too early;
+- the observed pattern is more consistent with an early validation optimum followed by generalization plateau / overfitting;
+- extending patience alone therefore adds training cost without producing a better validation checkpoint in this controlled ResNet run.
+
+Scope limitation:
+- this is a single-seed diagnostic on the ResNet-18 recipe;
+- it is not a claim about EfficientNet-B0, field data, or production reliability.
+
+Decision: `REJECT PATIENCE EXTENSION AS AN IMPROVEMENT`.
+
+Do not increase patience solely to compensate for LR `5e-5`. Keep this result as diagnostic evidence and move optimization effort to evidence-backed error analysis rather than longer training.
+
+---
+
 # Current preferred recipe
 
 ```text
@@ -175,6 +223,7 @@ Rejected branches:
 - 2-epoch head-only staged warm-up;
 - CosineAnnealingLR (`eta_min=5e-6`, `T_max=15`);
 - label smoothing `0.05`;
-- expected ordinal-distance regularizer `λ=0.20`.
+- expected ordinal-distance regularizer `λ=0.20`;
+- extending ResNet early-stopping patience from `5` to `12` as a remedy for LR `5e-5`.
 
 Next action is not blind tuning toward `0.98`. Follow `RIPENESS_TUNING_BACKLOG.md`: residual-error audit first, then only evidence-triggered tuning.
