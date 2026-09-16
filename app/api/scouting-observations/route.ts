@@ -28,9 +28,11 @@ export async function POST(request: Request) {
     if (!farmId || !houseId || !bedId || !zoneId) {
       return NextResponse.json({ error: '농장·동·베드·구역을 모두 선택해 주세요.' }, { status: 422 });
     }
+    // Semantic anomaly signals can create farm-wide alerts. Until a dedicated model-worker
+    // credential exists, only ADMIN-level farm management may submit this ingestion boundary.
     const member = await getFarmMember(request, farmId);
-    if (!member?.permissions.reviewAlerts) {
-      return NextResponse.json({ error: '이 농장의 예찰 기록을 등록할 권한이 없습니다.' }, { status: 403 });
+    if (!member?.permissions.manageFarm) {
+      return NextResponse.json({ error: '예찰 분석 결과를 등록할 권한이 없습니다.' }, { status: 403 });
     }
 
     const sourceType = text(body.sourceType, 30) || 'FUSION';
