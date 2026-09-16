@@ -101,7 +101,13 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
     }
   }, [farmId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve().then(async () => {
+      if (!cancelled) await load();
+    });
+    return () => { cancelled = true; };
+  }, [load]);
 
   async function submit(path: '/api/scouting-field-checks' | '/api/scouting-actions', row: ScoutingLocation, code: string) {
     setSending(`${row.id}:${code}`);
