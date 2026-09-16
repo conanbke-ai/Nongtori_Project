@@ -1,8 +1,16 @@
 -- Pest scouting operations V2: append-only corrections, explicit case lifecycle, versioned freshness policy.
 
-ALTER TABLE `scouting_cases` ADD COLUMN `previous_case_id` text REFERENCES `scouting_cases`(`id`) ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS `idx_scouting_cases_previous_case`
-  ON `scouting_cases` (`previous_case_id`);
+CREATE TABLE IF NOT EXISTS `scouting_case_links` (
+  `case_id` text PRIMARY KEY NOT NULL,
+  `previous_case_id` text,
+  `link_type` text NOT NULL DEFAULT 'RECURRENCE',
+  `created_at` text NOT NULL,
+  FOREIGN KEY (`case_id`) REFERENCES `scouting_cases`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`previous_case_id`) REFERENCES `scouting_cases`(`id`) ON DELETE SET NULL,
+  CHECK (`link_type` IN ('RECURRENCE'))
+);
+CREATE INDEX IF NOT EXISTS `idx_scouting_case_links_previous`
+  ON `scouting_case_links` (`previous_case_id`);
 
 CREATE TABLE IF NOT EXISTS `scouting_policy_profiles` (
   `policy_version` text PRIMARY KEY NOT NULL,
