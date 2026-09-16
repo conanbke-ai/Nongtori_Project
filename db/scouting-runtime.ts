@@ -79,6 +79,10 @@ const statements = [
   )`,
   `INSERT OR IGNORE INTO scouting_issue_catalog(code, family, display_name_ko, ai_capability, operational_status, created_at, updated_at) VALUES
     ('SPIDER_MITE', 'PEST', '응애', 'ALERT_ONLY', 'ACTIVE', '2026-09-16T00:00:00.000Z', '2026-09-16T00:00:00.000Z'),
+    ('APHID', 'PEST', '진딧물', 'RECORD_ONLY', 'ACTIVE', '2026-09-16T00:00:00.000Z', '2026-09-16T00:00:00.000Z'),
+    ('THRIPS', 'PEST', '총채벌레', 'RECORD_ONLY', 'ACTIVE', '2026-09-16T00:00:00.000Z', '2026-09-16T00:00:00.000Z'),
+    ('POWDERY_MILDEW', 'DISEASE', '흰가루병', 'RECORD_ONLY', 'ACTIVE', '2026-09-16T00:00:00.000Z', '2026-09-16T00:00:00.000Z'),
+    ('GRAY_MOLD', 'DISEASE', '잿빛곰팡이병', 'RECORD_ONLY', 'ACTIVE', '2026-09-16T00:00:00.000Z', '2026-09-16T00:00:00.000Z'),
     ('UNKNOWN_PEST', 'PEST', '기타 해충·종류 미확인', 'RECORD_ONLY', 'ACTIVE', '2026-09-16T00:00:00.000Z', '2026-09-16T00:00:00.000Z'),
     ('UNKNOWN_DISEASE', 'DISEASE', '병해 의심·종류 미확인', 'RECORD_ONLY', 'ACTIVE', '2026-09-16T00:00:00.000Z', '2026-09-16T00:00:00.000Z'),
     ('ENVIRONMENTAL_STRESS', 'PHYSIOLOGICAL_ENVIRONMENTAL', '환경·생리 이상', 'ALERT_ONLY', 'ACTIVE', '2026-09-16T00:00:00.000Z', '2026-09-16T00:00:00.000Z'),
@@ -89,8 +93,6 @@ export function ensureScoutingRuntime() {
   if (!env.DB) throw new Error('Cloudflare D1 binding `DB` is unavailable.');
   const pending = scoutingReady ??= (async () => {
     await env.DB.batch(statements.map((sql) => env.DB.prepare(sql)));
-    // Runtime parity guard: ensureSchema still defines the legacy stateless trigger for older schemas.
-    // Scouting runtime always disables it after base schema initialization.
     await env.DB.batch([
       env.DB.prepare('DROP TRIGGER IF EXISTS trg_mite_alert_notification_outbox_v3'),
       env.DB.prepare(`CREATE TRIGGER trg_mite_alert_notification_outbox_v3
