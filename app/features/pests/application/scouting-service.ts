@@ -44,6 +44,20 @@ function safeJson(value: unknown) {
   try { return JSON.stringify(value ?? {}); } catch { return '{}'; }
 }
 
+function caseClassificationFromEvidence(evidence: FieldEvidenceCode): {
+  issueFamily?: ScoutingCaseRow['issue_family'];
+  issueCode?: string;
+} {
+  switch (evidence) {
+    case 'DIRECT_MITE_OR_EGG_CONFIRMED': return { issueFamily: 'PEST', issueCode: 'SPIDER_MITE' };
+    case 'OTHER_PEST_LIKE_EVIDENCE': return { issueFamily: 'PEST', issueCode: 'UNKNOWN_PEST' };
+    case 'DISEASE_LIKE_EVIDENCE': return { issueFamily: 'DISEASE', issueCode: 'UNKNOWN_DISEASE' };
+    case 'PHYSIOLOGICAL_OR_ENVIRONMENTAL_ABNORMALITY':
+      return { issueFamily: 'PHYSIOLOGICAL_ENVIRONMENTAL', issueCode: 'ENVIRONMENTAL_STRESS' };
+    default: return {};
+  }
+}
+
 export async function processScoutingObservation(repository: ScoutingRepository, input: ProcessScoutingObservationInput) {
   const location = await repository.resolveLocation(input.farmId, input.houseId, input.bedId, input.zoneId, input.observedAt);
   let activeCase = await repository.activeCase(location.id);
@@ -176,6 +190,7 @@ export async function recordScoutingFieldCheck(repository: ScoutingRepository, i
   if (!history) throw new Error('이 농장의 예찰 구역을 찾을 수 없습니다.');
   const activeCase = await repository.activeCase(input.locationStateId);
   const nextState = stateAfterFieldEvidence(evidenceCode);
+  const classification = caseClassificationFromEvidence(evidenceCode);
 
   await repository.appendFieldCheck({
     id: crypto.randomUUID(),
@@ -194,7 +209,8 @@ export async function recordScoutingFieldCheck(repository: ScoutingRepository, i
     caseId: activeCase?.id ?? null,
     nextState,
     evidenceCode,
-    issueCode: evidenceCode === 'DIRECT_MITE_OR_EGG_CONFIRMED' ? 'SPIDER_MITE' : null,
+    issueFamily: classification.issueFamily,
+    issueCode: classification.issueCode,
     now: input.checkedAt,
   });
 
