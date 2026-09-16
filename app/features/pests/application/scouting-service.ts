@@ -47,10 +47,19 @@ function safeJson(value: unknown) {
 export async function processScoutingObservation(repository: ScoutingRepository, input: ProcessScoutingObservationInput) {
   const location = await repository.resolveLocation(input.farmId, input.houseId, input.bedId, input.zoneId, input.observedAt);
   let activeCase = await repository.activeCase(location.id);
+  const exactKnownPattern = Boolean(
+    input.patternFingerprint
+    && location.recent_pattern_fingerprint
+    && input.patternFingerprint === location.recent_pattern_fingerprint,
+  );
+  const effectiveSignals: ScoutingSignals = {
+    ...input.signals,
+    matchesRecentKnownPattern: input.signals.matchesRecentKnownPattern || exactKnownPattern,
+  };
   const decision = decideScoutingAlert({
     currentState: location.current_state as ScoutingState,
     hasActiveCase: Boolean(activeCase),
-    signals: input.signals,
+    signals: effectiveSignals,
   });
 
   if (decision.shouldOpenCase && !activeCase) {
@@ -98,7 +107,7 @@ export async function processScoutingObservation(repository: ScoutingRepository,
     trendSignal: input.trendSignal,
     spatialSignal: input.spatialSignal,
     patternFingerprint: input.patternFingerprint,
-    policyInputJson: safeJson(input.signals),
+    policyInputJson: safeJson(effectiveSignals),
   });
 
   await repository.appendAlert({
@@ -126,7 +135,7 @@ export async function processScoutingObservation(repository: ScoutingRepository,
   });
 
   let notificationIds: string[] = [];
-  if (alertIssued) {
+  if (decision.alertDecision !== 'SUPPRESSED') {
     notificationIds = await repository.createNotifications({
       farmId: input.farmId,
       locationState: location,
