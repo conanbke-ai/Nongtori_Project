@@ -95,11 +95,11 @@ export function decideScoutingAlert(input: ScoutingPolicyInput): ScoutingPolicyD
 
   if (signals.matchesRecentKnownPattern) {
     return {
-      alertDecision: 'SUPPRESSED',
-      nextState: currentState === 'BASELINE' ? 'WATCH' : currentState,
-      alertReason: 'KNOWN_PATTERN_CONTINUES',
-      suppressionReason: 'MATCHES_RECENT_KNOWN_PATTERN',
-      shouldOpenCase: false,
+      alertDecision: hasActiveCase ? 'RECHECK_REQUESTED' : 'ISSUED',
+      nextState: 'FIELD_CHECK_REQUIRED',
+      alertReason: 'STALE_PREVIOUS_CHECK',
+      suppressionReason: null,
+      shouldOpenCase: !hasActiveCase,
     };
   }
 
