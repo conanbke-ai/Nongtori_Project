@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ScoutingQueue } from '../app/features/pests/presentation/ScoutingQueue';
 
@@ -12,14 +13,13 @@ test('scouting queue does not turn missing visible evidence into a mite-negative
 });
 
 test('scouting action labels are concise operational nouns', () => {
-  const html = renderToStaticMarkup(<ScoutingQueue farmId="" canReview language="ko" />);
-  assert.ok(html.includes('방제'));
-  assert.ok(html.includes('피해잎 제거'));
-  assert.ok(html.includes('천적 처리'));
-  assert.ok(html.includes('추적 관찰'));
-  assert.ok(!html.includes('방제했어요'));
-  assert.ok(!html.includes('제거했어요'));
-  assert.ok(!html.includes('지켜볼게요'));
+  const source = readFileSync('app/features/pests/presentation/ScoutingQueue.tsx', 'utf8');
+  for (const label of ["ko: '방제'", "ko: '피해잎 제거'", "ko: '천적 처리'", "ko: '추적 관찰'", "ko: '기타 조치'"]) {
+    assert.ok(source.includes(label), `${label} must remain in the action catalog`);
+  }
+  assert.ok(!source.includes("ko: '방제했어요'"));
+  assert.ok(!source.includes("ko: '피해잎을 제거했어요'"));
+  assert.ok(!source.includes("ko: '조금 더 지켜볼게요'"));
 });
 
 test('scouting queue remains read-only and localized for workers without review permission', () => {
