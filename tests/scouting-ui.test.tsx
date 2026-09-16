@@ -11,9 +11,21 @@ test('scouting queue does not turn missing visible evidence into a mite-negative
   assert.ok(!html.includes('응애 아님'));
 });
 
-test('scouting queue remains read-only for workers without review permission', () => {
+test('scouting action labels are concise operational nouns', () => {
+  const html = renderToStaticMarkup(<ScoutingQueue farmId="" canReview language="ko" />);
+  assert.ok(html.includes('방제'));
+  assert.ok(html.includes('피해잎 제거'));
+  assert.ok(html.includes('천적 처리'));
+  assert.ok(html.includes('추적 관찰'));
+  assert.ok(!html.includes('방제했어요'));
+  assert.ok(!html.includes('제거했어요'));
+  assert.ok(!html.includes('지켜볼게요'));
+});
+
+test('scouting queue remains read-only and localized for workers without review permission', () => {
   const html = renderToStaticMarkup(<ScoutingQueue farmId="" canReview={false} language="vi" />);
-  assert.ok(html.includes('구역 상태 기반 예찰'));
+  assert.ok(html.includes('Theo dõi theo trạng thái khu vực'));
+  assert.ok(html.includes('Khu vực cần kiểm tra hôm nay'));
   assert.ok(!html.includes('현장 점검 결과'));
   assert.ok(!html.includes('조치 기록'));
 });
