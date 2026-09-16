@@ -93,6 +93,7 @@ class RunLogger:
             return f"\n┌─ Epoch {int(fields.get('epoch',0)):02d} / {int(fields.get('max_epochs',0)):02d} " + "─" * 39
         if event == "EPOCH_COMPLETED":
             best_mark = "  ↑ BEST" if bool(fields.get("checkpoint_saved")) else ""
+            patience_limit = fields.get("patience_limit", 5)
             lines = [
                 f"│ Train Loss      {_fmt(fields.get('train_loss'))}",
                 f"│ Valid Loss      {_fmt(fields.get('valid_loss'))}",
@@ -102,7 +103,7 @@ class RunLogger:
                 f"│ Weighted Kappa  {_fmt(fields.get('weighted_kappa'))}",
                 f"│ LR              {_fmt(fields.get('learning_rate'), 6)}",
                 f"│ Best Epoch      {fields.get('best_epoch','-')}",
-                f"│ Early Stop      {fields.get('early_stopping_counter','-')} / 5",
+                f"│ Early Stop      {fields.get('early_stopping_counter','-')} / {patience_limit}",
                 f"│ Epoch Time      {_duration(float(fields.get('epoch_elapsed_sec',0.0)))}",
                 "└" + "─" * 57,
             ]
@@ -160,7 +161,6 @@ class RunLogger:
         pretty = self._pretty_console(level, event, message, fields)
         method = level.lower() if level in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"} else "info"
         getattr(self._logger, method)(pretty)
-        # File log keeps a searchable compact structured tail even though console is human-oriented.
         if self._logger.handlers:
             file_tail = json.dumps(fields, ensure_ascii=False, sort_keys=True)
             logging.getLogger(f"nongtori.filetail.{self.run_id}")
