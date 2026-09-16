@@ -8,14 +8,13 @@ from typing import Any
 from PIL import Image
 
 from ml.observability import RunLogger
-from ml.ripeness_baseline.cache_io import load_or_build_crop_cache
+from ml.ripeness_baseline.cache_io import CANONICAL_CACHE_ROOT, load_or_build_crop_cache
 from ml.ripeness_baseline.screen_lr_v002 import _num_workers
 from ml.ripeness_baseline.train_v001 import CLASS_TO_INDEX, CLASS_VALUES, metrics, seed_all
 
 LR = 5e-5
 PATIENCE = 12
 MAX_EPOCHS = 25
-DEFAULT_CACHE_ROOT = Path('artifacts/ripeness-v002-lr-screening/crops')
 
 
 def run(cache: dict[str, Any], out: Path, logger: RunLogger, seed: int) -> dict[str, Any]:
@@ -97,8 +96,8 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--seed',type=int,default=20260910)
     ap.add_argument('--workdir',type=Path,default=Path('artifacts/ripeness-v003-patience'))
-    ap.add_argument('--cache-root',type=Path,default=DEFAULT_CACHE_ROOT)
-    ap.add_argument('--allow-download',action='store_true',help='build remote cache only when verified local cache is unavailable')
+    ap.add_argument('--cache-root',type=Path,default=CANONICAL_CACHE_ROOT)
+    ap.add_argument('--allow-download',action='store_true',help='build canonical snapshot cache only when unavailable')
     a=ap.parse_args()
     logger=RunLogger(a.workdir,'ripeness_v003_patience')
     try:
