@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { NextResponse } from 'next/server';
 import { ensureSchema } from '@/db';
+import { ensureScoutingRuntime } from '@/db/scouting-runtime';
 import { getFarmMember } from '@/app/lib/farm-auth';
 
 export const runtime = 'edge';
@@ -26,6 +27,7 @@ type ScoutingLocationRow = {
 export async function GET(request: Request) {
   try {
     await ensureSchema();
+    await ensureScoutingRuntime();
     const url = new URL(request.url);
     const farmId = url.searchParams.get('farmId')?.trim() ?? '';
     const attentionOnly = url.searchParams.get('attention') !== '0';
@@ -38,8 +40,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '이 농장의 예찰 현황을 볼 권한이 없습니다.' }, { status: 403 });
     }
 
+    // Attention queue is intentionally narrower than the full state list.
+    // POST_TREATMENT/MONITORING remain in history and return here only when a new
+    // observation moves the location back to FIELD_CHECK_REQUIRED.
     const attentionClause = attentionOnly
-      ? `AND s.current_state IN ('FIELD_CHECK_REQUIRED', 'SUSPECTED', 'CONFIRMED', 'POST_TREATMENT', 'MONITORING')`
+      ? `AND s.current_state IN ('FIELD_CHECK_REQUIRED', 'SUSPECTED', 'CONFIRMED')`
       : '';
     const result = await env.DB.prepare(`SELECT
         s.id, s.location_key, s.house_code, s.bed_code, s.zone_code, s.current_state,
