@@ -1,0 +1,36 @@
+name: Ripeness V003 Patience Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - 'ml/ripeness_baseline/run_patience_v003.py'
+      - '.github/workflows/ripeness-v003-patience.yml'
+  workflow_dispatch:
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision && pip install pillow numpy scikit-learn
+      - name: Run patience diagnostic
+        run: python -u -m ml.ripeness_baseline.run_patience_v003 --seed 20260910 --workdir artifacts/ripeness-v003-patience
+      - name: Show summary
+        if: always()
+        run: |
+          cat artifacts/ripeness-v003-patience/summaries/run_summary.json 2>/dev/null || true
+          tail -n 160 artifacts/ripeness-v003-patience/run.log 2>/dev/null || true
+          cat artifacts/ripeness-v003-patience/error.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ripeness-v003-patience
+          path: artifacts/ripeness-v003-patience/
+          retention-days: 90
