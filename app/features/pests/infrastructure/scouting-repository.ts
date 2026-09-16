@@ -166,16 +166,18 @@ export class ScoutingRepository {
 
   async applyFieldCheckState(input: {
     locationStateId: string; caseId: string | null; nextState: ScoutingState;
-    evidenceCode: FieldEvidenceCode; issueCode?: string | null; now: string;
+    evidenceCode: FieldEvidenceCode; issueFamily?: ScoutingCaseRow['issue_family']; issueCode?: string | null; now: string;
   }) {
     const statements = [
       this.db.prepare(`UPDATE scouting_location_states SET current_state = ?, last_field_check_at = ?,
         state_version = state_version + 1, updated_at = ? WHERE id = ?`)
         .bind(input.nextState, input.now, input.now, input.locationStateId),
     ];
-    if (input.caseId && input.evidenceCode === 'DIRECT_MITE_OR_EGG_CONFIRMED') {
-      statements.push(this.db.prepare(`UPDATE scouting_cases SET primary_issue_code = COALESCE(?, primary_issue_code),
-        status = 'OPEN', updated_at = ? WHERE id = ?`).bind(input.issueCode ?? 'SPIDER_MITE', input.now, input.caseId));
+    if (input.caseId && input.issueFamily && input.issueCode) {
+      statements.push(this.db.prepare(`UPDATE scouting_cases SET issue_family = ?, primary_issue_code = ?,
+        status = ?, updated_at = ? WHERE id = ?`)
+        .bind(input.issueFamily, input.issueCode,
+          input.evidenceCode === 'DIRECT_MITE_OR_EGG_CONFIRMED' ? 'OPEN' : 'MONITORING', input.now, input.caseId));
     } else if (input.caseId) {
       statements.push(this.db.prepare(`UPDATE scouting_cases SET status = 'MONITORING', updated_at = ?
         WHERE id = ? AND status != 'RESOLVED'`).bind(input.now, input.caseId));
