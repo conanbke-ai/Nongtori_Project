@@ -1,46 +1,96 @@
 # Nongtori Pest Scouting DB Schema V1
 
-Status: **CANONICAL CANDIDATE / IMPLEMENTATION CONTRACT DRAFT**
+Status: **CANONICAL / COMPATIBILITY-AWARE TARGET CONTRACT — 2026-09-17**
 
-이 문서는 `PEST_SCOUTING_STATE_DESIGN.md`의 상태 기반 예찰 정책을 실제 DB로 구현하기 위한 V1 schema 계약을 정의한다.
+이 문서는 `PEST_SCOUTING_STATE_DESIGN.md`의 stateful scouting 정책을 실제 DB/runtime에 적용하기 위한 V1 계약이다. 기존 main의 scouting runtime은 보존하며, 공간/현장확인 계약은 아래 목표 구조로 점진 전환한다.
 
-## 1. 목표
+## 1. 원칙
 
-응애/병해충 예찰은 다음 요구를 동시에 만족해야 한다.
+- Observation과 Case를 분리한다.
+- 현재 state projection과 append-only history를 분리한다.
+- 상태 enum과 병해충 종류를 분리한다.
+- 미입력/미확인을 음성 라벨로 만들지 않는다.
+- 현장확인은 optional evidence다.
+- 농가 공간구조를 `house → bed → zone` 고정 계층으로 만들지 않는다.
+- 현재 legacy location column은 destructive migration 없이 compatibility field로 유지할 수 있다.
 
-- 같은 구역의 과거 상태를 기억한다.
-- 모든 관측은 이력으로 남긴다.
-- 동일 패턴 반복 시 같은 알림을 매번 보내지 않는다.
-- 새로운 변화가 생길 때만 재알림할 수 있다.
-- 현장 사용자는 병명을 억지로 확정하지 않고 관찰 사실만 남길 수 있다.
-- 현장 확인 결과는 영구 negative/positive 판정으로 과도하게 일반화하지 않는다.
-- 향후 응애 이외 병해충/생리장해/환경 이상으로 확장 가능해야 한다.
-
-## 2. 테이블 개요
+## 2. 목표 테이블
 
 ```text
-scouting_location_states      # 구역별 현재 상태 projection
+spatial_units                 # 다농가 가변 공간 hierarchy
+scouting_location_states      # 공간별 현재 상태 projection
 scouting_cases                # 하나의 의심/발생 episode
-scouting_observations         # 센서/영상/모델 관측 append-only
-scouting_field_checks         # 작업자/농장주의 현장 evidence
-scouting_actions              # 방제/제거/관찰 유지 등 조치
-scouting_alert_events         # 발행/억제된 alert 이력
-scouting_issue_catalog        # 응애/기타 병해충/환경 이상 taxonomy
+scouting_observations         # 자동 관측 append-only
+scouting_field_checks         # 현장 확인 event
+scouting_field_findings       # 한 확인에서 발견한 0..N finding
+scouting_actions              # 조치 event
+scouting_alert_events         # 발행/억제/재알림 event
+scouting_issue_catalog        # 병해충/질병/환경이상 taxonomy
 ```
 
-기존 `mite_record_notes`는 migration audit 전까지 유지한다.
+기존 `houses/beds/zones`, `mite_record_notes`, 기존 scouting field-check code는 migration audit 전 삭제하지 않는다.
 
-## 3. scouting_location_states
+## 3. spatial_units
 
-구역별 현재 상태를 빠르게 조회하는 projection 테이블이다.
+농가마다 다른 시설 구조를 지원한다.
 
 ```text
 id
 farm_id
-location_key
-house_code
-bed_code
-zone_code
+parent_id nullable
+unit_type
+code
+name
+display_code
+sort_order nullable
+metadata_json nullable
+active
+created_at
+updated_at
+```
+
+`unit_type` 후보:
+
+```text
+FACILITY
+HOUSE
+SECTION
+BLOCK
+BED
+ROW
+ZONE
+CUSTOM
+```
+
+제약:
+
+```text
+UNIQUE(farm_id, id)
+UNIQUE(farm_id, display_code)  # 정책상 안정적인 display code를 운영하는 경우
+```
+
+`HOUSE`는 필수 레벨이 아니다.
+
+예:
+
+```text
+M: 3동 → Bed 08 → E
+C1: Facility A → Bed 37 → E
+C2: Bed 37 → E
+```
+
+## 4. scouting_location_states
+
+빠른 조회를 위한 current projection.
+
+목표 필드:
+
+```text
+id
+farm_id
+spatial_unit_id nullable
+location_key                # legacy/derived compatibility key
+display_location_code
 current_state
 active_case_id nullable
 last_observed_at nullable
@@ -55,36 +105,29 @@ created_at
 updated_at
 ```
 
-### 제약
+현재 runtime의 다음 필드는 migration 전 유지 가능하다.
 
 ```text
-UNIQUE(farm_id, location_key)
+house_code
+bed_code
+zone_code
 ```
 
-`location_key`는 derived key이며 source의 원본 `Farm`/`Zone`을 대체하지 않는다.
+하지만 신규 business logic이 이 세 필드의 존재를 필수 전제로 삼아서는 안 된다.
 
-권장 state:
+목표 identity:
 
 ```text
-BASELINE
-WATCH
-FIELD_CHECK_REQUIRED
-SUSPECTED
-CONFIRMED
-POST_TREATMENT
-MONITORING
-RESOLVED
+farm_id + spatial_unit_id
 ```
 
-금지:
+legacy fallback:
 
 ```text
-NO_VISIBLE_EVIDENCE → VERIFIED_NEGATIVE 자동 변환
+farm_id + location_key
 ```
 
-## 4. scouting_cases
-
-하나의 연속된 의심/발생/조치 episode를 관리한다.
+## 5. scouting_cases
 
 ```text
 id
@@ -97,32 +140,23 @@ opened_at
 opened_reason
 closed_at nullable
 close_reason nullable
+previous_case_id nullable
 created_at
 updated_at
 ```
 
-권장 status:
+상태와 이슈를 분리한다.
 
 ```text
-OPEN
-MONITORING
-POST_TREATMENT
-RESOLVED
+status = OPEN | MONITORING | POST_TREATMENT | RESOLVED
+primary_issue_code = SPIDER_MITE | THRIPS | ... | null
 ```
 
-동일 위치에서 같은 상태가 반복됐다는 이유만으로 매일 새 case를 만들지 않는다.
+동일 observation 반복으로 case를 매번 새로 만들지 않는다.
 
-새 case는 적어도 다음 중 하나가 충족될 때 생성 후보가 된다.
+## 6. scouting_observations
 
-- 기존 case 없음 + meaningful anomaly 발생
-- 기존 case 종료 후 충분한 시간 경과 뒤 새로운 anomaly 발생
-- 기존 이슈와 질적으로 다른 새로운 issue family 발생
-
-정확한 시간/거리 threshold는 field calibration 전 고정하지 않는다.
-
-## 5. scouting_observations
-
-모든 자동 관측을 append-only로 저장한다.
+자동/센서/영상/모델 관측을 append-only로 저장한다.
 
 ```text
 id
@@ -138,6 +172,7 @@ leaf_temp nullable
 ambient_temp nullable
 reference_temp nullable
 humidity nullable
+vpd nullable
 light_level nullable
 thermal_features_json
 rgb_reference_json
@@ -151,26 +186,19 @@ pattern_fingerprint nullable
 created_at
 ```
 
-### source_type 예
+시간정보는 반드시 보존한다. 불규칙 반복 관측에서는 파생 feature로 다음을 만들 수 있다.
 
 ```text
-THERMAL
-RGB_REFERENCE
-SENSOR
-MANUAL
-FUSION
+time_since_previous
+change_since_previous
+rolling/accumulated environment features
 ```
 
-### 원칙
+규칙적인 sequence가 없는 데이터를 임의 interpolation해 canonical raw observation처럼 저장하지 않는다.
 
-- observation은 alert가 억제되어도 저장한다.
-- 원시/파생 feature는 provenance를 남긴다.
-- 현재 state를 덮어쓰기 위한 유일한 source로 사용하지 않고 state service가 history를 해석한다.
-- RGB는 V1에서 응애 객체 검출 필수 입력이 아니다.
+## 7. scouting_field_checks
 
-## 6. scouting_field_checks
-
-현장 작업자가 직접 관찰한 사실을 기록한다.
+현장에 갔다는 event 자체.
 
 ```text
 id
@@ -179,15 +207,62 @@ location_state_id
 case_id nullable
 observation_id nullable
 checked_at
+recorded_at
 checker_member_id nullable
-primary_evidence_code
-secondary_evidence_json
+verification_status
 note nullable
 photo_asset_id nullable
 created_at
 ```
 
-### primary_evidence_code
+`checked_at`과 `recorded_at`을 구분할 수 있어야 한다. 현장에서 확인한 뒤 나중에 앱에 입력할 수 있기 때문이다.
+
+`verification_status` 목표 enum:
+
+```text
+UNVERIFIED      # row가 없는 경우를 기본으로 사용해도 됨
+VERIFIED
+INCONCLUSIVE
+```
+
+현장확인 row가 없다는 사실을 정상/음성으로 변환하지 않는다.
+
+## 8. scouting_field_findings
+
+현장확인의 구체 결과를 0..N으로 저장한다.
+
+```text
+id
+field_check_id
+family
+issue_code nullable
+finding_code
+certainty nullable
+severity nullable
+created_at
+```
+
+`family`:
+
+```text
+PEST
+DISEASE
+PHYSIOLOGICAL_ENVIRONMENTAL
+UNKNOWN
+NONE_VISIBLE
+```
+
+예:
+
+```text
+field_check = VERIFIED
+finding #1 = PEST / SPIDER_MITE
+finding #2 = DISEASE / POWDERY_MILDEW
+```
+
+아무 이상을 찾지 못한 경우도 `NONE_VISIBLE`이며 강한 negative ground truth와 동일하지 않다.
+
+현재 runtime의 legacy evidence:
 
 ```text
 NO_VISIBLE_EVIDENCE
@@ -200,24 +275,20 @@ PHYSIOLOGICAL_OR_ENVIRONMENTAL_ABNORMALITY
 INCONCLUSIVE
 ```
 
-### 핵심 의미
+은 기존 이력/호환을 위해 보존하고, 신규 도메인에서는 finding mapper를 통해 해석한다.
 
-```text
-NO_VISIBLE_EVIDENCE
-= 점검 당시 뚜렷한 이상을 작업자가 확인하지 못함
-≠ 응애가 존재하지 않음
-```
+예:
 
 ```text
 DIRECT_MITE_OR_EGG_CONFIRMED
-= 확대 관찰 등으로 응애/알을 직접 확인한 강한 현장 evidence
+→ family=PEST
+→ issue_code=SPIDER_MITE
+→ state=CONFIRMED
 ```
 
-`WEBBING_OR_MITE_TRACE_SUSPECTED`는 현재 활성 응애 확정과 동일하지 않다.
+## 9. scouting_actions
 
-## 7. scouting_actions
-
-현장에서 실제 수행한 조치를 기록한다.
+현장확인과 별도의 event다.
 
 ```text
 id
@@ -225,28 +296,30 @@ farm_id
 location_state_id
 case_id nullable
 action_at
-action_code
+recorded_at
 actor_member_id nullable
+action_code
 detail_json
 note nullable
 created_at
 ```
 
-V1 action code 후보:
+V1 후보:
 
 ```text
 TREATMENT_APPLIED
 LEAF_REMOVED
 BIOCONTROL_APPLIED
+ENVIRONMENT_ADJUSTED
 OBSERVE_ONLY
 OTHER_ACTION
 ```
 
-농민/작업자에게 상세 약제명/농도 입력을 기본 의무화하지 않는다.
+조치 row가 없으면 `NOT_TREATED`가 아니라 `NO_ACTION_RECORD`로 해석한다.
 
-## 8. scouting_alert_events
+조치가 있어도 case를 자동 RESOLVED 하지 않는다.
 
-알림 발행 여부 자체도 이력으로 남긴다.
+## 10. scouting_alert_events
 
 ```text
 id
@@ -262,7 +335,7 @@ policy_version
 notification_outbox_id nullable
 ```
 
-### alert_decision
+`alert_decision`:
 
 ```text
 ISSUED
@@ -271,17 +344,7 @@ ESCALATED
 RECHECK_REQUESTED
 ```
 
-### suppression_reason 예
-
-```text
-MATCHES_RECENT_KNOWN_PATTERN
-NO_MEANINGFUL_NEW_EVIDENCE
-RECENT_FIELD_CHECK_STILL_FRESH
-ACTIVE_CASE_ALREADY_NOTIFIED
-ENVIRONMENT_EXPLAINS_VARIATION
-```
-
-### re-alert reason 예
+재알림은 의미 있는 변화가 있을 때만 허용한다.
 
 ```text
 NOVELTY_INCREASE
@@ -292,11 +355,7 @@ STALE_PREVIOUS_CHECK
 POST_TREATMENT_REBOUND
 ```
 
-정확한 cutoff 값은 schema에 하드코딩하지 않는다.
-
-## 9. scouting_issue_catalog
-
-응애 단일 기능으로 schema를 잠그지 않는다.
+## 11. scouting_issue_catalog
 
 ```text
 code
@@ -308,7 +367,7 @@ created_at
 updated_at
 ```
 
-### family
+`family`:
 
 ```text
 PEST
@@ -317,7 +376,7 @@ PHYSIOLOGICAL_ENVIRONMENTAL
 UNKNOWN
 ```
 
-### ai_capability
+`ai_capability`:
 
 ```text
 SUPPORTED
@@ -325,162 +384,76 @@ ALERT_ONLY
 RECORD_ONLY
 ```
 
-예시:
+첫 자동 예찰 대상은 응애이지만 schema/UI가 응애 전용이어서는 안 된다.
+
+예:
 
 ```text
 SPIDER_MITE / PEST / 응애 / ALERT_ONLY
+THRIPS / PEST / 총채벌레 / RECORD_ONLY
+APHID / PEST / 진딧물 / RECORD_ONLY
+POWDERY_MILDEW / DISEASE / 흰가루병 / RECORD_ONLY
 UNKNOWN_PEST / PEST / 기타 해충 / RECORD_ONLY
 UNKNOWN_DISEASE / DISEASE / 병해 의심 / RECORD_ONLY
 ENVIRONMENTAL_STRESS / PHYSIOLOGICAL_ENVIRONMENTAL / 환경·생리 이상 / ALERT_ONLY
 ```
 
-실제 검증 없이 `SUPPORTED`로 올리지 않는다.
+검증되지 않은 모델은 `SUPPORTED`로 승격하지 않는다.
 
-## 10. 상태 전이 예시
+## 12. UI/API projection
 
-### Case A — 동일 패턴 반복
-
-```text
-09/01
-thermal anomaly
-→ FIELD_CHECK_REQUIRED
-→ field check = NO_VISIBLE_EVIDENCE
-→ state = WATCH
-
-09/02
-동일한 thermal/environment pattern
-→ observation append
-→ alert_event = SUPPRESSED
-→ state = WATCH 유지
-```
-
-### Case B — 새로운 악화
+목록 API는 내부 location hierarchy 전체가 아니라 다음처럼 소비하기 쉬운 projection을 제공하는 것을 목표로 한다.
 
 ```text
-09/05
-novelty/trend/spatial signal 상승
-→ alert_event = RECHECK_REQUESTED
-→ state = FIELD_CHECK_REQUIRED
+caseId
+locationStateId
+spatialUnitId nullable
+displayLocationCode
+primaryIssueCode nullable
+currentState
+priority
+lastObservedAt
+repeatCount
+summarySignals[]
 ```
 
-### Case C — 직접 확인
+`summarySignals[]` 예:
 
 ```text
-field check = DIRECT_MITE_OR_EGG_CONFIRMED
-→ case.primary_issue_code = SPIDER_MITE
-→ state = CONFIRMED
+{ type: HUMIDITY_LOW, label: '습도 낮음', value: '43%' }
+{ type: LEAF_TEMP_DELTA, label: '잎 온도 상승', value: '+1.8℃' }
+{ type: REPEAT_DETECTION, label: '반복 감지', value: '3회' }
 ```
 
-### Case D — 방제 후 추적
+UI가 `thermal anomaly high` 같은 모델 내부 문자열을 직접 번역해 보여주지 않도록 한다.
+
+## 13. Compatibility migration 원칙
+
+포트폴리오 V1 완료를 위해 기존 정상 runtime을 파괴적으로 재작성하지 않는다.
+
+단계:
 
 ```text
-action = TREATMENT_APPLIED
-→ state = POST_TREATMENT
-→ 이후 observation 지속
-→ signal 감소/안정 → MONITORING
-→ policy 조건 충족 → RESOLVED
+1. Domain/API에서 displayLocationCode + generic finding contract 도입
+2. legacy house/bed/zone → Location Adapter 제공
+3. spatial_units 추가 migration 설계
+4. 신규 데이터부터 spatial_unit_id 병행 저장
+5. 기존 데이터 backfill audit
+6. 충분히 검증된 후 legacy column deprecation 검토
 ```
 
-## 11. 기존 Health source와의 관계
+V1에서 3~6을 모두 끝내야 한다는 의미는 아니다.
 
-현재 field source의 `Health`:
+## 14. Acceptance
 
-```text
-NOR / MIT / MIT_R / ANT / MAL / OTH
-```
-
-은 **학습/원본 source label**이다.
-
-운영 scouting state와 동일한 컬럼으로 합치지 않는다.
-
-```text
-Field source Health
-→ immutable source/normalized label
-
-Operational scouting state
-→ live location state + history
-```
-
-예를 들어 과거 데이터에서 `Health=MIT`라고 되어 있어도 현재 운영 location state의 `CONFIRMED`를 자동 생성하지 않는다.
-
-## 12. 기존 mite_record_notes migration 원칙
-
-즉시 rename/delete 금지.
-
-먼저 실제 사용처를 audit한다.
-
-가능한 migration 방향:
-
-```text
-mite_record_notes
-→ scouting case/observation에 연결되는 free-form note/evidence attachment
-```
-
-또는 실제 사용이 없다면 deprecation → migration → 제거를 별도 PR에서 수행한다.
-
-## 13. Repository / Service 경계
-
-Repository:
-
-```text
-state 조회/저장
-observation append
-case 조회/저장
-field check append
-action append
-alert event append
-```
-
-Repository가 해서는 안 되는 것:
-
-```text
-응애 위험 판단
-새 변화 판정
-재알림 여부 결정
-case open/close business rule 결정
-```
-
-Service/Policy:
-
-```text
-ScoutingStateService
-ScoutingObservationService
-ScoutingCaseService
-ScoutingAlertService
-RiskAggregationStrategy
-NoveltyDetectionStrategy
-AlertSuppressionPolicy
-RealertPolicy
-FieldEvidencePolicy
-```
-
-## 14. V1 구현 순서
-
-```text
-1. 현재 db/schema.ts와 mite_record_notes 사용처 audit
-2. migration 파일 설계
-3. issue catalog seed
-4. append-only observation repository
-5. location state projection
-6. state transition tests
-7. suppression/re-alert tests
-8. field check API
-9. action API
-10. Farmer/Worker 최소입력 UI
-11. 농장주 location history UI
-12. field calibration
-```
-
-## 15. Acceptance
-
-다음이 만족되어야 V1 scouting schema 구현 완료로 본다.
-
-- 동일 구역의 observation history가 유지됨
-- 현재 state와 history가 분리됨
-- 반복 동일 observation을 저장하면서 alert만 suppress 가능
-- field check 결과를 negative ground truth로 강제 변환하지 않음
-- 새로운 변화 발생 시 재알림 가능
-- treatment 이후 monitoring/rebound 추적 가능
-- 응애 외 issue family로 확장 가능
-- 기존 field Health 원본 의미를 훼손하지 않음
-- 기존 mite_record_notes migration 전 raw history 손실 없음
+- 동일 공간의 observation history가 유지됨
+- observation과 CASE가 분리됨
+- current state와 history가 분리됨
+- 상태와 병해충 종류가 분리됨
+- 반복 관측은 저장하면서 alert만 suppress 가능
+- 현장 미입력/미관찰을 negative ground truth로 강제 변환하지 않음
+- 현장확인과 조치가 별도 event로 저장됨
+- 한 현장확인에 여러 finding을 표현 가능
+- 응애 외 issue로 확장 가능
+- house/bed/zone이 없는 농가 구조도 목표 contract에서 표현 가능
+- 기존 runtime/data를 destructive migration 없이 점진 전환 가능
