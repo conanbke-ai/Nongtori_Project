@@ -68,7 +68,7 @@ JM → PROCESSING_JAM
 
 Source:
 - HF mirror: `Project-AgML/strawberry_growth_detection`
-- Original dataset DOI: `10.5281/zenodo.10957609` / record family `10957605~10957909`
+- Original dataset DOI: `10.5281/zenodo.10957909`
 - License recorded in current registry: CC BY 4.0
 
 ### 3.1 HF mirror에서 즉시 사용 가능한 값
@@ -227,6 +227,77 @@ production_pretraining = PROHIBITED unless separate permission is obtained
 
 농토리 상용화를 전제로 하면 이 데이터는 모델 구조/metric/reference 확인에는 쓸 수 있지만 상용 weight model의 production training set에는 넣지 않는다.
 
+### DATA-QUAL-002 — UC Davis Dryad Strawberry Database
+
+Source:
+- DOI: `10.25338/B8V308`
+- provider: Dryad / University of California, Davis
+
+Dataset:
+- 1,611 individual strawberries
+- 15 varieties
+- 3 California production regions
+- each berry photographed from 22 controlled RGB views
+- manual shape classification
+- manually measured maximal width / height
+- weight with calyx and weight without calyx
+- 3D scan / point cloud also available
+
+License / commercial use:
+- Dryad terms state submitted datasets are made public under a CC0 instrument and encourage unrestricted reuse.
+- the dataset page shows no alternate restrictive license.
+- current Nongtori registry status: `REVIEW_REQUIRED`, commercial-use candidate.
+
+Why this is the strongest current weight candidate:
+
+```text
+fruit-level physical weight GT
++ many RGB views of the same fruit
++ dimensions / shape / 3D data
++ commercial reuse not blocked by NC clause
+```
+
+Approximate view count from the published acquisition protocol:
+
+```text
+1,611 fruits × 22 RGB views = 35,442 fruit views
+```
+
+Critical leakage rule:
+
+```text
+all 22 views of one strawberry MUST stay in the same split
+split_group = FRUIT_ID
+```
+
+Before `APPROVED`:
+
+1. download/audit `datasheet.xlsx`
+2. confirm exact column names and units
+3. prove picture filename ↔ fruit ID join
+4. choose weight-with-calyx vs weight-without-calyx target consistent with Nongtori `Weight_g`
+5. audit missing/duplicate IDs
+6. create fruit-level immutable manifest
+
+Domain limitation:
+- controlled turntable/lighting
+- post-harvest individual fruit
+- multiple cultivars, not Seolhyang-specific greenhouse field imagery
+
+Therefore:
+
+```text
+role = COMMERCIAL_WEIGHT_PRETRAINING_CANDIDATE
+field_acceptance = NOT_ALLOWED
+```
+
+Use first for:
+- geometry-only weight baseline
+- RGB single-view / multi-view weight regression
+- shape/weight representation pretraining
+
+Then calibrate/fine-tune with Nongtori Seolhyang field data after field data readiness.
+
 ### PAPER-QUAL-001 — MMF-Net strawberry weight estimation (2025)
 
 - Scientific Reports 2025
@@ -244,7 +315,31 @@ status = REQUEST_ONLY / LICENSE_REVIEW_REQUIRED
 role = ARCHITECTURE_REFERENCE
 ```
 
-## 6. Weight Estimation V1 실험 게이트
+## 6. Commercial-use weight source ranking
+
+현재 확인된 후보 우선순위:
+
+| Priority | Source | Commercial training | Fruit-level weight | RGB linked | Domain note |
+|---|---|---|---|---|---|
+| 1 | DATA-QUAL-002 Dryad UC Davis | YES / CC0 candidate | YES | YES, 22 views/fruit | controlled postharvest |
+| 2 | DATA-RIP-002 KGCV original | YES / CC BY 4.0 | YES in measurements | JOIN AUDIT REQUIRED | greenhouse, stronger domain match |
+| Reference | DATA-QUAL-001 ICRA 2022 | NO | YES | YES | NC license |
+| Reference | PAPER-QUAL-001 MMF-Net | UNCONFIRMED | YES | YES / RGB-D | author request |
+
+Recommended combination after W0 audit:
+
+```text
+Dryad DATA-QUAL-002
+  → clean commercial RGB weight pretraining / geometry baseline
+
+KGCV DATA-RIP-002
+  → greenhouse size/phenology + weight join if identity audit passes
+
+NONGTORI_FIELD
+  → final Seolhyang calibration / field acceptance
+```
+
+## 7. Weight Estimation V1 실험 게이트
 
 현 시점에 바로 `SP/HI/MD/JM classifier`를 학습하지 않는다.
 
@@ -265,7 +360,8 @@ W0 통과 후 비교:
 A. geometry-only: diameter / length → weight
 B. RGB crop only → weight
 C. RGB + predicted geometry → weight
-D. depth/3D source가 상업적으로 사용 가능할 때만 RGB-D candidate
+D. multi-view aggregation if source provides multiple views per fruit
+E. depth/3D only when commercial-use source allows it
 ```
 
 Primary metrics:
@@ -288,7 +384,7 @@ predicted weight
 
 평가 시 weight regression 오차가 실제 Grade 경계를 얼마나 넘나드는지 별도로 측정한다.
 
-## 7. Ripeness V2 외부데이터 전략
+## 8. Ripeness V2 외부데이터 전략
 
 현재 KGCV-RIPENESS-V001 benchmark를 변경하지 않는다.
 
@@ -315,16 +411,6 @@ source audit
 
 전체 validation 평균만 좋아지고 특정 source에서 붕괴하는 경우 승인하지 않는다.
 
-## 8. 구현 결과물
-
-이 audit와 함께 다음을 추가한다.
-
-- `ml/data_pipeline/kgcv_quality_audit.py`
-- `tests/test_kgcv_quality_audit.py`
-- external source registry JSON
-- `AI_DATA_MODEL_SOURCES.md` 갱신
-- Grade policy 문서 보강
-
 ## 9. Stop condition
 
 현재 외부 데이터만으로 다음을 주장하지 않는다.
@@ -333,12 +419,14 @@ source audit
 - production SP/HI/MD/JM accuracy
 - M0~M4 field accuracy
 - KGCV image와 fresh weight가 자동 1:1 join된다는 주장
+- Dryad controlled-view 성능을 스마트팜 field 성능으로 간주
 
 현장 데이터 정리 전까지 완료 목표:
 
 ```text
 external source audit complete
++ commercial-use weight source identified
++ fruit-ID-safe split policy frozen
 + KGCV dimension/weight join audit tooling ready
-+ commercial-use-safe source separation
 + Ripeness V2 / Weight V1 experiment gates frozen
 ```
