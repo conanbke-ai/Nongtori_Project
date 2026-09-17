@@ -30,7 +30,10 @@
     "status": "WEIGHT_SOURCE_AUDIT_REQUIRED",
     "role": "COMMERCIAL_WEIGHT_PRETRAINING_CANDIDATE",
     "split_group": "FRUIT_ID",
+    "primary_weight_target": "weight_with_calyx",
+    "auxiliary_weight_target": "weight_without_calyx",
+    "field_weight_protocol": "WITH_CALYX",
     "grade_policy": "PREDICT_WEIGHT_THEN_APPLY_12_16_22G_THRESHOLDS"
   },
-  "notes": "Dryad dataset page reports 1,611 individual strawberries, 22 controlled RGB views per fruit, manually measured width/height, and weights with and without calyx. Dryad terms publish datasets under CC0; the dataset page shows no alternate restriction. Before APPROVED: audit datasheet columns/units, prove image filename to fruit ID join, select the weight target consistent with Nongtori field Weight_g, and split strictly by fruit identity so the 22 views of one berry never cross train/validation/test. Controlled postharvest imagery is suitable for pretraining/geometry baselines, not field-domain acceptance."
+  "notes": "Nongtori field Weight_g is measured with the strawberry calyx attached. Therefore Dryad weight_with_calyx is the canonical weight target and weight_without_calyx is auxiliary analysis only. Before APPROVED: audit datasheet columns/units, prove image filename to fruit ID join, require complete with-calyx GT, and split strictly by fruit identity so the 22 views of one berry never cross train/validation/test. Controlled postharvest imagery is suitable for pretraining/geometry baselines, not field-domain acceptance."
 }
