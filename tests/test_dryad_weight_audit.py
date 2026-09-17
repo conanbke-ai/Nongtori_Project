@@ -67,7 +67,7 @@ def write_xlsx(path: Path, headers: list[str], rows: list[list[object]]) -> None
 
 
 class DryadWeightAuditTests(unittest.TestCase):
-    def test_audit_resolves_dual_weight_columns_and_preserves_target_ambiguity(self) -> None:
+    def test_audit_uses_with_calyx_as_primary_weight_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "datasheet.xlsx"
             write_xlsx(
@@ -82,28 +82,39 @@ class DryadWeightAuditTests(unittest.TestCase):
             )
             report = audit_datasheet(path)
             self.assertEqual(report["status"], "AUDITED_METADATA")
+            self.assertEqual(report["target_alignment"], "WITH_CALYX_PRIMARY")
+            self.assertEqual(report["primary_weight_field"], "weight_with_calyx")
+            self.assertEqual(report["auxiliary_weight_field"], "weight_without_calyx")
+            self.assertEqual(report["field_weight_protocol"], "WITH_CALYX")
             self.assertEqual(report["fruit_id_count"], 4)
             self.assertFalse(report["official_count_match"])
             self.assertEqual(report["calyx_weight_relation"]["violations_without_gt_with"], 0)
-            self.assertEqual(report["weight_grade_bins"]["weight_with_calyx"]["SP_WEIGHT"], 1)
-            self.assertEqual(report["weight_grade_bins"]["weight_with_calyx"]["HI_WEIGHT"], 1)
-            self.assertEqual(report["weight_grade_bins"]["weight_with_calyx"]["MD_WEIGHT"], 1)
-            self.assertEqual(report["weight_grade_bins"]["weight_with_calyx"]["JM_WEIGHT_CANDIDATE"], 1)
-            self.assertEqual(report["target_alignment"], "FIELD_PROTOCOL_REQUIRED")
+            self.assertEqual(report["primary_weight_grade_bins"]["SP_WEIGHT"], 1)
+            self.assertEqual(report["primary_weight_grade_bins"]["HI_WEIGHT"], 1)
+            self.assertEqual(report["primary_weight_grade_bins"]["MD_WEIGHT"], 1)
+            self.assertEqual(report["primary_weight_grade_bins"]["JM_WEIGHT_CANDIDATE"], 1)
             self.assertFalse(report["weight_training_ready"])
+
+    def test_generic_weight_without_with_calyx_column_does_not_pass_metadata_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "datasheet.xlsx"
+            write_xlsx(path, ["Strawberry ID", "Weight"], [["41", 14.0], ["42", 14.1]])
+            report = audit_datasheet(path)
+            self.assertEqual(report["status"], "REVIEW_REQUIRED")
+            self.assertFalse(report["required_semantics"]["primary_weight_with_calyx"])
+            self.assertIn("weight_generic", report["resolved_columns"])
 
     def test_duplicate_fruit_identity_blocks_metadata_audit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "datasheet.xlsx"
             write_xlsx(
                 path,
-                ["Strawberry ID", "Weight"],
+                ["Strawberry ID", "Weight with calyx g"],
                 [["42", 14.0], ["42", 14.1]],
             )
             report = audit_datasheet(path)
             self.assertEqual(report["status"], "REVIEW_REQUIRED")
             self.assertEqual(report["duplicate_fruit_id_count"], 1)
-            self.assertIn("weight_generic", report["resolved_columns"])
 
     def test_image_inventory_requires_all_views_to_stay_with_known_fruit_ids(self) -> None:
         names = [f"fruit_1_view_{index:02d}.jpg" for index in range(1, 23)]
