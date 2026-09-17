@@ -1,0 +1,18 @@
+{
+  "source_id": "DATA-RIP-004",
+  "source_type": "dataset",
+  "provider": "mendeley",
+  "title": "Longitudinal Strawberry and Avocado Ripening Dataset",
+  "original_url": "https://data.mendeley.com/datasets/zysvgmxcyz/1",
+  "version_or_revision": "1",
+  "license": "CC-BY-4.0",
+  "license_checked_at": "2026-09-17",
+  "redistribution_allowed": "allowed_with_attribution",
+  "commercial_use": "allowed_with_attribution",
+  "status": "REVIEW_REQUIRED",
+  "retrieval": {"dataset_id": "zysvgmxcyz", "version": 1},
+  "original_labels": ["unripe", "partially ripe", "ripe", "rotten"],
+  "nongtori_mapping": {"status": "AUXILIARY_ONLY_REVIEW_REQUIRED"},
+  "roles": ["POSTHARVEST_RIPENING_AUXILIARY", "DETERIORATION_REFERENCE"],
+  "notes": "1,333 original images reported; augmented count is much larger. Preserve original identity and augmentation provenance to avoid leakage. Rotten is not Maturity=4."
+}
