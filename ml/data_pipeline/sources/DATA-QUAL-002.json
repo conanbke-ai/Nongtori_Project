@@ -1,0 +1,36 @@
+{
+  "source_id": "DATA-QUAL-002",
+  "source_type": "dataset",
+  "provider": "dryad",
+  "title": "A Strawberry Database: Geometric Properties, Images and 3D Scans",
+  "original_url": "https://doi.org/10.25338/B8V308",
+  "version_or_revision": "2018-02-08",
+  "license": "CC0-1.0",
+  "license_checked_at": "2026-09-17",
+  "redistribution_allowed": "allowed",
+  "commercial_use": "allowed",
+  "status": "REVIEW_REQUIRED",
+  "retrieval": {
+    "dataset_doi": "10.25338/B8V308",
+    "metadata_file": "datasheet.xlsx",
+    "picture_archives": 7,
+    "scan_archives": 20,
+    "total_published_size_gb": 89.98
+  },
+  "original_labels": [
+    "fruit_identity",
+    "variety",
+    "shape",
+    "width",
+    "height",
+    "weight_with_calyx",
+    "weight_without_calyx"
+  ],
+  "nongtori_mapping": {
+    "status": "WEIGHT_SOURCE_AUDIT_REQUIRED",
+    "role": "COMMERCIAL_WEIGHT_PRETRAINING_CANDIDATE",
+    "split_group": "FRUIT_ID",
+    "grade_policy": "PREDICT_WEIGHT_THEN_APPLY_12_16_22G_THRESHOLDS"
+  },
+  "notes": "Dryad dataset page reports 1,611 individual strawberries, 22 controlled RGB views per fruit, manually measured width/height, and weights with and without calyx. Dryad terms publish datasets under CC0; the dataset page shows no alternate restriction. Before APPROVED: audit datasheet columns/units, prove image filename to fruit ID join, select the weight target consistent with Nongtori field Weight_g, and split strictly by fruit identity so the 22 views of one berry never cross train/validation/test. Controlled postharvest imagery is suitable for pretraining/geometry baselines, not field-domain acceptance."
+}
