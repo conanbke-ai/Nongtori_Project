@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     const result = await env.DB.prepare(`SELECT
         s.id,
         s.location_key,
-        COALESCE(NULLIF(TRIM(s.location_key), ''), NULLIF(TRIM(s.zone_code), ''), NULLIF(TRIM(s.bed_code), ''), NULLIF(TRIM(s.house_code), '')) AS display_location,
+        COALESCE(NULLIF(REPLACE(TRIM(s.location_key), ':', '-'), ''), NULLIF(TRIM(s.zone_code), ''), NULLIF(TRIM(s.bed_code), ''), NULLIF(TRIM(s.house_code), '')) AS display_location,
         s.house_code,
         s.bed_code,
         s.zone_code,
