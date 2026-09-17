@@ -1,6 +1,6 @@
 # Nongtori Pest Scouting Operations V2
 
-Status: **CANONICAL CANDIDATE / PEST_SCOUTING_STATE_DESIGN EXTENSION**
+Status: **CANONICAL / IMPLEMENTED ON MAIN (PR #32)**
 
 이 문서는 `PEST_SCOUTING_STATE_DESIGN.md`의 운영 lifecycle을 보완한다. 기존 stateful scouting 원칙을 유지하며, 현장 입력 정정·case 종료/재발·freshness policy·observation scope validation을 정의한다.
 
