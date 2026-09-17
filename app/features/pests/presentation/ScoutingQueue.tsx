@@ -130,6 +130,10 @@ function metricSummary(row: ScoutingLocation, language: Language) {
   if (row.observation_count > 1) parts.push(language === 'ko' ? `관측 ${row.observation_count}회` : `${row.observation_count} observations`);
   return parts;
 }
+function focusedLocationId() {
+  if (typeof window === 'undefined') return '';
+  return new URLSearchParams(window.location.search).get('scoutingLocation')?.trim() ?? '';
+}
 
 type RecentFieldCheck = { fieldCheckId: string; label: string };
 
@@ -150,11 +154,17 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
     if (!farmId) { setRows([]); setSelectedId(null); return; }
     setLoading(true); setError('');
     try {
-      const response = await fetch(`/api/scouting-locations?farmId=${encodeURIComponent(farmId)}&attention=1&limit=20`, { cache: 'no-store' });
+      const focus = focusedLocationId();
+      const params = new URLSearchParams({ farmId, attention: '1', limit: '20' });
+      if (focus) params.set('locationStateId', focus);
+      const response = await fetch(`/api/scouting-locations?${params}`, { cache: 'no-store' });
       const result = await response.json() as QueueResponse;
       if (!response.ok) throw new Error(result.error ?? text.loadError);
       setRows(result.rows);
-      setSelectedId((current) => current && result.rows.some((row) => row.id === current) ? current : null);
+      setSelectedId((current) => {
+        if (focus && result.rows.some((row) => row.id === focus)) return focus;
+        return current && result.rows.some((row) => row.id === current) ? current : null;
+      });
     } catch (caught) { setError(caught instanceof Error ? caught.message : text.loadError); }
     finally { setLoading(false); }
   }, [farmId, text.loadError]);
@@ -204,9 +214,18 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
 
   async function resolve(row: ScoutingLocation, reasonCode: string) {
     setSending(`resolve:${row.id}`); setMessage(''); setError('');
-    try { const result = await post('/api/scouting-resolve', { farmId, locationStateId: row.id, reasonCode }); setMessage(result.message ?? text.saved); setSelectedId(null); await load(); onChanged?.(); }
+    try { const result = await post('/api/scouting-resolve', { farmId, locationStateId: row.id, reasonCode }); setMessage(result.message ?? text.saved); closeDetail(); await load(); onChanged?.(); }
     catch (caught) { setError(caught instanceof Error ? caught.message : text.saveError); }
     finally { setSending(''); }
+  }
+
+  function closeDetail() {
+    setSelectedId(null);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('scoutingLocation');
+      window.history.replaceState(null, '', url);
+    }
   }
 
   return <section className="scouting-queue" aria-busy={loading}>
@@ -232,7 +251,7 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
           {selected && <aside className="scouting-detail-panel" aria-label={`${locationLabel(selected)} ${text.details}`}>
             <div className="scouting-detail-heading">
               <div><span className="scouting-state-badge">{localized(stateLabels[selected.current_state] ?? stateLabels.WATCH, language)}</span><h3>{locationLabel(selected)}</h3><p>{text.candidate}: <strong>{issueLabel(selected, language)}</strong></p></div>
-              <button className="scouting-detail-close" onClick={() => setSelectedId(null)} type="button">{text.closeDetails}</button>
+              <button className="scouting-detail-close" onClick={closeDetail} type="button">{text.closeDetails}</button>
             </div>
 
             <div className="scouting-signal-grid">
