@@ -20,8 +20,40 @@
 | KGCV Ripeness Training Snapshot v001 | `main`, PR #16 | FROZEN | immutable descriptor/checksum 유지 |
 | Ripeness Baseline v001~v006 | `main` + historical experiment branches/PRs | EXECUTED / RECORDED | rejected directions 반복 금지 |
 | Ripeness V007 + V008 benchmark | `main`, PR #23 | MERGED / BENCHMARK_FROZEN | field/data-label successor snapshot 대기 |
+| Pest scouting state/history V1 | `main`, PR #28~#31 | MERGED / CANONICAL | field calibration 및 visual acceptance |
+| Pest scouting operations V2 | `main`, PR #32 | MERGED / IMPLEMENTED | 실제 현장 데이터로 freshness/종료 정책 calibration |
 | Field data readiness v001 | `feat/field-data-readiness-v001` | IN_PROGRESS | readiness validator + tests → PR/CI → merge |
 | Ripeness further tuning | none | PAUSED | field/photo/video + label freeze 후 successor snapshot에서 재개 |
+
+## Pest scouting canonical state
+
+Current runtime is stateful and location-history based.
+
+Implemented canonical behavior:
+
+- 동일/최근 확인 패턴은 observation은 저장하고 반복 alert는 억제
+- 새 anomaly / 악화 / spatial spread / post-treatment rebound는 재알림 가능
+- `NO_VISIBLE_EVIDENCE != MITE_NEGATIVE`
+- 현장 점검 원본은 append-only, 잘못 누른 입력은 `REPLACE` / `VOID` correction event로 정정
+- `RESOLVED`는 명시적 종료만 허용하며 방제 자체가 자동 종료를 의미하지 않음
+- RESOLVED 뒤 새 anomaly는 새 case로 생성하고 이전 case와 recurrence link 유지
+- field-check freshness는 versioned policy이며 calibration 전 duration 숫자를 임의 고정하지 않음
+- capture session / frame / location scope mismatch observation은 저장 거부
+- 병해충 관리 화면 `오늘 확인할 곳`은 즉시 행동이 필요한 상태 중심으로 표시
+- 조치 UI 기본 명칭: `방제 / 피해잎 제거 / 천적 처리 / 추적 관찰 / 기타 조치`
+
+Canonical docs:
+
+- `docs/PEST_SCOUTING_STATE_DESIGN.md`
+- `docs/PEST_SCOUTING_DB_SCHEMA_V1.md`
+- `docs/PEST_SCOUTING_OPERATIONS_V2.md`
+
+Remaining validation, not implementation claims:
+
+- actual browser/mobile visual acceptance
+- field-derived freshness calibration
+- field-derived case resolution automation criteria (if ever enabled)
+- longitudinal early-warning performance validation
 
 ## KGCV-RIPENESS-V001 frozen facts
 
