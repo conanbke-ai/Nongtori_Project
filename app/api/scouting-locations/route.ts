@@ -38,6 +38,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const farmId = url.searchParams.get('farmId')?.trim() ?? '';
     const attentionOnly = url.searchParams.get('attention') !== '0';
+    const locationStateId = url.searchParams.get('locationStateId')?.trim() ?? '';
     const requestedLimit = Number(url.searchParams.get('limit') ?? '20');
     const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(50, Math.floor(requestedLimit))) : 20;
     if (!farmId) return NextResponse.json({ error: '농장을 선택해 주세요.' }, { status: 422 });
@@ -47,14 +48,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '이 농장의 예찰 현황을 볼 권한이 없습니다.' }, { status: 403 });
     }
 
-    // Attention queue is intentionally narrower than the full state list.
-    // POST_TREATMENT/MONITORING remain in history and return here only when a new
-    // observation moves the location back to FIELD_CHECK_REQUIRED.
     const attentionClause = attentionOnly
-      ? `AND s.current_state IN ('FIELD_CHECK_REQUIRED', 'SUSPECTED', 'CONFIRMED')`
-      : '';
+      ? locationStateId
+        ? `AND (s.id = ? OR s.current_state IN ('FIELD_CHECK_REQUIRED', 'SUSPECTED', 'CONFIRMED'))`
+        : `AND s.current_state IN ('FIELD_CHECK_REQUIRED', 'SUSPECTED', 'CONFIRMED')`
+      : locationStateId ? 'AND s.id = ?' : '';
 
-    const result = await env.DB.prepare(`SELECT
+    const statement = env.DB.prepare(`SELECT
         s.id,
         s.location_key,
         COALESCE(NULLIF(REPLACE(TRIM(s.location_key), ':', '-'), ''), NULLIF(TRIM(s.zone_code), ''), NULLIF(TRIM(s.bed_code), ''), NULLIF(TRIM(s.house_code), '')) AS display_location,
@@ -91,18 +91,20 @@ export async function GET(request: Request) {
         LIMIT 1
       )
       WHERE s.farm_id = ? ${attentionClause}
-      ORDER BY CASE s.current_state
-        WHEN 'FIELD_CHECK_REQUIRED' THEN 1
-        WHEN 'CONFIRMED' THEN 2
-        WHEN 'SUSPECTED' THEN 3
-        WHEN 'POST_TREATMENT' THEN 4
-        WHEN 'MONITORING' THEN 5
-        WHEN 'WATCH' THEN 6
-        ELSE 7 END,
+      ORDER BY CASE WHEN s.id = ? THEN 0 ELSE 1 END,
+        CASE s.current_state
+          WHEN 'FIELD_CHECK_REQUIRED' THEN 1
+          WHEN 'CONFIRMED' THEN 2
+          WHEN 'SUSPECTED' THEN 3
+          WHEN 'POST_TREATMENT' THEN 4
+          WHEN 'MONITORING' THEN 5
+          WHEN 'WATCH' THEN 6
+          ELSE 7 END,
         COALESCE(s.last_alert_at, s.last_observed_at, s.updated_at) DESC
-      LIMIT ?`)
-      .bind(farmId, limit)
-      .all<ScoutingLocationRow>();
+      LIMIT ?`);
+    const result = locationStateId
+      ? await statement.bind(farmId, locationStateId, locationStateId, limit).all<ScoutingLocationRow>()
+      : await statement.bind(farmId, '', limit).all<ScoutingLocationRow>();
 
     const counts = await env.DB.prepare(`SELECT current_state, COUNT(*) AS count
       FROM scouting_location_states WHERE farm_id = ? GROUP BY current_state`)
