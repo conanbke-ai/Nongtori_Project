@@ -1,0 +1,21 @@
+{
+  "source_id": "DATA-QUAL-001",
+  "source_type": "dataset",
+  "provider": "github",
+  "title": "Strawberry picking point localisation ripeness and weight estimation",
+  "original_url": "https://github.com/imanlab/strawberry-pp-w-r-dataset",
+  "version_or_revision": "repository-main",
+  "license": "CC-BY-NC-SA",
+  "license_checked_at": "2026-09-17",
+  "redistribution_allowed": "noncommercial_sharealike_only",
+  "commercial_use": "prohibited_without_separate_permission",
+  "status": "NON_COMMERCIAL_ONLY",
+  "retrieval": {
+    "repository": "imanlab/strawberry-pp-w-r-dataset",
+    "weight_dataset": "Dyson dataset linked from repository"
+  },
+  "original_labels": ["ripe", "unripe", "weight"],
+  "nongtori_mapping": {"status": "REFERENCE_ONLY"},
+  "roles": ["WEIGHT_ESTIMATION_REFERENCE", "RGBD_REFERENCE", "ARCHITECTURE_REFERENCE"],
+  "notes": "Contains RGB, background-removed RGB, depth, point cloud, weight labels and annotations. Do not include in commercial production training unless separate permission/license is obtained."
+}
