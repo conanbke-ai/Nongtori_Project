@@ -17,6 +17,10 @@ DRYAD_DATASHEET_URL = "https://datadryad.org/downloads/file_stream/141475"
 EXPECTED_FRUITS = 1611
 EXPECTED_VIEWS_PER_FRUIT = 22
 
+NONGTORI_WEIGHT_PROTOCOL = "WITH_CALYX"
+PRIMARY_WEIGHT_FIELD = "weight_with_calyx"
+AUXILIARY_WEIGHT_FIELD = "weight_without_calyx"
+
 _XLSX_NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 _REL_NS = {"r": "http://schemas.openxmlformats.org/package/2006/relationships"}
 _OFFICE_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -84,10 +88,7 @@ def _sheet_paths(archive: zipfile.ZipFile) -> list[tuple[str, str]]:
         target = relation_map.get(rel_id)
         if not target:
             continue
-        if target.startswith("/"):
-            path = target.lstrip("/")
-        else:
-            path = f"xl/{target.lstrip('./')}"
+        path = target.lstrip("/") if target.startswith("/") else f"xl/{target.lstrip('./')}"
         result.append((name, path))
     return result
 
@@ -109,8 +110,7 @@ def _decode_cell(cell: ET.Element, shared: list[str]) -> str:
 
 
 def read_xlsx_sheets(path: Path) -> dict[str, list[list[str]]]:
-    path = Path(path)
-    with zipfile.ZipFile(path) as archive:
+    with zipfile.ZipFile(Path(path)) as archive:
         shared = _shared_strings(archive)
         sheets: dict[str, list[list[str]]] = {}
         for sheet_name, sheet_path in _sheet_paths(archive):
@@ -132,11 +132,9 @@ def read_xlsx_sheets(path: Path) -> dict[str, list[list[str]]]:
 
 
 def _header_semantic(header: str) -> str | None:
-    raw = str(header or "").strip().lower()
-    key = _norm(raw)
+    key = _norm(header)
     if not key:
         return None
-
     if key in {"id", "fruitid", "strawberryid", "berryid", "fruitnumber", "strawberrynumber", "berrynumber"}:
         return "fruit_id"
     if "variety" in key or "cultivar" in key:
@@ -147,15 +145,14 @@ def _header_semantic(header: str) -> str | None:
         return "width"
     if "height" in key or "length" in key:
         return "height"
-
     has_weight = "weight" in key or "mass" in key
-    if has_weight:
-        if any(token in key for token in ("withoutcalyx", "nocalyx", "calyxremoved", "withoutstem", "nostem", "fleshweight")):
-            return "weight_without_calyx"
-        if any(token in key for token in ("withcalyx", "wholeweight", "totalweight", "withstem")):
-            return "weight_with_calyx"
-        return "weight_generic"
-    return None
+    if not has_weight:
+        return None
+    if any(token in key for token in ("withoutcalyx", "nocalyx", "calyxremoved", "withoutstem", "nostem", "fleshweight")):
+        return AUXILIARY_WEIGHT_FIELD
+    if any(token in key for token in ("withcalyx", "wholeweight", "totalweight", "withstem")):
+        return PRIMARY_WEIGHT_FIELD
+    return "weight_generic"
 
 
 def _header_score(row: list[str]) -> tuple[int, dict[str, int]]:
@@ -165,11 +162,13 @@ def _header_score(row: list[str]) -> tuple[int, dict[str, int]]:
         semantic = _header_semantic(value)
         if semantic and semantic not in mapping:
             mapping[semantic] = index
-            score += 3 if semantic in {"fruit_id", "weight_with_calyx", "weight_without_calyx", "weight_generic"} else 1
+            score += 3 if semantic in {"fruit_id", PRIMARY_WEIGHT_FIELD, AUXILIARY_WEIGHT_FIELD, "weight_generic"} else 1
     if "fruit_id" in mapping:
         score += 2
-    if any(key.startswith("weight_") for key in mapping):
-        score += 2
+    if PRIMARY_WEIGHT_FIELD in mapping:
+        score += 4
+    elif any(key.startswith("weight_") for key in mapping):
+        score += 1
     return score, mapping
 
 
@@ -179,18 +178,11 @@ def detect_table(sheets: dict[str, list[list[str]]], *, scan_rows: int = 25) -> 
         for row_index, row in enumerate(rows[:scan_rows]):
             score, mapping = _header_score(row)
             if score:
-                candidates.append({
-                    "sheet": sheet_name,
-                    "header_row_index": row_index,
-                    "score": score,
-                    "mapping": mapping,
-                    "headers": row,
-                })
+                candidates.append({"sheet": sheet_name, "header_row_index": row_index, "score": score, "mapping": mapping, "headers": row})
     if not candidates:
         return {"status": "HEADER_NOT_FOUND", "candidates": []}
     candidates.sort(key=lambda item: (item["score"], len(item["mapping"])), reverse=True)
-    best = candidates[0]
-    return {"status": "FOUND", "best": best, "candidates": candidates[:5]}
+    return {"status": "FOUND", "best": candidates[0], "candidates": candidates[:5]}
 
 
 def _value_at(row: list[str], index: int | None) -> str:
@@ -203,13 +195,7 @@ def _numeric_summary(values: list[float]) -> dict[str, Any]:
     if not values:
         return {"count": 0}
     ordered = sorted(values)
-    return {
-        "count": len(values),
-        "min": ordered[0],
-        "mean": mean(values),
-        "median": median(values),
-        "max": ordered[-1],
-    }
+    return {"count": len(values), "min": ordered[0], "mean": mean(values), "median": median(values), "max": ordered[-1]}
 
 
 def _grade_bins(values: Iterable[float]) -> dict[str, int]:
@@ -236,7 +222,10 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
             "datasheet_status": table["status"],
             "weight_training_ready": False,
             "image_join_status": "NOT_RUN",
-            "target_alignment": "FIELD_PROTOCOL_REQUIRED",
+            "target_alignment": "WITH_CALYX_PRIMARY",
+            "primary_weight_field": PRIMARY_WEIGHT_FIELD,
+            "auxiliary_weight_field": AUXILIARY_WEIGHT_FIELD,
+            "field_weight_protocol": NONGTORI_WEIGHT_PROTOCOL,
         }
 
     best = table["best"]
@@ -251,7 +240,7 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
     fruit_ids = [value for value in fruit_ids if value]
     duplicate_ids = sorted(value for value, count in Counter(fruit_ids).items() if count > 1)
 
-    numeric_fields = ["width", "height", "weight_with_calyx", "weight_without_calyx", "weight_generic"]
+    numeric_fields = ["width", "height", PRIMARY_WEIGHT_FIELD, AUXILIARY_WEIGHT_FIELD, "weight_generic"]
     numeric_values: dict[str, list[float]] = defaultdict(list)
     numeric_missing: dict[str, int] = defaultdict(int)
     for row in rows:
@@ -259,20 +248,18 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
             if field not in mapping:
                 continue
             parsed = _to_float(_value_at(row, mapping[field]))
-            if parsed is None:
+            if parsed is None or parsed <= 0:
                 numeric_missing[field] += 1
-            elif parsed > 0:
-                numeric_values[field].append(parsed)
             else:
-                numeric_missing[field] += 1
+                numeric_values[field].append(parsed)
 
     relation_checked = 0
     relation_violations = 0
     calyx_delta: list[float] = []
-    if "weight_with_calyx" in mapping and "weight_without_calyx" in mapping:
+    if PRIMARY_WEIGHT_FIELD in mapping and AUXILIARY_WEIGHT_FIELD in mapping:
         for row in rows:
-            with_calyx = _to_float(_value_at(row, mapping["weight_with_calyx"]))
-            without_calyx = _to_float(_value_at(row, mapping["weight_without_calyx"]))
+            with_calyx = _to_float(_value_at(row, mapping[PRIMARY_WEIGHT_FIELD]))
+            without_calyx = _to_float(_value_at(row, mapping[AUXILIARY_WEIGHT_FIELD]))
             if with_calyx is None or without_calyx is None:
                 continue
             relation_checked += 1
@@ -281,18 +268,21 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
             if delta < -1e-6:
                 relation_violations += 1
 
-    weight_fields = [field for field in ("weight_with_calyx", "weight_without_calyx", "weight_generic") if field in mapping]
     required_semantics = {
         "fruit_id": "fruit_id" in mapping,
-        "weight": bool(weight_fields),
+        "primary_weight_with_calyx": PRIMARY_WEIGHT_FIELD in mapping,
         "width": "width" in mapping,
         "height": "height" in mapping,
     }
-    schema_ok = required_semantics["fruit_id"] and required_semantics["weight"]
-
+    schema_ok = required_semantics["fruit_id"] and required_semantics["primary_weight_with_calyx"]
     fruit_count = len(set(fruit_ids)) if fruit_ids else 0
     official_count_match = fruit_count == EXPECTED_FRUITS if fruit_ids else False
-    status = "AUDITED_METADATA" if schema_ok and fruit_count > 0 and not duplicate_ids else "REVIEW_REQUIRED"
+    primary_values = numeric_values[PRIMARY_WEIGHT_FIELD]
+    primary_weight_complete = bool(primary_values) and len(primary_values) == len(rows)
+    status = "AUDITED_METADATA" if schema_ok and fruit_count > 0 and not duplicate_ids and primary_weight_complete else "REVIEW_REQUIRED"
+
+    weight_fields = [field for field in (PRIMARY_WEIGHT_FIELD, AUXILIARY_WEIGHT_FIELD, "weight_generic") if field in mapping]
+    weight_grade_bins = {field: _grade_bins(numeric_values[field]) for field in weight_fields}
 
     return {
         "source_id": "DATA-QUAL-002",
@@ -312,14 +302,14 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
         "duplicate_fruit_id_count": len(duplicate_ids),
         "numeric_summary": {field: _numeric_summary(numeric_values[field]) for field in numeric_fields if field in mapping},
         "numeric_missing": {field: numeric_missing[field] for field in numeric_fields if field in mapping},
-        "weight_grade_bins": {field: _grade_bins(numeric_values[field]) for field in weight_fields},
-        "calyx_weight_relation": {
-            "checked": relation_checked,
-            "violations_without_gt_with": relation_violations,
-            "delta_with_minus_without": _numeric_summary(calyx_delta),
-        },
-        "target_alignment": "FIELD_PROTOCOL_REQUIRED",
-        "target_alignment_note": "Nongtori Weight_g is measured strawberry weight in grams but current field guide does not specify calyx inclusion. Preserve both Dryad weight targets until the field weighing protocol is frozen.",
+        "weight_grade_bins": weight_grade_bins,
+        "primary_weight_grade_bins": weight_grade_bins.get(PRIMARY_WEIGHT_FIELD, {}),
+        "calyx_weight_relation": {"checked": relation_checked, "violations_without_gt_with": relation_violations, "delta_with_minus_without": _numeric_summary(calyx_delta)},
+        "target_alignment": "WITH_CALYX_PRIMARY",
+        "primary_weight_field": PRIMARY_WEIGHT_FIELD,
+        "auxiliary_weight_field": AUXILIARY_WEIGHT_FIELD,
+        "field_weight_protocol": NONGTORI_WEIGHT_PROTOCOL,
+        "target_alignment_note": "Nongtori field Weight_g is measured with the strawberry calyx attached. Dryad weight_with_calyx is therefore the canonical training target; weight_without_calyx is retained only for auxiliary analysis.",
         "image_join_status": "NOT_RUN",
         "expected_views_per_fruit": EXPECTED_VIEWS_PER_FRUIT,
         "weight_training_ready": False,
@@ -327,12 +317,7 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
     }
 
 
-def audit_image_inventory(
-    image_names: Iterable[str],
-    *,
-    fruit_ids: Iterable[str],
-    fruit_id_regex: str,
-) -> dict[str, Any]:
+def audit_image_inventory(image_names: Iterable[str], *, fruit_ids: Iterable[str], fruit_id_regex: str) -> dict[str, Any]:
     pattern = re.compile(fruit_id_regex)
     known = {str(value) for value in fruit_ids}
     counts: Counter[str] = Counter()
@@ -349,7 +334,6 @@ def audit_image_inventory(
         if fruit_id not in known:
             unknown_ids[fruit_id] += 1
         counts[fruit_id] += 1
-
     known_counts = {fruit_id: counts.get(fruit_id, 0) for fruit_id in known}
     wrong_view_counts = {fruit_id: count for fruit_id, count in known_counts.items() if count != EXPECTED_VIEWS_PER_FRUIT}
     status = "JOIN_VERIFIED" if not unmatched and not unknown_ids and not wrong_view_counts and known else "REVIEW_REQUIRED"
@@ -371,12 +355,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--download", action="store_true", help="Download the official Dryad datasheet if --datasheet does not exist")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
-
     if not args.datasheet.exists():
         if not args.download:
             raise SystemExit("datasheet does not exist; pass --download to retrieve the official Dryad datasheet")
         download_datasheet(args.datasheet)
-
     report = audit_datasheet(args.datasheet)
     payload = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:
