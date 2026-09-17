@@ -28,6 +28,11 @@ test('scouting list stays summary-first and moves field inputs into detail', () 
   assert.ok(source.includes('잎 온도 ${delta >= 0 ?'));
 });
 
+test('scouting display projection normalizes legacy colon location keys for users', () => {
+  const source = readFileSync('app/api/scouting-locations/route.ts', 'utf8');
+  assert.ok(source.includes("REPLACE(TRIM(s.location_key), ':', '-')"));
+});
+
 test('scouting action labels remain concise operational nouns', () => {
   const source = readFileSync('app/features/pests/presentation/ScoutingQueue.tsx', 'utf8');
   for (const label of ["ko: '방제'", "ko: '피해잎 제거'", "ko: '천적 처리'", "ko: '추적 관찰'", "ko: '기타 조치'"]) {
