@@ -1,3 +1,4 @@
+import { createScoutingAppNotification } from '@/app/features/notifications/application/notification-service';
 import {
   decideScoutingAlert,
   fieldEvidenceCodes,
@@ -196,7 +197,23 @@ export async function processScoutingObservation(repository: ScoutingRepository,
   });
 
   let notificationIds: string[] = [];
+  let appNotificationId: string | null = null;
+  let appNotificationRecipientCount = 0;
   if (decision.alertDecision !== 'SUPPRESSED') {
+    const appNotification = await createScoutingAppNotification({
+      farmId: input.farmId,
+      locationStateId: location.id,
+      caseId: activeCase?.id ?? null,
+      locationKey: location.location_key,
+      issueCode: activeCase?.primary_issue_code ?? input.issueCode ?? null,
+      decision: decision.alertDecision,
+      reason: decision.alertReason,
+      observationId,
+      createdAt: input.observedAt,
+    });
+    appNotificationId = appNotification.notificationId;
+    appNotificationRecipientCount = appNotification.recipientCount;
+
     notificationIds = await repository.createNotifications({
       farmId: input.farmId,
       locationState: location,
@@ -216,6 +233,8 @@ export async function processScoutingObservation(repository: ScoutingRepository,
     suppressionReason: decision.suppressionReason,
     nextState: decision.nextState,
     notificationCount: notificationIds.length,
+    appNotificationId,
+    appNotificationRecipientCount,
     policyVersion: appliedPolicyVersion,
     freshnessSource: freshness.source,
   };
