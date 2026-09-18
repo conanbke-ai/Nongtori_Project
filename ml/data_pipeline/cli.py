@@ -16,7 +16,11 @@ from .dryad_acquisition import (
     write_manifest_inventory,
     write_manifest_inventory_from_records,
 )
-from .dryad_image_join_audit import audit_remote_picture_archives, write_image_join_report
+from .dryad_image_join_audit import (
+    audit_remote_picture_archives,
+    load_cached_image_join_report,
+    write_image_join_report,
+)
 from .dryad_weight_audit import audit_datasheet, write_audit_report as write_dryad_weight_audit_report
 from .downloader import DatasetDownloader
 from .field_audit import audit_field_csv
@@ -116,16 +120,27 @@ def main(argv: list[str] | None = None) -> int:
 
             if not args.skip_image_join:
                 try:
-                    image_join = audit_remote_picture_archives(
-                        args.datasheet,
-                        dataset=dataset,
+                    cached_image_join = load_cached_image_join_report(
+                        args.image_join_output,
+                        datasheet=args.datasheet,
                         files=files,
-                        timeout=min(args.timeout, 120),
-                        min_chunk_size=max(1, args.range_chunk_mb) * 1024 * 1024,
                     )
-                    write_image_join_report(image_join, args.image_join_output)
+                    if cached_image_join is not None:
+                        image_join = cached_image_join
+                        image_join_reuse = "REUSED_VERIFIED"
+                    else:
+                        image_join = audit_remote_picture_archives(
+                            args.datasheet,
+                            dataset=dataset,
+                            files=files,
+                            timeout=min(args.timeout, 120),
+                            min_chunk_size=max(1, args.range_chunk_mb) * 1024 * 1024,
+                        )
+                        write_image_join_report(image_join, args.image_join_output)
+                        image_join_reuse = "REFRESHED_REMOTE_METADATA"
                     payload["image_join"] = {
                         "path": str(args.image_join_output),
+                        "cache_action": image_join_reuse,
                         **image_join,
                     }
                 except DryadAccessError as exc:
