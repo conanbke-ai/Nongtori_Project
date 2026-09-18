@@ -52,20 +52,25 @@
 
 ### Dryad
 
-`DRYAD_TOKEN`은 **농토리 운영 환경변수가 아닙니다.**
-
-현재 canonical flow:
+Dryad 자격증명은 **운영 서버 secret이 아니라 로컬 연구용 secret**으로 관리합니다.
 
 ```text
-Dryad/외부 공개 데이터
-→ 필요한 파일 수동 다운로드
-→ Git-ignored local data directory
-→ checksum / schema / join audit
-→ immutable snapshot descriptor
-→ local GPU training
+.env.local
+  DRYAD_CLIENT_ID
+  DRYAD_CLIENT_SECRET
+        ↓
+Dryad OAuth access token 자동 발급
+        ↓
+datasheet / 필요한 공개 데이터 자동 다운로드
+        ↓
+checksum / schema / join audit
+        ↓
+immutable snapshot descriptor
+        ↓
+local GPU training
 ```
 
-기존 `ml/data_pipeline/dryad_acquisition.py`의 token-aware 다운로드 helper는 보조 경로로만 유지합니다. Render/Cloudflare에 Dryad 자격증명을 지금 등록하지 않습니다. 자동 수집이 실제로 필요해질 때 별도 migration으로 다룹니다.
+`DRYAD_TOKEN`은 필요할 때만 사용하는 임시 override입니다. 일반 경로에서는 Client ID/Secret으로 access token을 자동 발급합니다. Render/Cloudflare로 자동수집을 이전할 필요가 생기면 그때 동일 변수명을 배포 secret store로 마이그레이션합니다.
 
 ## 4. Tooling-only 값
 
@@ -87,13 +92,17 @@ Dryad/외부 공개 데이터
 - `OPENAI_API_KEY`
 - 임의의 Weather API key
 - 임의의 model endpoint URL
-- Dryad client ID / client secret
 
 새 외부 서비스가 실제 Adapter/Service에 연결되는 작업에서 계약을 추가합니다.
 
 ## 6. 로컬 secret template
 
-`.dev.vars.example`은 **이름만 제공하는 템플릿**입니다.
+TORI 공통 canonical 파일명은 `.env.example` / `.env.local`입니다.
+
+- `.env.example`: Git에 포함하는 변수명 템플릿
+- `.env.local`: 실제 로컬 값, Git 제외
+
+플랫폼 전용 파일명은 canonical 이름으로 사용하지 않습니다.
 
 실제 로컬 값 파일은 Git에서 제외합니다. Cloudflare binding인 `DB`, `FILES`는 이 템플릿에 문자열 값으로 넣지 않습니다.
 
@@ -105,6 +114,6 @@ Dryad/외부 공개 데이터
 2. `configs/environment-contract.json` 갱신
 3. `env.d.ts` 타입 갱신
 4. secret/config/resource binding 분류
-5. local example이 필요한 경우 `.dev.vars.example` 갱신
+5. local example이 필요한 경우 `.env.example` 갱신
 6. README/ACTIVE_WORK와 배포 대상 불일치가 없는지 확인
 7. 실제 secret 값은 Git에 커밋하지 않음
