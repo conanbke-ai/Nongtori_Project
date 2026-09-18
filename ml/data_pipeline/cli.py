@@ -16,6 +16,11 @@ from .dryad_acquisition import (
     write_manifest_inventory,
     write_manifest_inventory_from_records,
 )
+from .dryad_candidate_manifest import (
+    build_strict_candidate_manifest,
+    load_cached_candidate_manifest,
+    write_candidate_manifest,
+)
 from .dryad_image_join_audit import (
     audit_remote_picture_archives,
     load_cached_image_join_report,
@@ -47,7 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("audit-strawberry-ds"); p.add_argument("--labels-dir", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("audit-kgcv"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("dryad-manifest"); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/public-manifest.json")); p.add_argument("--timeout", type=int, default=60)
-    p = sub.add_parser("dryad-weight-audit"); p.add_argument("--datasheet", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/datasheet.xlsx")); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/datasheet-audit.json")); p.add_argument("--manifest-output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/public-manifest.json")); p.add_argument("--image-join-output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/image-join-audit.json")); p.add_argument("--force-download", action="store_true"); p.add_argument("--skip-image-join", action="store_true"); p.add_argument("--range-chunk-mb", type=int, default=1); p.add_argument("--timeout", type=int, default=300)
+    p = sub.add_parser("dryad-weight-audit"); p.add_argument("--datasheet", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/datasheet.xlsx")); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/datasheet-audit.json")); p.add_argument("--manifest-output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/public-manifest.json")); p.add_argument("--image-join-output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/image-join-audit.json")); p.add_argument("--candidate-manifest-output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/strict-candidate-manifest.json")); p.add_argument("--force-download", action="store_true"); p.add_argument("--skip-image-join", action="store_true"); p.add_argument("--skip-candidate-manifest", action="store_true"); p.add_argument("--range-chunk-mb", type=int, default=1); p.add_argument("--timeout", type=int, default=300)
     p = sub.add_parser("dryad-image-join-audit"); p.add_argument("--datasheet", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/datasheet.xlsx")); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/image-join-audit.json")); p.add_argument("--timeout", type=int, default=120); p.add_argument("--range-chunk-mb", type=int, default=1)
     p = sub.add_parser("snapshot"); p.add_argument("source_id"); p.add_argument("--audit-dir", type=Path, required=True); p.add_argument("--snapshot-root", type=Path, required=True); p.add_argument("--snapshot-id", required=True)
     p = sub.add_parser("incremental-scan"); p.add_argument("--input", type=Path, required=True); p.add_argument("--ledger", type=Path, required=True); p.add_argument("--output-ledger", type=Path, required=True); p.add_argument("--key-field", action="append", default=[]); p.add_argument("--ignore-field", action="append", default=[])
@@ -107,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
                 "acquisition": acquisition,
                 "audit": report,
                 "image_join": None,
+                "candidate_manifest": None,
             }
             write_dryad_weight_audit_report(payload, args.output)
 
@@ -152,12 +158,73 @@ def main(argv: list[str] | None = None) -> int:
                     print(json.dumps(payload, ensure_ascii=False, indent=2))
                     return 3
 
+            if not args.skip_image_join and not args.skip_candidate_manifest:
+                try:
+                    image_join_report = {
+                        key: value
+                        for key, value in payload["image_join"].items()
+                        if key not in {"path", "cache_action"}
+                    }
+                    cached_candidate = load_cached_candidate_manifest(
+                        args.candidate_manifest_output,
+                        datasheet=args.datasheet,
+                        files=files,
+                        image_join_report=image_join_report,
+                    )
+                    if cached_candidate is not None:
+                        candidate_manifest = cached_candidate
+                        candidate_cache_action = "REUSED_VERIFIED"
+                    else:
+                        candidate_manifest = build_strict_candidate_manifest(
+                            args.datasheet,
+                            files,
+                            image_join_report,
+                            timeout=min(args.timeout, 120),
+                            min_chunk_size=max(1, args.range_chunk_mb) * 1024 * 1024,
+                        )
+                        write_candidate_manifest(
+                            candidate_manifest,
+                            args.candidate_manifest_output,
+                        )
+                        candidate_cache_action = "REFRESHED_REMOTE_METADATA"
+                    payload["candidate_manifest"] = {
+                        "path": str(args.candidate_manifest_output),
+                        "cache_action": candidate_cache_action,
+                        "status": candidate_manifest["status"],
+                        "fruit_count": candidate_manifest["fruit_count"],
+                        "image_count": candidate_manifest["image_count"],
+                        "rows_sha256": candidate_manifest["rows_sha256"],
+                    }
+                except DryadAccessError as exc:
+                    payload["candidate_manifest"] = {
+                        "status": "FAILED",
+                        "error": str(exc),
+                    }
+                    write_dryad_weight_audit_report(payload, args.output)
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                    return 3
+
             write_dryad_weight_audit_report(payload, args.output)
             print(json.dumps(payload, ensure_ascii=False, indent=2))
 
             if args.skip_image_join:
                 return 0
-            return 0 if payload["image_join"]["audit"]["status"] == "JOIN_VERIFIED" else 2
+
+            accepted_join_statuses = {
+                "JOIN_VERIFIED",
+                "PUBLISHED_SUBSET_VERIFIED",
+                "PUBLISHED_SUBSET_VERIFIED_WITH_VIEW_EXCEPTIONS",
+            }
+            if payload["image_join"]["audit"]["status"] not in accepted_join_statuses:
+                return 2
+            if args.skip_candidate_manifest:
+                return 0
+            return (
+                0
+                if payload["candidate_manifest"]["status"]
+                == "STRICT_CANDIDATE_MANIFEST_VERIFIED"
+                else 2
+            )
         except DryadAccessError as exc:
             print(json.dumps({"status": "ACQUISITION_FAILED", "error": str(exc)}, ensure_ascii=False, indent=2))
             return 3
