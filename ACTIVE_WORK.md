@@ -361,3 +361,12 @@ Next gate:
 - branch budget가 full이면 unrelated branch를 임의 삭제/재사용하지 않는다.
 - PR merge 후 자동 삭제
 - 기준 상태 보존은 branch보다 immutable snapshot descriptor/tag 우선
+
+## POLICY_ACK — ChatGPT logical orchestration — 2026-09-18
+
+- Common baseline: `conanbke-ai/Tori_Common_Project@98946df8f04685f0b2c9814363ec9fea8be25226`
+- tags: `AGENT_ORCHESTRATION,AI_SURFACE,CREDIT,DOCUMENTATION`
+- result: `ADOPTED`
+- Runtime model: ChatGPT logical roles; no Cursor/plugin installation required.
+- Surface rule: Chat/connector first; Codex only for repository-local implementation/build/test; Work only for actual rendered/interactive acceptance; LOCAL_RUNTIME for long GPU workloads where applicable.
+- Product-specific contracts in this repository remain authoritative over generic common assumptions.
