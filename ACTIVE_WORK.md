@@ -1,10 +1,19 @@
 ## Dryad image join gate — 2026-09-18
 
 - Datasheet audit is canonical on main: 1,611 fruit IDs, 60 footer rows excluded, 1,571 usable with-calyx primary targets, 40 primary-target missing rows excluded.
-- Current workstream: `feat/dryad-image-join-audit`.
-- Next gate: verify all 7 `Pictures_*.zip` filename inventories against the 1,611 canonical fruit IDs and require 22 views per fruit.
-- Default strategy: remote ZIP central-directory metadata only via guarded HTTP Range requests.
-- Reuse policy: if datasheet SHA-256 + 7 picture archive manifest identities + image-join audit schema version are unchanged, reuse the verified local image-join audit and make no repeat ZIP Range requests.
+- Current workstream: `feat/dryad-image-join-audit` / PR #42.
+- Actual authenticated remote validation completed for ZIP metadata access:
+  - 7/7 `Pictures_*.zip` central directories read successfully with HTTP Range.
+  - `full_archive_download_performed=false`.
+  - actual published image entries observed: 12,062.
+  - filename→datasheet fruit-ID matching: 12,062 / 12,062.
+  - unmatched filenames: 0.
+  - ambiguous filenames: 0.
+- Therefore the parser/range transport is validated; the remaining issue is published-photo coverage, not filename parsing.
+- The original blanket expectation `1,611 × 22 = 35,442 published files` is not treated as an acceptance invariant until the datasheet `Photo` field and actual per-fruit view-count distribution are reconciled.
+- Next diagnostic (schema v2): audit datasheet `Photo` values, full per-fruit view-count distribution, complete/partial/overcomplete fruit counts, and overlap with the 1,571 primary-weight candidates.
+- Reuse policy: if datasheet SHA-256 + 7 picture archive manifest identities + image-join audit schema version are unchanged, reuse verified image-join audit with no repeat ZIP Range requests.
+- Schema v2 intentionally invalidates the prior v1 image-join cache once, so the new coverage diagnostics require one metadata-only Range refresh; no image bodies are downloaded.
 - Safety: if Dryad does not honor HTTP Range, abort; never silently fall back to downloading the ~39.24 GB picture archives.
 - No raw image bytes are committed.
 
@@ -56,7 +65,7 @@ Branch deletion for the two DELETE entries is pending only because the connected
 | Pest scouting operations V2 | `main`, PR #32 | MERGED / IMPLEMENTED | 실제 현장 데이터로 freshness/종료 정책 calibration |
 | Field data readiness v001 | existing workstream | IN_PROGRESS | readiness validator + tests → PR/CI → merge |
 | Ripeness further tuning | PR #26 / `feat/ripeness-v010-convnext-tiny` | PAUSED / RESULT_PENDING | field/photo/video + label freeze 후 successor snapshot에서 재개; V009 rejected result는 main에 보존 |
-| Dryad Weight Estimation V1 | `main` + PR #42 | DATASHEET_AUDITED / IMAGE_JOIN_IN_PROGRESS | `dryad-weight-audit` 한 명령으로 manifest 저장 → datasheet 검증/재사용 → metadata audit → remote ZIP image join → snapshot gate |
+| Dryad Weight Estimation V1 | `main` + PR #42 | DATASHEET_AUDITED / REMOTE_JOIN_TRANSPORT_VERIFIED / PHOTO_SUBSET_REVIEW | schema-v2 coverage audit → usable photo×weight candidate freeze → snapshot gate |
 | Environment / deployment contract | `main` | CANONICAL / CLOUDFLARE_TARGET | D1/R2 bindings + capability secrets만 유지; 미사용 키 선제 추가 금지 |
 
 ## Pest scouting canonical state
