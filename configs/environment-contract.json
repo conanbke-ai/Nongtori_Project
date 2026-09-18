@@ -26,19 +26,28 @@
       "kind": "config",
       "required": false,
       "capability": "phone_verification",
-      "required_with": ["SMS_VERIFICATION_TOKEN", "PHONE_VERIFICATION_PEPPER"]
+      "required_with": [
+        "SMS_VERIFICATION_TOKEN",
+        "PHONE_VERIFICATION_PEPPER"
+      ]
     },
     "SMS_VERIFICATION_TOKEN": {
       "kind": "secret",
       "required": false,
       "capability": "phone_verification",
-      "required_with": ["SMS_VERIFICATION_URL", "PHONE_VERIFICATION_PEPPER"]
+      "required_with": [
+        "SMS_VERIFICATION_URL",
+        "PHONE_VERIFICATION_PEPPER"
+      ]
     },
     "PHONE_VERIFICATION_PEPPER": {
       "kind": "secret",
       "required": false,
       "capability": "phone_verification",
-      "required_with": ["SMS_VERIFICATION_URL", "SMS_VERIFICATION_TOKEN"]
+      "required_with": [
+        "SMS_VERIFICATION_URL",
+        "SMS_VERIFICATION_TOKEN"
+      ]
     },
     "NOTIFICATION_WORKER_TOKEN": {
       "kind": "secret",
@@ -50,13 +59,17 @@
       "kind": "config",
       "required": false,
       "capability": "sms_alert_delivery",
-      "required_with": ["SMS_ALERT_TOKEN"]
+      "required_with": [
+        "SMS_ALERT_TOKEN"
+      ]
     },
     "SMS_ALERT_TOKEN": {
       "kind": "secret",
       "required": false,
       "capability": "sms_alert_delivery",
-      "required_with": ["SMS_ALERT_URL"]
+      "required_with": [
+        "SMS_ALERT_URL"
+      ]
     },
     "FORECAST_WORKER_TOKEN": {
       "kind": "secret",
@@ -78,12 +91,26 @@
     }
   },
   "local_research_only": {
+    "DRYAD_CLIENT_ID": {
+      "kind": "secret",
+      "required": false,
+      "deploy": false,
+      "source_file": ".env.local",
+      "purpose": "Dryad API account client ID used to mint short-lived access tokens"
+    },
+    "DRYAD_CLIENT_SECRET": {
+      "kind": "secret",
+      "required": false,
+      "deploy": false,
+      "source_file": ".env.local",
+      "purpose": "Dryad API account client secret used to mint short-lived access tokens"
+    },
     "DRYAD_TOKEN": {
       "kind": "temporary_secret",
       "required": false,
       "deploy": false,
-      "default_flow": "manual_download",
-      "purpose": "Optional legacy helper for Dryad file-byte acquisition; current canonical flow is manual/local acquisition"
+      "source_file": ".env.local",
+      "purpose": "Optional one-off access-token override; normally generated automatically"
     }
   },
   "tooling_only": {
@@ -103,5 +130,10 @@
       "managed_by": "vite.config.ts",
       "deploy": false
     }
+  },
+  "local_env_standard": {
+    "template": ".env.example",
+    "values": ".env.local",
+    "rule": "TORI common canonical local env naming"
   }
 }
