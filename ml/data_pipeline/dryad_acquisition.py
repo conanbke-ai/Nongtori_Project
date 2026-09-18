@@ -8,7 +8,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-DRYAD_API_BASE = "https://datadryad.org/api/v2"\nDRYAD_TOKEN_URL = "https://datadryad.org/oauth/token"
+DRYAD_API_BASE = "https://datadryad.org/api/v2"
+DRYAD_TOKEN_URL = "https://datadryad.org/oauth/token"
 DEFAULT_DATASET_DOI = "doi:10.25338/B8V308"
 DEFAULT_DATASHEET_PATH = "datasheet.xlsx"
 
