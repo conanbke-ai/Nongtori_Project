@@ -24,7 +24,7 @@
 | Pest scouting operations V2 | `main`, PR #32 | MERGED / IMPLEMENTED | 실제 현장 데이터로 freshness/종료 정책 calibration |
 | Field data readiness v001 | existing workstream | IN_PROGRESS | readiness validator + tests → PR/CI → merge |
 | Ripeness further tuning | existing experiment branches | PAUSED / SEPARATE | field/photo/video + label freeze 후 successor snapshot에서 재개 |
-| Dryad Weight Estimation V1 | `main`, PR #35~#39 | MANUAL_LOCAL_ACQUISITION / DATA_BYTES_PENDING | 수동 다운로드 → datasheet 실감사 → 22-view join → immutable snapshot candidate |
+| Dryad Weight Estimation V1 | `main`, PR #35~#39 + 2026-09-18 env refreeze | CLIENT_CREDENTIAL_LOCAL / DATA_BYTES_PENDING | `.env.local` Client ID/Secret → 자동 token/download → datasheet 실감사 → 22-view join → snapshot |
 | Environment / deployment contract | `main` | CANONICAL / CLOUDFLARE_TARGET | D1/R2 bindings + capability secrets만 유지; 미사용 키 선제 추가 금지 |
 
 ## Pest scouting canonical state
@@ -256,12 +256,16 @@ Frozen facts:
 Acquisition state:
 - PR #38 added official Dryad API manifest resolution, token-aware file download, cross-host auth stripping, size verification and SHA-256 verification.
 - Anonymous metadata/manifest lookup is available.
-- Current canonical acquisition is manual/local. Dryad credentials are not part of the Nongtori deployment secret inventory.
-- Real `datasheet.xlsx` row/header/weight-distribution audit is **NOT RUN** until the file is downloaded locally and checksum-verified.
+- Dryad credentials are local-research secrets, not Nongtori runtime deployment secrets.
+- Canonical local files are `.env.example` / `.env.local` across TORI projects.
+- `DRYAD_CLIENT_ID` + `DRYAD_CLIENT_SECRET` mint a short-lived token automatically; `DRYAD_TOKEN` is optional override only.
+- Real `datasheet.xlsx` row/header/weight-distribution audit is **NOT RUN** until automatic acquisition completes and checksum is verified.
 
 Next gate:
 ```text
-manual datasheet.xlsx download
+.env.local client credentials
+→ automatic access token
+→ automatic datasheet.xlsx download
 → checksum verification
 → real 1,611-row audit
 → picture archive inventory
