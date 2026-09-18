@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import io
+import json
+import tempfile
 import unittest
 import zipfile
+from pathlib import Path
 
 from ml.data_pipeline.dryad_image_join_audit import (
     RemoteZipRangeReader,
     audit_filename_inventory,
+    build_image_join_cache_identity,
     infer_fruit_id,
+    load_cached_image_join_report,
 )
 
 
@@ -34,6 +39,58 @@ class DryadImageJoinAuditTests(unittest.TestCase):
         broken = audit_filename_inventory(names, fruit_ids=fruit_ids)
         self.assertEqual(broken["status"], "REVIEW_REQUIRED")
         self.assertEqual(broken["wrong_view_count_fruit_count"], 1)
+
+    def test_image_join_cache_reuses_only_matching_source_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            datasheet = Path(temp_dir) / "datasheet.xlsx"
+            datasheet.write_bytes(b"datasheet-v1")
+            output = Path(temp_dir) / "image-join-audit.json"
+            files = [
+                {
+                    "path": "Pictures_01.zip",
+                    "size": 100,
+                    "digestType": "sha-256",
+                    "digest": "archive-a",
+                }
+            ]
+            identity = build_image_join_cache_identity(datasheet, files)
+            report = {
+                "cache_identity": identity,
+                "audit": {"status": "JOIN_VERIFIED"},
+            }
+            output.write_text(json.dumps(report), encoding="utf-8")
+
+            reused = load_cached_image_join_report(
+                output,
+                datasheet=datasheet,
+                files=files,
+            )
+            self.assertIsNotNone(reused)
+
+            changed_files = [
+                {
+                    "path": "Pictures_01.zip",
+                    "size": 100,
+                    "digestType": "sha-256",
+                    "digest": "archive-b",
+                }
+            ]
+            self.assertIsNone(
+                load_cached_image_join_report(
+                    output,
+                    datasheet=datasheet,
+                    files=changed_files,
+                )
+            )
+
+            datasheet.write_bytes(b"datasheet-v2")
+            self.assertIsNone(
+                load_cached_image_join_report(
+                    output,
+                    datasheet=datasheet,
+                    files=files,
+                )
+            )
 
     def test_remote_zip_range_reader_supports_zipfile_without_full_download(self) -> None:
         payload = io.BytesIO()
