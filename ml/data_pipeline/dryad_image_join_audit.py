@@ -26,6 +26,7 @@ from .dryad_weight_audit import (
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 IMAGE_JOIN_AUDIT_SCHEMA_VERSION = 2
+REPORT_DERIVATION_VERSION = 1
 
 
 class RemoteZipRangeReader(io.RawIOBase):
@@ -158,6 +159,94 @@ def build_image_join_cache_identity(
     }
 
 
+def finalize_published_subset_audit(report: dict[str, Any]) -> dict[str, Any]:
+    """Derive acceptance/training policy from cached coverage facts without network I/O."""
+    audit = report.get("audit")
+    if not isinstance(audit, dict):
+        return report
+
+    photo_join = audit.get("photo_metadata_join")
+    overlap = audit.get("training_candidate_overlap")
+    if not isinstance(photo_join, dict) or not isinstance(overlap, dict):
+        return report
+
+    no_bucket = photo_join.get("NO") or {}
+    yes_bucket = photo_join.get("YES") or {}
+    if not isinstance(no_bucket, dict) or not isinstance(yes_bucket, dict):
+        return report
+
+    no_total = sum(int(value or 0) for value in no_bucket.values())
+    no_zero = int(no_bucket.get("ZERO") or 0)
+    yes_total = sum(int(value or 0) for value in yes_bucket.values())
+    yes_zero = int(yes_bucket.get("ZERO") or 0)
+    yes_complete = int(yes_bucket.get("COMPLETE_22") or 0)
+    yes_partial = int(yes_bucket.get("PARTIAL") or 0)
+    yes_overcomplete = int(yes_bucket.get("OVERCOMPLETE") or 0)
+
+    unmatched = int(audit.get("unmatched_image_count") or 0)
+    ambiguous = len(audit.get("ambiguous_filename_sample") or [])
+    fruit_count = int(audit.get("fruit_id_count") or 0)
+    published_subset_reconciled = (
+        no_total + yes_total == fruit_count
+        and no_zero == no_total
+        and yes_zero == 0
+        and unmatched == 0
+        and ambiguous == 0
+    )
+    view_exception_count = yes_partial + yes_overcomplete
+
+    if published_subset_reconciled:
+        audit["status"] = (
+            "PUBLISHED_SUBSET_VERIFIED"
+            if view_exception_count == 0
+            else "PUBLISHED_SUBSET_VERIFIED_WITH_VIEW_EXCEPTIONS"
+        )
+
+    nominal_published_image_count = yes_total * EXPECTED_VIEWS_PER_FRUIT
+    actual_published_image_count = int(audit.get("image_count") or 0)
+
+    primary_count = int(overlap.get("primary_weight_candidate_count") or 0)
+    primary_any = int(overlap.get("primary_with_any_picture_count") or 0)
+    primary_complete = int(overlap.get("primary_with_complete_22_views_count") or 0)
+    primary_missing = int(overlap.get("primary_missing_all_pictures_count") or 0)
+    primary_incomplete = int(overlap.get("primary_incomplete_picture_count") or 0)
+
+    view_counts = audit.get("view_counts_by_fruit") or {}
+    primary_picture_image_count = None
+    if isinstance(view_counts, dict):
+        # Exact primary membership is not retained in the cached report, so this
+        # count remains unavailable unless already emitted by a fresh audit.
+        primary_picture_image_count = overlap.get("primary_with_any_picture_image_count")
+
+    audit["published_subset_validation"] = {
+        "reconciled": published_subset_reconciled,
+        "photo_no_fruit_count": no_total,
+        "photo_no_zero_picture_count": no_zero,
+        "photo_yes_fruit_count": yes_total,
+        "photo_yes_zero_picture_count": yes_zero,
+        "photo_yes_complete_22_count": yes_complete,
+        "photo_yes_partial_count": yes_partial,
+        "photo_yes_overcomplete_count": yes_overcomplete,
+        "photo_yes_view_exception_count": view_exception_count,
+        "nominal_photo_yes_image_count_at_22_each": nominal_published_image_count,
+        "actual_published_image_count": actual_published_image_count,
+        "nominal_minus_actual_image_count": nominal_published_image_count - actual_published_image_count,
+    }
+    audit["strict_training_candidate_summary"] = {
+        "policy": "VALID_WITH_CALYX_WEIGHT_AND_EXACTLY_22_PUBLISHED_VIEWS",
+        "primary_weight_candidate_count": primary_count,
+        "primary_with_any_picture_count": primary_any,
+        "strict_22_view_weight_fruit_count": primary_complete,
+        "strict_22_view_weight_image_count": primary_complete * EXPECTED_VIEWS_PER_FRUIT,
+        "primary_missing_all_pictures_count": primary_missing,
+        "primary_view_count_exception_count": primary_incomplete,
+        "primary_with_any_picture_image_count": primary_picture_image_count,
+        "split_group": "FRUIT_ID",
+    }
+    report["derivation_version"] = REPORT_DERIVATION_VERSION
+    return report
+
+
 def load_cached_image_join_report(
     output: Path,
     *,
@@ -179,7 +268,7 @@ def load_cached_image_join_report(
         return None
     if cached.get("schema_version") != IMAGE_JOIN_AUDIT_SCHEMA_VERSION:
         return None
-    return report
+    return finalize_published_subset_audit(report)
 
 
 def list_remote_zip_names(
@@ -388,16 +477,21 @@ def audit_remote_picture_archives(
         for fruit_id, count in view_counts.items()
         if count == EXPECTED_VIEWS_PER_FRUIT
     }
+    primary_with_picture_ids = primary_ids & picture_ids
     audit["training_candidate_overlap"] = {
         "primary_weight_candidate_count": len(primary_ids),
-        "primary_with_any_picture_count": len(primary_ids & picture_ids),
+        "primary_with_any_picture_count": len(primary_with_picture_ids),
         "primary_with_complete_22_views_count": len(primary_ids & complete_ids),
         "primary_missing_all_pictures_count": len(primary_ids - picture_ids),
         "primary_incomplete_picture_count": len(
-            (primary_ids & picture_ids) - complete_ids
+            primary_with_picture_ids - complete_ids
+        ),
+        "primary_with_any_picture_image_count": sum(
+            view_counts.get(fruit_id, 0)
+            for fruit_id in primary_with_picture_ids
         ),
     }
-    return {
+    report = {
         "dataset_doi": dataset.get("identifier") or dataset.get("doi"),
         "mode": "REMOTE_ZIP_CENTRAL_DIRECTORY_ONLY",
         "full_archive_download_performed": False,
@@ -406,6 +500,7 @@ def audit_remote_picture_archives(
         "archives": archive_meta,
         "audit": audit,
     }
+    return finalize_published_subset_audit(report)
 
 
 def write_image_join_report(report: dict[str, Any], output: Path) -> None:
