@@ -56,3 +56,10 @@
 - 새 workflow나 배포 자동화 전 예상 실행 빈도·runtime·무료 사용량 영향을 확인한다.
 
 작업 종료/중단/인계 시 기존 `ACTIVE_WORK.md` 또는 PR에 branch/PR/SHA, 완료·미완료, 실행한 검증, known issue, 다음 단계를 남긴다.
+
+## ChatGPT logical orchestration
+
+- Common orchestration baseline: `conanbke-ai/Tori_Common_Project@98946df8f04685f0b2c9814363ec9fea8be25226`.
+- Specialist roles are logical ChatGPT review/design roles from `policies/agent_roles/`; no Cursor/plugin installation is required.
+- Apply only the smallest relevant role set. Role selection is separate from execution-surface routing.
+- Chat/connector is the default; Codex is only for repository-local implementation/build/test, Work only for actual browser/app interaction acceptance, and LOCAL_RUNTIME for long GPU work where applicable.
