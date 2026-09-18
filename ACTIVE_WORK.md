@@ -265,7 +265,15 @@ Current stop condition:
 - acquisition과 XLSX audit 역할 분리
 - data-pipeline CLI에 acquisition → checksum → audit → JSON report 통합
 
-로컬 실행:
+공개 manifest inventory(자격증명 불필요):
+
+```bash
+python -m ml.data_pipeline.cli dryad-manifest
+```
+
+기본 산출물: `data/audit/dryad/DATA-QUAL-002/public-manifest.json`
+
+로컬 acquisition + audit:
 
 ```bash
 python -m ml.data_pipeline.cli dryad-weight-audit
