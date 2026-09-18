@@ -14,6 +14,7 @@ DRYAD_API_VERSION = "2.1.0"
 DRYAD_TOKEN_URL = "https://datadryad.org/oauth/token"
 DEFAULT_DATASET_DOI = "doi:10.25338/B8V308"
 DEFAULT_DATASHEET_PATH = "datasheet.xlsx"
+MAX_SAFE_RANGE_BYTES = 32 * 1024 * 1024
 
 
 class DryadAccessError(RuntimeError):
@@ -247,6 +248,51 @@ def _transfer_file(
             handle.write(chunk)
 
 
+def fetch_file_range(
+    file_record: dict[str, Any],
+    start: int,
+    end: int,
+    *,
+    access_token: str,
+    timeout: int = 120,
+) -> bytes:
+    """Fetch one inclusive byte range and refuse a full-body fallback."""
+    if start < 0 or end < start:
+        raise ValueError("invalid byte range")
+    if end - start + 1 > MAX_SAFE_RANGE_BYTES:
+        raise DryadAccessError(
+            f"Refusing oversized Dryad range request: {end - start + 1} bytes"
+        )
+    request = urllib.request.Request(
+        download_url(file_record),
+        headers={
+            "User-Agent": "Nongtori-Dryad/1.0",
+            "Accept": "application/octet-stream",
+            "Authorization": f"Bearer {access_token}",
+            "X-API-Version": DRYAD_API_VERSION,
+            "Range": f"bytes={start}-{end}",
+        },
+    )
+    try:
+        with _OPENER.open(request, timeout=timeout) as response:
+            status = int(getattr(response, "status", response.getcode()))
+            content_range = str(response.headers.get("Content-Range") or "")
+            if status != 206 or not content_range.lower().startswith("bytes "):
+                raise DryadAccessError(
+                    "Dryad picture archive endpoint did not honor HTTP Range; "
+                    "refusing to download the full multi-GB archive."
+                )
+            payload = response.read(end - start + 1)
+    except urllib.error.HTTPError as exc:
+        raise DryadAccessError(f"Dryad range request failed: HTTP {exc.code}") from exc
+    expected = end - start + 1
+    if len(payload) != expected:
+        raise DryadAccessError(
+            f"Dryad range response length mismatch: got {len(payload)}, expected {expected}"
+        )
+    return payload
+
+
 def download_file(
     file_record: dict[str, Any],
     output: Path,
@@ -295,12 +341,12 @@ def acquire_datasheet(
     }
 
 
-def build_public_manifest_inventory(
-    doi: str = DEFAULT_DATASET_DOI,
+def build_manifest_inventory_from_records(
+    dataset: dict[str, Any],
+    files: list[dict[str, Any]],
     *,
-    timeout: int = 60,
+    doi: str = DEFAULT_DATASET_DOI,
 ) -> dict[str, Any]:
-    dataset, files = resolve_manifest(doi, timeout=timeout)
     inventory = []
     for record in files:
         path = str(record.get("path") or "")
@@ -337,14 +383,73 @@ def build_public_manifest_inventory(
     }
 
 
+def build_public_manifest_inventory(
+    doi: str = DEFAULT_DATASET_DOI,
+    *,
+    timeout: int = 60,
+) -> dict[str, Any]:
+    dataset, files = resolve_manifest(doi, timeout=timeout)
+    return build_manifest_inventory_from_records(dataset, files, doi=doi)
+
+
+def write_manifest_inventory_from_records(
+    output: Path,
+    dataset: dict[str, Any],
+    files: list[dict[str, Any]],
+    *,
+    doi: str = DEFAULT_DATASET_DOI,
+) -> dict[str, Any]:
+    report = build_manifest_inventory_from_records(dataset, files, doi=doi)
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return report
+
+
 def write_manifest_inventory(
     output: Path,
     *,
     doi: str = DEFAULT_DATASET_DOI,
     timeout: int = 60,
 ) -> dict[str, Any]:
-    report = build_public_manifest_inventory(doi, timeout=timeout)
+    dataset, files = resolve_manifest(doi, timeout=timeout)
+    return write_manifest_inventory_from_records(output, dataset, files, doi=doi)
+
+
+def ensure_datasheet(
+    output: Path,
+    dataset: dict[str, Any],
+    files: list[dict[str, Any]],
+    *,
+    force_download: bool = False,
+    timeout: int = 300,
+) -> dict[str, Any]:
     output = Path(output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    return report
+    record = select_file(files, DEFAULT_DATASHEET_PATH)
+    action = "DOWNLOADED"
+
+    if output.exists() and not force_download:
+        try:
+            verification = verify_download(output, record)
+            action = "REUSED_VERIFIED"
+        except DryadAccessError:
+            verification = download_file(record, output, timeout=timeout)
+            action = "REDOWNLOADED_AFTER_VERIFICATION_FAILURE"
+    else:
+        verification = download_file(record, output, timeout=timeout)
+
+    return {
+        "action": action,
+        "dataset_doi": dataset.get("identifier") or dataset.get("doi") or DEFAULT_DATASET_DOI,
+        "publication_date": dataset.get("publicationDate"),
+        "version_number": dataset.get("versionNumber"),
+        "file": {
+            "id": file_id(record),
+            "path": record.get("path"),
+            "size": record.get("size"),
+            "mime_type": record.get("mimeType"),
+            "digest_type": record.get("digestType"),
+            "digest": record.get("digest"),
+        },
+        "verification": verification,
+    }

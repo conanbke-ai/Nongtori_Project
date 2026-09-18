@@ -137,6 +137,8 @@ def _header_semantic(header: str) -> str | None:
         return "variety"
     if "shape" in key:
         return "shape"
+    if key in {"photo", "photos", "picture", "pictures", "image", "images"}:
+        return "photo"
     if "width" in key or "diameter" in key:
         return "width"
     if "height" in key or "length" in key:
@@ -252,7 +254,7 @@ def _row_context(
         "fruit_id": _value_at(row, mapping.get("fruit_id")),
         "sheet": source_sheet,
     }
-    for field in ("variety", "shape"):
+    for field in ("variety", "shape", "photo"):
         if field in mapping:
             context[field] = _value_at(row, mapping[field])
     for field in ("width", "height", PRIMARY_WEIGHT_FIELD, AUXILIARY_WEIGHT_FIELD):
@@ -280,6 +282,71 @@ def _grade_bins(values: Iterable[float]) -> dict[str, int]:
         else:
             counts["JM_WEIGHT_CANDIDATE"] += 1
     return dict(counts)
+
+
+def photo_metadata_from_datasheet(path: Path) -> dict[str, str]:
+    """Return raw datasheet Photo values keyed by canonical fruit ID."""
+    sheets = read_xlsx_sheets(path)
+    tables = _detect_sheet_tables(sheets)
+    if not tables:
+        raise ValueError("No compatible Dryad fruit tables found")
+    mappings = [table["mapping"] for table in tables]
+    if any(mapping != mappings[0] for mapping in mappings[1:]):
+        raise ValueError("Dryad fruit tables have incompatible column mappings")
+    mapping = mappings[0]
+    if "photo" not in mapping:
+        return {}
+    result: dict[str, str] = {}
+    for table in tables:
+        for row in table["rows"]:
+            fruit_id = _value_at(row, mapping["fruit_id"])
+            if not fruit_id:
+                continue
+            result[fruit_id] = _value_at(row, mapping["photo"])
+    return result
+
+
+def primary_weight_candidate_ids_from_datasheet(path: Path) -> list[str]:
+    """Return fruit IDs with a valid with-calyx target for supervised weight training."""
+    sheets = read_xlsx_sheets(path)
+    tables = _detect_sheet_tables(sheets)
+    if not tables:
+        raise ValueError("No compatible Dryad fruit tables found")
+    mappings = [table["mapping"] for table in tables]
+    if any(mapping != mappings[0] for mapping in mappings[1:]):
+        raise ValueError("Dryad fruit tables have incompatible column mappings")
+    mapping = mappings[0]
+    ids: list[str] = []
+    for table in tables:
+        for row in table["rows"]:
+            fruit_id = _value_at(row, mapping["fruit_id"])
+            primary = _to_float(_value_at(row, mapping.get(PRIMARY_WEIGHT_FIELD)))
+            if fruit_id and primary is not None and primary > 0:
+                ids.append(fruit_id)
+    if len(ids) != len(set(ids)):
+        raise ValueError("Duplicate Dryad primary-weight candidate IDs found")
+    return ids
+
+
+def fruit_ids_from_datasheet(path: Path) -> list[str]:
+    """Return canonical fruit IDs from all compatible Dryad fruit tables."""
+    sheets = read_xlsx_sheets(path)
+    tables = _detect_sheet_tables(sheets)
+    if not tables:
+        raise ValueError("No compatible Dryad fruit tables found")
+    mappings = [table["mapping"] for table in tables]
+    if any(mapping != mappings[0] for mapping in mappings[1:]):
+        raise ValueError("Dryad fruit tables have incompatible column mappings")
+    mapping = mappings[0]
+    ids = [
+        _value_at(row, mapping["fruit_id"])
+        for table in tables
+        for row in table["rows"]
+    ]
+    ids = [value for value in ids if value]
+    if len(ids) != len(set(ids)):
+        raise ValueError("Duplicate Dryad fruit IDs found")
+    return ids
 
 
 def audit_datasheet(path: Path) -> dict[str, Any]:
@@ -462,6 +529,12 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
         else "DATASHEET_SCHEMA_OR_VALUE_REVIEW"
     )
 
+    photo_values: Counter[str] = Counter()
+    if "photo" in mapping:
+        for _, row in row_records:
+            raw_photo = _value_at(row, mapping["photo"])
+            photo_values[raw_photo if raw_photo else "<EMPTY>"] += 1
+
     return {
         "source_id": "DATA-QUAL-002",
         "dataset_doi": DRYAD_DATASET_DOI,
@@ -482,6 +555,10 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
         "official_count_match": official_count_match,
         "duplicate_fruit_ids": duplicate_ids[:100],
         "duplicate_fruit_id_count": len(duplicate_ids),
+        "photo_metadata": {
+            "column_present": "photo" in mapping,
+            "value_distribution": dict(sorted(photo_values.items())),
+        },
         "numeric_summary": {field: _numeric_summary(numeric_values[field]) for field in numeric_fields if field in mapping},
         "numeric_missing": {field: numeric_missing[field] for field in numeric_fields if field in mapping},
         "numeric_missing_samples": {
