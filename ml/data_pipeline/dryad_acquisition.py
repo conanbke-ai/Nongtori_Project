@@ -13,7 +13,7 @@ DRYAD_API_BASE = "https://datadryad.org/api/v2"
 DRYAD_API_VERSION = "2.1.0"
 DRYAD_TOKEN_URL = "https://datadryad.org/oauth/token"
 DEFAULT_DATASET_DOI = "doi:10.25338/B8V308"
-DEFAULT_DATASHEET_PATH = "datasheet.xlsx"
+DEFAULT_DATASHEET_PATH = "datasheet.xlsx"\nMAX_SAFE_RANGE_BYTES = 32 * 1024 * 1024
 
 
 class DryadAccessError(RuntimeError):
@@ -258,6 +258,10 @@ def fetch_file_range(
     """Fetch one inclusive byte range and refuse a full-body fallback."""
     if start < 0 or end < start:
         raise ValueError("invalid byte range")
+    if end - start + 1 > MAX_SAFE_RANGE_BYTES:
+        raise DryadAccessError(
+            f"Refusing oversized Dryad range request: {end - start + 1} bytes"
+        )
     request = urllib.request.Request(
         download_url(file_record),
         headers={
