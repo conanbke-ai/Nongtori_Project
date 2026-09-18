@@ -22,7 +22,51 @@
     "client_id_env": "DRYAD_CLIENT_ID",
     "client_secret_env": "DRYAD_CLIENT_SECRET",
     "temporary_token_env": "DRYAD_TOKEN",
-    "local_env_file": ".env.local"
+    "local_env_file": ".env.local",
+    "published_page_inventory": {
+      "checked_at": "2026-09-18",
+      "source": "Dryad dataset page",
+      "total_published_size_gb": 89.98,
+      "datasheet": {
+        "path": "datasheet.xlsx",
+        "display_size_kb": 128.08
+      },
+      "picture_archives": [
+        {
+          "path": "Pictures_01.zip",
+          "display_size_gb": 5.73
+        },
+        {
+          "path": "Pictures_02.zip",
+          "display_size_gb": 4.98
+        },
+        {
+          "path": "Pictures_03.zip",
+          "display_size_gb": 6.27
+        },
+        {
+          "path": "Pictures_04.zip",
+          "display_size_gb": 6.21
+        },
+        {
+          "path": "Pictures_05.zip",
+          "display_size_gb": 6.77
+        },
+        {
+          "path": "Pictures_06.zip",
+          "display_size_gb": 4.09
+        },
+        {
+          "path": "Pictures_07.zip",
+          "display_size_gb": 5.19
+        }
+      ],
+      "picture_archives_display_total_gb": 39.24,
+      "scan_archive_count": 20,
+      "note": "Display sizes are human-readable values from the Dryad dataset page. Exact byte sizes and digests must come from the API manifest before immutable snapshotting."
+    },
+    "public_manifest_command": "python -m ml.data_pipeline.cli dryad-manifest",
+    "acquire_and_audit_command": "python -m ml.data_pipeline.cli dryad-weight-audit"
   },
   "original_labels": [
     "fruit_identity",
@@ -41,7 +85,7 @@
     "auxiliary_weight_target": "weight_without_calyx",
     "field_weight_protocol": "WITH_CALYX",
     "grade_policy": "PREDICT_WEIGHT_THEN_APPLY_12_16_22G_THRESHOLDS",
-    "acquisition_status": "CLIENT_CREDENTIAL_AUTO_TOKEN_LOCAL"
+    "acquisition_status": "ONE_COMMAND_ACQUIRE_AUDIT_READY_DATA_BYTES_PENDING"
   },
   "notes": "Nongtori field Weight_g is measured with the strawberry calyx attached. Therefore Dryad weight_with_calyx is the canonical weight target and weight_without_calyx is auxiliary analysis only. Local research credentials use the common TORI .env.local file (DRYAD_CLIENT_ID / DRYAD_CLIENT_SECRET); the acquisition helper mints a short-lived access token automatically, downloads the target file, and verifies size/SHA-256. DRYAD_TOKEN is an optional one-off override only. Before APPROVED: run the real datasheet audit, prove image filename to fruit ID join, require complete with-calyx GT, and split strictly by fruit identity so the 22 views of one berry never cross train/validation/test."
 }
