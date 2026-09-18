@@ -121,7 +121,17 @@ def _header_semantic(header: str) -> str | None:
     key = _norm(header)
     if not key:
         return None
-    if key in {"id", "fruitid", "strawberryid", "berryid", "fruitnumber", "strawberrynumber", "berrynumber"}:
+    if key in {
+        "id",
+        "idno",
+        "idnumber",
+        "fruitid",
+        "strawberryid",
+        "berryid",
+        "fruitnumber",
+        "strawberrynumber",
+        "berrynumber",
+    }:
         return "fruit_id"
     if "variety" in key or "cultivar" in key:
         return "variety"
@@ -131,12 +141,24 @@ def _header_semantic(header: str) -> str | None:
         return "width"
     if "height" in key or "length" in key:
         return "height"
-    has_weight = "weight" in key or "mass" in key
+    has_weight = "weight" in key or "mass" in key or key.startswith("wt")
     if not has_weight:
         return None
-    if any(token in key for token in ("withoutcalyx", "nocalyx", "calyxremoved", "withoutstem", "nostem", "fleshweight")):
+    if any(
+        token in key
+        for token in (
+            "withoutcalyx",
+            "wocalyx",
+            "nocalyx",
+            "calyxremoved",
+            "withoutstem",
+            "wostem",
+            "nostem",
+            "fleshweight",
+        )
+    ):
         return AUXILIARY_WEIGHT_FIELD
-    if any(token in key for token in ("withcalyx", "wholeweight", "totalweight", "withstem")):
+    if any(token in key for token in ("withcalyx", "wcalyx", "wholeweight", "totalweight", "withstem", "wstem")):
         return PRIMARY_WEIGHT_FIELD
     return "weight_generic"
 
@@ -171,10 +193,72 @@ def detect_table(sheets: dict[str, list[list[str]]], *, scan_rows: int = 25) -> 
     return {"status": "FOUND", "best": candidates[0], "candidates": candidates[:5]}
 
 
+def _detect_sheet_tables(
+    sheets: dict[str, list[list[str]]],
+    *,
+    scan_rows: int = 25,
+) -> list[dict[str, Any]]:
+    tables: list[dict[str, Any]] = []
+    for sheet_name, rows in sheets.items():
+        candidates: list[dict[str, Any]] = []
+        for row_index, row in enumerate(rows[:scan_rows]):
+            score, mapping = _header_score(row)
+            if not score:
+                continue
+            candidates.append(
+                {
+                    "sheet": sheet_name,
+                    "header_row_index": row_index,
+                    "score": score,
+                    "mapping": mapping,
+                    "headers": row,
+                }
+            )
+        if not candidates:
+            continue
+        candidates.sort(key=lambda item: (item["score"], len(item["mapping"])), reverse=True)
+        best = candidates[0]
+        mapping = best["mapping"]
+        if "fruit_id" not in mapping or PRIMARY_WEIGHT_FIELD not in mapping:
+            continue
+        raw_rows = rows[int(best["header_row_index"]) + 1 :]
+        nonempty_rows = [row for row in raw_rows if any(str(cell).strip() for cell in row)]
+        fruit_id_index = mapping["fruit_id"]
+        data_rows = [row for row in nonempty_rows if _value_at(row, fruit_id_index)]
+        tables.append(
+            {
+                **best,
+                "rows": data_rows,
+                "raw_nonempty_row_count": len(nonempty_rows),
+                "excluded_non_fruit_row_count": len(nonempty_rows) - len(data_rows),
+            }
+        )
+    return tables
+
+
 def _value_at(row: list[str], index: int | None) -> str:
     if index is None or index >= len(row):
         return ""
     return row[index].strip()
+
+
+def _row_context(
+    row: list[str],
+    mapping: dict[str, int],
+    *,
+    source_sheet: str,
+) -> dict[str, Any]:
+    context: dict[str, Any] = {
+        "fruit_id": _value_at(row, mapping.get("fruit_id")),
+        "sheet": source_sheet,
+    }
+    for field in ("variety", "shape"):
+        if field in mapping:
+            context[field] = _value_at(row, mapping[field])
+    for field in ("width", "height", PRIMARY_WEIGHT_FIELD, AUXILIARY_WEIGHT_FIELD):
+        if field in mapping:
+            context[field] = _to_float(_value_at(row, mapping[field]))
+    return context
 
 
 def _numeric_summary(values: list[float]) -> dict[str, Any]:
@@ -200,27 +284,93 @@ def _grade_bins(values: Iterable[float]) -> dict[str, int]:
 
 def audit_datasheet(path: Path) -> dict[str, Any]:
     sheets = read_xlsx_sheets(path)
-    table = detect_table(sheets)
-    if table["status"] != "FOUND":
-        return {
-            "source_id": "DATA-QUAL-002",
-            "status": "REVIEW_REQUIRED",
-            "datasheet_status": table["status"],
-            "weight_training_ready": False,
-            "image_join_status": "NOT_RUN",
-            "target_alignment": "WITH_CALYX_PRIMARY",
-            "primary_weight_field": PRIMARY_WEIGHT_FIELD,
-            "auxiliary_weight_field": AUXILIARY_WEIGHT_FIELD,
-            "field_weight_protocol": NONGTORI_WEIGHT_PROTOCOL,
-        }
+    tables = _detect_sheet_tables(sheets)
 
-    best = table["best"]
-    sheet_name = best["sheet"]
-    header_row_index = int(best["header_row_index"])
-    mapping: dict[str, int] = best["mapping"]
-    headers: list[str] = best["headers"]
-    raw_rows = sheets[sheet_name][header_row_index + 1 :]
-    rows = [row for row in raw_rows if any(str(cell).strip() for cell in row)]
+    if not tables:
+        table = detect_table(sheets)
+        if table["status"] != "FOUND":
+            return {
+                "source_id": "DATA-QUAL-002",
+                "status": "REVIEW_REQUIRED",
+                "datasheet_status": table["status"],
+                "weight_training_ready": False,
+                "image_join_status": "NOT_RUN",
+                "target_alignment": "WITH_CALYX_PRIMARY",
+                "primary_weight_field": PRIMARY_WEIGHT_FIELD,
+                "auxiliary_weight_field": AUXILIARY_WEIGHT_FIELD,
+                "field_weight_protocol": NONGTORI_WEIGHT_PROTOCOL,
+            }
+
+        best = table["best"]
+        sheet_name = best["sheet"]
+        header_row_index = int(best["header_row_index"])
+        mapping: dict[str, int] = best["mapping"]
+        headers: list[str] = best["headers"]
+        raw_rows = sheets[sheet_name][header_row_index + 1 :]
+        rows = [row for row in raw_rows if any(str(cell).strip() for cell in row)]
+        table_summaries = [
+            {
+                "sheet": sheet_name,
+                "header_row": header_row_index + 1,
+                "headers": headers,
+                "resolved_columns": mapping,
+                "data_row_count": len(rows),
+                "raw_nonempty_row_count": len(rows),
+                "excluded_non_fruit_row_count": 0,
+            }
+        ]
+    else:
+        rows: list[list[str]] = []
+        table_summaries: list[dict[str, Any]] = []
+        for table in tables:
+            table_rows = table["rows"]
+            rows.extend(table_rows)
+            table_summaries.append(
+                {
+                    "sheet": table["sheet"],
+                    "header_row": int(table["header_row_index"]) + 1,
+                    "headers": table["headers"],
+                    "resolved_columns": table["mapping"],
+                    "data_row_count": len(table_rows),
+                    "raw_nonempty_row_count": int(table.get("raw_nonempty_row_count", len(table_rows))),
+                    "excluded_non_fruit_row_count": int(table.get("excluded_non_fruit_row_count", 0)),
+                }
+            )
+
+        mapping = tables[0]["mapping"]
+        headers = tables[0]["headers"]
+        sheet_name = tables[0]["sheet"] if len(tables) == 1 else "MULTI_SHEET"
+        header_row_index = int(tables[0]["header_row_index"])
+
+        incompatible = [
+            item["sheet"]
+            for item in tables
+            if item["mapping"] != mapping
+        ]
+        if incompatible:
+            return {
+                "source_id": "DATA-QUAL-002",
+                "dataset_doi": DRYAD_DATASET_DOI,
+                "status": "REVIEW_REQUIRED",
+                "datasheet_status": "INCOMPATIBLE_TABLE_SCHEMAS",
+                "tables": table_summaries,
+                "incompatible_sheets": incompatible,
+                "weight_training_ready": False,
+                "image_join_status": "NOT_RUN",
+                "target_alignment": "WITH_CALYX_PRIMARY",
+                "primary_weight_field": PRIMARY_WEIGHT_FIELD,
+                "auxiliary_weight_field": AUXILIARY_WEIGHT_FIELD,
+                "field_weight_protocol": NONGTORI_WEIGHT_PROTOCOL,
+            }
+
+    if tables:
+        row_records = [
+            (str(table["sheet"]), row)
+            for table in tables
+            for row in table["rows"]
+        ]
+    else:
+        row_records = [(sheet_name, row) for row in rows]
 
     fruit_ids = [_value_at(row, mapping.get("fruit_id")) for row in rows]
     fruit_ids = [value for value in fruit_ids if value]
@@ -229,21 +379,30 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
     numeric_fields = ["width", "height", PRIMARY_WEIGHT_FIELD, AUXILIARY_WEIGHT_FIELD, "weight_generic"]
     numeric_values: dict[str, list[float]] = defaultdict(list)
     numeric_missing: dict[str, int] = defaultdict(int)
-    for row in rows:
+    numeric_missing_samples: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for source_sheet, row in row_records:
+        fruit_id = _value_at(row, mapping.get("fruit_id"))
         for field in numeric_fields:
             if field not in mapping:
                 continue
             parsed = _to_float(_value_at(row, mapping[field]))
             if parsed is None or parsed <= 0:
                 numeric_missing[field] += 1
+                if fruit_id:
+                    numeric_missing_samples[field].append(
+                        _row_context(row, mapping, source_sheet=source_sheet)
+                    )
             else:
                 numeric_values[field].append(parsed)
 
     relation_checked = 0
     relation_violations = 0
     calyx_delta: list[float] = []
+    calyx_relation_violation_samples: list[dict[str, Any]] = []
+    calyx_delta_samples: list[dict[str, Any]] = []
     if PRIMARY_WEIGHT_FIELD in mapping and AUXILIARY_WEIGHT_FIELD in mapping:
-        for row in rows:
+        for source_sheet, row in row_records:
+            fruit_id = _value_at(row, mapping.get("fruit_id"))
             with_calyx = _to_float(_value_at(row, mapping[PRIMARY_WEIGHT_FIELD]))
             without_calyx = _to_float(_value_at(row, mapping[AUXILIARY_WEIGHT_FIELD]))
             if with_calyx is None or without_calyx is None:
@@ -251,8 +410,18 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
             relation_checked += 1
             delta = with_calyx - without_calyx
             calyx_delta.append(delta)
+            sample = _row_context(row, mapping, source_sheet=source_sheet)
+            sample["delta_with_minus_without"] = delta
+            calyx_delta_samples.append(sample)
             if delta < -1e-6:
                 relation_violations += 1
+                calyx_relation_violation_samples.append(sample)
+
+    largest_calyx_deltas = sorted(
+        calyx_delta_samples,
+        key=lambda item: float(item["delta_with_minus_without"]),
+        reverse=True,
+    )[:20]
 
     required_semantics = {
         "fruit_id": "fruit_id" in mapping,
@@ -265,10 +434,33 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
     official_count_match = fruit_count == EXPECTED_FRUITS if fruit_ids else False
     primary_values = numeric_values[PRIMARY_WEIGHT_FIELD]
     primary_weight_complete = bool(primary_values) and len(primary_values) == len(rows)
-    status = "AUDITED_METADATA" if schema_ok and fruit_count > 0 and not duplicate_ids and primary_weight_complete else "REVIEW_REQUIRED"
+
+    primary_training_candidate_count = 0
+    primary_geometry_candidate_count = 0
+    for _, row in row_records:
+        primary = _to_float(_value_at(row, mapping.get(PRIMARY_WEIGHT_FIELD)))
+        if primary is None or primary <= 0:
+            continue
+        primary_training_candidate_count += 1
+        width = _to_float(_value_at(row, mapping.get("width")))
+        height = _to_float(_value_at(row, mapping.get("height")))
+        if width is not None and width > 0 and height is not None and height > 0:
+            primary_geometry_candidate_count += 1
+
+    identity_ok = fruit_count > 0 and not duplicate_ids
+    if schema_ok and identity_ok and primary_training_candidate_count:
+        status = "AUDITED_METADATA" if primary_weight_complete else "AUDITED_METADATA_WITH_EXCLUSIONS"
+    else:
+        status = "REVIEW_REQUIRED"
 
     weight_fields = [field for field in (PRIMARY_WEIGHT_FIELD, AUXILIARY_WEIGHT_FIELD, "weight_generic") if field in mapping]
     weight_grade_bins = {field: _grade_bins(numeric_values[field]) for field in weight_fields}
+
+    next_gate = (
+        "IMAGE_FILENAME_TO_FRUIT_ID_JOIN_AUDIT"
+        if status in {"AUDITED_METADATA", "AUDITED_METADATA_WITH_EXCLUSIONS"}
+        else "DATASHEET_SCHEMA_OR_VALUE_REVIEW"
+    )
 
     return {
         "source_id": "DATA-QUAL-002",
@@ -279,8 +471,12 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
         "header_row": header_row_index + 1,
         "headers": headers,
         "resolved_columns": mapping,
+        "tables": table_summaries,
+        "table_count": len(table_summaries),
         "required_semantics": required_semantics,
         "data_row_count": len(rows),
+        "raw_nonempty_row_count": sum(item.get("raw_nonempty_row_count", item["data_row_count"]) for item in table_summaries),
+        "excluded_non_fruit_row_count": sum(item.get("excluded_non_fruit_row_count", 0) for item in table_summaries),
         "fruit_id_count": fruit_count,
         "expected_fruit_count": EXPECTED_FRUITS,
         "official_count_match": official_count_match,
@@ -288,9 +484,36 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
         "duplicate_fruit_id_count": len(duplicate_ids),
         "numeric_summary": {field: _numeric_summary(numeric_values[field]) for field in numeric_fields if field in mapping},
         "numeric_missing": {field: numeric_missing[field] for field in numeric_fields if field in mapping},
+        "numeric_missing_samples": {
+            field: numeric_missing_samples[field]
+            for field in numeric_fields
+            if field in mapping and numeric_missing_samples[field]
+        },
+        "training_candidate_summary": {
+            "primary_target_total_rows": len(rows),
+            "primary_target_usable_count": primary_training_candidate_count,
+            "primary_target_excluded_missing_count": len(rows) - primary_training_candidate_count,
+            "primary_geometry_usable_count": primary_geometry_candidate_count,
+            "primary_missing_policy": "EXCLUDE_FROM_SUPERVISED_WEIGHT_TRAINING",
+            "auxiliary_missing_policy": "RETAIN_IF_PRIMARY_TARGET_IS_VALID",
+            "calyx_relation_anomaly_policy": "FLAG_FOR_REVIEW_DO_NOT_AUTO_EXCLUDE",
+        },
+        "data_quality_review": {
+            "required": bool(
+                relation_violations
+                or any(item["delta_with_minus_without"] > 3.0 for item in calyx_delta_samples)
+            ),
+            "reason": "CALYX_RELATION_ANOMALIES_PRESENT" if calyx_delta_samples else "NO_PAIRED_CALYX_VALUES",
+        },
         "weight_grade_bins": weight_grade_bins,
         "primary_weight_grade_bins": weight_grade_bins.get(PRIMARY_WEIGHT_FIELD, {}),
-        "calyx_weight_relation": {"checked": relation_checked, "violations_without_gt_with": relation_violations, "delta_with_minus_without": _numeric_summary(calyx_delta)},
+        "calyx_weight_relation": {
+            "checked": relation_checked,
+            "violations_without_gt_with": relation_violations,
+            "violation_samples": calyx_relation_violation_samples,
+            "delta_with_minus_without": _numeric_summary(calyx_delta),
+            "largest_positive_deltas": largest_calyx_deltas,
+        },
         "target_alignment": "WITH_CALYX_PRIMARY",
         "primary_weight_field": PRIMARY_WEIGHT_FIELD,
         "auxiliary_weight_field": AUXILIARY_WEIGHT_FIELD,
@@ -299,9 +522,8 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
         "image_join_status": "NOT_RUN",
         "expected_views_per_fruit": EXPECTED_VIEWS_PER_FRUIT,
         "weight_training_ready": False,
-        "next_gate": "IMAGE_FILENAME_TO_FRUIT_ID_JOIN_AUDIT",
+        "next_gate": next_gate,
     }
-
 
 def audit_image_inventory(image_names: Iterable[str], *, fruit_ids: Iterable[str], fruit_id_regex: str) -> dict[str, Any]:
     pattern = re.compile(fruit_id_regex)
