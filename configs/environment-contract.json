@@ -1,0 +1,107 @@
+{
+  "version": "NONGTORI-ENV-V1-20260918",
+  "deployment_target": "cloudflare",
+  "resource_bindings": {
+    "DB": {
+      "kind": "D1",
+      "required": true,
+      "secret": false,
+      "purpose": "Application database, auth, farm, scouting, harvest and workflow state"
+    },
+    "FILES": {
+      "kind": "R2",
+      "required": true,
+      "secret": false,
+      "purpose": "Images, videos and evidence-frame object storage"
+    }
+  },
+  "runtime": {
+    "GOOGLE_TRANSLATE_API_KEY": {
+      "kind": "secret",
+      "required": false,
+      "capability": "record_note_translation",
+      "purpose": "Google Translate v2 for translated field notes"
+    },
+    "SMS_VERIFICATION_URL": {
+      "kind": "config",
+      "required": false,
+      "capability": "phone_verification",
+      "required_with": ["SMS_VERIFICATION_TOKEN", "PHONE_VERIFICATION_PEPPER"]
+    },
+    "SMS_VERIFICATION_TOKEN": {
+      "kind": "secret",
+      "required": false,
+      "capability": "phone_verification",
+      "required_with": ["SMS_VERIFICATION_URL", "PHONE_VERIFICATION_PEPPER"]
+    },
+    "PHONE_VERIFICATION_PEPPER": {
+      "kind": "secret",
+      "required": false,
+      "capability": "phone_verification",
+      "required_with": ["SMS_VERIFICATION_URL", "SMS_VERIFICATION_TOKEN"]
+    },
+    "NOTIFICATION_WORKER_TOKEN": {
+      "kind": "secret",
+      "required": false,
+      "capability": "notification_worker",
+      "purpose": "Authorizes non-local notification-worker execution"
+    },
+    "SMS_ALERT_URL": {
+      "kind": "config",
+      "required": false,
+      "capability": "sms_alert_delivery",
+      "required_with": ["SMS_ALERT_TOKEN"]
+    },
+    "SMS_ALERT_TOKEN": {
+      "kind": "secret",
+      "required": false,
+      "capability": "sms_alert_delivery",
+      "required_with": ["SMS_ALERT_URL"]
+    },
+    "FORECAST_WORKER_TOKEN": {
+      "kind": "secret",
+      "required": false,
+      "capability": "forecast_worker",
+      "purpose": "Authorizes non-local price/revenue forecast worker calls"
+    },
+    "ROBOT_INGEST_TOKEN": {
+      "kind": "secret",
+      "required": false,
+      "capability": "robot_ingest",
+      "purpose": "Authorizes non-local robot harvest completion ingestion"
+    },
+    "VENDOR_IMPORT_TOKEN": {
+      "kind": "secret",
+      "required": false,
+      "capability": "vendor_farm_import",
+      "purpose": "Authorizes vendor-side farm configuration imports"
+    }
+  },
+  "local_research_only": {
+    "DRYAD_TOKEN": {
+      "kind": "temporary_secret",
+      "required": false,
+      "deploy": false,
+      "default_flow": "manual_download",
+      "purpose": "Optional legacy helper for Dryad file-byte acquisition; current canonical flow is manual/local acquisition"
+    }
+  },
+  "tooling_only": {
+    "CODEX_SANDBOX": {
+      "managed_by": "tooling",
+      "deploy": false
+    },
+    "WRANGLER_WRITE_LOGS": {
+      "managed_by": "vite.config.ts",
+      "deploy": false
+    },
+    "WRANGLER_LOG_PATH": {
+      "managed_by": "vite.config.ts",
+      "deploy": false
+    },
+    "MINIFLARE_REGISTRY_PATH": {
+      "managed_by": "vite.config.ts",
+      "deploy": false
+    }
+  }
+}
