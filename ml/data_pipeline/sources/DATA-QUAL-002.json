@@ -18,8 +18,11 @@
     "total_published_size_gb": 89.98,
     "api_base": "https://datadryad.org/api/v2",
     "api_account_required_for_file_download": true,
-    "token_env": "DRYAD_TOKEN",
-    "acquisition_module": "ml/data_pipeline/dryad_acquisition.py"
+    "acquisition_module": "ml/data_pipeline/dryad_acquisition.py",
+    "client_id_env": "DRYAD_CLIENT_ID",
+    "client_secret_env": "DRYAD_CLIENT_SECRET",
+    "temporary_token_env": "DRYAD_TOKEN",
+    "local_env_file": ".env.local"
   },
   "original_labels": [
     "fruit_identity",
@@ -38,7 +41,7 @@
     "auxiliary_weight_target": "weight_without_calyx",
     "field_weight_protocol": "WITH_CALYX",
     "grade_policy": "PREDICT_WEIGHT_THEN_APPLY_12_16_22G_THRESHOLDS",
-    "acquisition_status": "METADATA_RESOLVABLE_FILE_BYTES_REQUIRE_TOKEN"
+    "acquisition_status": "CLIENT_CREDENTIAL_AUTO_TOKEN_LOCAL"
   },
-  "notes": "Nongtori field Weight_g is measured with the strawberry calyx attached. Therefore Dryad weight_with_calyx is the canonical weight target and weight_without_calyx is auxiliary analysis only. Anonymous Dryad metadata/manifest lookup is allowed, but file-byte acquisition is gated by a Dryad API token (`DRYAD_TOKEN`) and must pass size/SHA-256 verification before audit. Before APPROVED: run the real datasheet audit, prove image filename to fruit ID join, require complete with-calyx GT, and split strictly by fruit identity so the 22 views of one berry never cross train/validation/test. Controlled postharvest imagery is suitable for pretraining/geometry baselines, not field-domain acceptance."
+  "notes": "Nongtori field Weight_g is measured with the strawberry calyx attached. Therefore Dryad weight_with_calyx is the canonical weight target and weight_without_calyx is auxiliary analysis only. Local research credentials use the common TORI .env.local file (DRYAD_CLIENT_ID / DRYAD_CLIENT_SECRET); the acquisition helper mints a short-lived access token automatically, downloads the target file, and verifies size/SHA-256. DRYAD_TOKEN is an optional one-off override only. Before APPROVED: run the real datasheet audit, prove image filename to fruit ID join, require complete with-calyx GT, and split strictly by fruit identity so the 22 views of one berry never cross train/validation/test."
 }
