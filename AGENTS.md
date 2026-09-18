@@ -59,7 +59,9 @@
 
 ## ChatGPT logical orchestration
 
-- Common orchestration baseline: `conanbke-ai/Tori_Common_Project@98946df8f04685f0b2c9814363ec9fea8be25226`.
+- Common orchestration baseline: `conanbke-ai/Tori_Common_Project@94207d2cff53603345bc38bb1dbebe34c714513d`.
 - Specialist roles are logical ChatGPT review/design roles from `policies/agent_roles/`; no Cursor/plugin installation is required.
 - Apply only the smallest relevant role set. Role selection is separate from execution-surface routing.
 - Chat/connector is the default; Codex is only for repository-local implementation/build/test, Work only for actual browser/app interaction acceptance, and LOCAL_RUNTIME for long GPU work where applicable.
+- Role triggers/regression baseline: common `docs/TORI_AGENT_TRIGGER_MATRIX.md` and `docs/TORI_ORCHESTRATION_REGRESSION_SCENARIOS.md`.
+- Runtime recovery/retry/reconnect/checkpoint changes use Runtime Reliability review; prompt/model/provider/context changes affecting generative output use AI Output Evaluation review.
