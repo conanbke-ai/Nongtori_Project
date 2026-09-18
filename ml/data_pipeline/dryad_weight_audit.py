@@ -4,7 +4,6 @@ import argparse
 import json
 import math
 import re
-import urllib.request
 import zipfile
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -13,7 +12,6 @@ from typing import Any, Iterable
 from xml.etree import ElementTree as ET
 
 DRYAD_DATASET_DOI = "10.25338/B8V308"
-DRYAD_DATASHEET_URL = "https://datadryad.org/downloads/file_stream/141475"
 EXPECTED_FRUITS = 1611
 EXPECTED_VIEWS_PER_FRUIT = 22
 
@@ -52,18 +50,6 @@ def _col_index(cell_ref: str) -> int:
     for char in match.group(1):
         result = result * 26 + (ord(char) - ord("A") + 1)
     return result - 1
-
-
-def download_datasheet(output: Path, *, url: str = DRYAD_DATASHEET_URL, timeout: int = 60) -> Path:
-    output = Path(output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(url, headers={"User-Agent": "Nongtori-Dryad-Audit/1.0"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        payload = response.read()
-    if not payload.startswith(b"PK"):
-        raise RuntimeError("Dryad datasheet download did not return an XLSX/ZIP payload")
-    output.write_bytes(payload)
-    return output
 
 
 def _shared_strings(archive: zipfile.ZipFile) -> list[str]:
@@ -349,22 +335,23 @@ def audit_image_inventory(image_names: Iterable[str], *, fruit_ids: Iterable[str
     }
 
 
+def write_audit_report(report: dict[str, Any], output: Path | None) -> None:
+    if not output:
+        return
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Audit UC Davis Dryad strawberry weight metadata without adding XLSX dependencies")
+    parser = argparse.ArgumentParser(description="Audit an already acquired UC Davis Dryad strawberry weight datasheet")
     parser.add_argument("--datasheet", type=Path, required=True)
-    parser.add_argument("--download", action="store_true", help="Download the official Dryad datasheet if --datasheet does not exist")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     if not args.datasheet.exists():
-        if not args.download:
-            raise SystemExit("datasheet does not exist; pass --download to retrieve the official Dryad datasheet")
-        download_datasheet(args.datasheet)
+        raise SystemExit("datasheet does not exist; acquire it through nongtori-data dryad-weight-audit")
     report = audit_datasheet(args.datasheet)
-    payload = json.dumps(report, ensure_ascii=False, indent=2)
-    if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(payload, encoding="utf-8")
-    print(payload)
+    write_audit_report(report, args.output)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["status"] == "AUDITED_METADATA" else 2
 
 
