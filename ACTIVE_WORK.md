@@ -10,6 +10,18 @@
 - machine-readable contract: `configs/environment-contract.json`; human contract: `docs/ENVIRONMENT_VARIABLES.md`.
 - Data Pipeline CI는 credential-flow 변경 기준 PASS.
 
+## Branch cleanup — 2026-09-18
+
+Current remote branch state after cleanup:
+
+- `main`: canonical
+- `feat/ripeness-v010-convnext-tiny`: KEEP — PR #26 open draft, experiment result not yet recorded
+- `feat/ripeness-v009-ordinal-head`: DELETE — PR #25 closed, rejected result preserved on main
+- `fix/dryad-oauth-credential-flow`: DELETE — PR #40 closed/unmerged, superseded by newer main implementation
+- `exp/ripeness-v003-patience`: MERGED + AUTO-DELETED — PR #27 squash merged as `6d4837f`
+
+Branch deletion for the two DELETE entries is pending only because the connected GitHub tool does not expose remote branch deletion.
+
 이 파일은 여러 대화창/세션에서 같은 기능을 중복 구현하지 않기 위한 현재 작업 기준표다. 새 작업 전에 반드시 open PR/branch와 함께 확인한다.
 
 ## 현재 Budget
@@ -33,7 +45,7 @@
 | Pest scouting state/history V1 | `main`, PR #28~#31 + 2026-09-17 refreeze | MERGED / CANONICAL | actual browser/mobile visual acceptance |
 | Pest scouting operations V2 | `main`, PR #32 | MERGED / IMPLEMENTED | 실제 현장 데이터로 freshness/종료 정책 calibration |
 | Field data readiness v001 | existing workstream | IN_PROGRESS | readiness validator + tests → PR/CI → merge |
-| Ripeness further tuning | existing experiment branches | PAUSED / SEPARATE | field/photo/video + label freeze 후 successor snapshot에서 재개 |
+| Ripeness further tuning | PR #26 / `feat/ripeness-v010-convnext-tiny` | PAUSED / RESULT_PENDING | field/photo/video + label freeze 후 successor snapshot에서 재개; V009 rejected result는 main에 보존 |
 | Dryad Weight Estimation V1 | `main`, PR #35~#39 + 2026-09-18 acquisition integration | ONE_COMMAND_ACQUIRE_AUDIT_READY / DATA_BYTES_PENDING | 로컬 `dryad-weight-audit` 실행 → 실제 datasheet 결과 검토 → image inventory/join → snapshot |
 | Environment / deployment contract | `main` | CANONICAL / CLOUDFLARE_TARGET | D1/R2 bindings + capability secrets만 유지; 미사용 키 선제 추가 금지 |
 
