@@ -9,6 +9,7 @@ from unittest import mock
 
 from ml.data_pipeline.dryad_acquisition import (
     DryadAccessError,
+    build_public_manifest_inventory,
     download_file,
     download_url,
     file_id,
@@ -145,6 +146,25 @@ class DryadAcquisitionTests(unittest.TestCase):
             with self.assertRaises(urllib.error.HTTPError):
                 download_file(record, Path(temp_dir) / "datasheet.xlsx", token="explicit-token")
             refresh.assert_not_called()
+
+    def test_public_manifest_inventory_classifies_archives(self) -> None:
+        dataset = {"identifier": "doi:10.25338/B8V308", "publicationDate": "2018-02-08", "versionNumber": 1}
+        files = [
+            {"path": "datasheet.xlsx", "size": 100, "_links": {"self": {"href": "/api/v2/files/1"}}},
+            {"path": "Pictures_01.zip", "size": 200, "_links": {"self": {"href": "/api/v2/files/2"}}},
+            {"path": "Scans_01.zip", "size": 300, "_links": {"self": {"href": "/api/v2/files/3"}}},
+        ]
+        with mock.patch(
+            "ml.data_pipeline.dryad_acquisition.resolve_manifest",
+            return_value=(dataset, files),
+        ):
+            report = build_public_manifest_inventory()
+        self.assertEqual(report["file_count"], 3)
+        self.assertEqual(report["picture_archive_count"], 1)
+        self.assertEqual(report["scan_archive_count"], 1)
+        self.assertEqual(report["picture_archive_bytes"], 200)
+        self.assertEqual(report["scan_archive_bytes"], 300)
+        self.assertEqual([item["role"] for item in report["files"]], ["DATASHEET", "PICTURE_ARCHIVE", "SCAN_ARCHIVE"])
 
 
 if __name__ == "__main__":
