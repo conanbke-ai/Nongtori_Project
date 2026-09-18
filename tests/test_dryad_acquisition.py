@@ -12,6 +12,7 @@ from ml.data_pipeline.dryad_acquisition import (
     build_public_manifest_inventory,
     download_file,
     download_url,
+    ensure_datasheet,
     file_id,
     load_env_local,
     request_access_token,
@@ -146,6 +147,56 @@ class DryadAcquisitionTests(unittest.TestCase):
             with self.assertRaises(urllib.error.HTTPError):
                 download_file(record, Path(temp_dir) / "datasheet.xlsx", token="explicit-token")
             refresh.assert_not_called()
+
+    def test_ensure_datasheet_reuses_verified_local_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "datasheet.xlsx"
+            payload = b"PK verified"
+            output.write_bytes(payload)
+            digest = hashlib.sha256(payload).hexdigest()
+            dataset = {
+                "identifier": "doi:10.25338/B8V308",
+                "publicationDate": "2018-02-08",
+                "versionNumber": 1,
+            }
+            files = [{
+                "path": "datasheet.xlsx",
+                "size": len(payload),
+                "digestType": "sha-256",
+                "digest": digest,
+                "_links": {"self": {"href": "/api/v2/files/141475"}},
+            }]
+            with mock.patch(
+                "ml.data_pipeline.dryad_acquisition.download_file"
+            ) as download:
+                report = ensure_datasheet(output, dataset, files)
+            download.assert_not_called()
+            self.assertEqual(report["action"], "REUSED_VERIFIED")
+            self.assertTrue(report["verification"]["digest_verified"])
+
+    def test_ensure_datasheet_redownloads_after_verification_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "datasheet.xlsx"
+            output.write_bytes(b"stale")
+            dataset = {
+                "identifier": "doi:10.25338/B8V308",
+                "publicationDate": "2018-02-08",
+                "versionNumber": 1,
+            }
+            files = [{
+                "path": "datasheet.xlsx",
+                "size": 8,
+                "digestType": "sha-256",
+                "digest": "expected",
+                "_links": {"self": {"href": "/api/v2/files/141475"}},
+            }]
+            with mock.patch(
+                "ml.data_pipeline.dryad_acquisition.download_file",
+                return_value={"path": str(output), "size": 8, "digest_verified": True},
+            ) as download:
+                report = ensure_datasheet(output, dataset, files)
+            download.assert_called_once()
+            self.assertEqual(report["action"], "REDOWNLOADED_AFTER_VERIFICATION_FAILURE")
 
     def test_public_manifest_inventory_classifies_archives(self) -> None:
         dataset = {"identifier": "doi:10.25338/B8V308", "publicationDate": "2018-02-08", "versionNumber": 1}
