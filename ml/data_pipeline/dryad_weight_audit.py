@@ -282,6 +282,27 @@ def _grade_bins(values: Iterable[float]) -> dict[str, int]:
     return dict(counts)
 
 
+def fruit_ids_from_datasheet(path: Path) -> list[str]:
+    """Return canonical fruit IDs from all compatible Dryad fruit tables."""
+    sheets = read_xlsx_sheets(path)
+    tables = _detect_sheet_tables(sheets)
+    if not tables:
+        raise ValueError("No compatible Dryad fruit tables found")
+    mappings = [table["mapping"] for table in tables]
+    if any(mapping != mappings[0] for mapping in mappings[1:]):
+        raise ValueError("Dryad fruit tables have incompatible column mappings")
+    mapping = mappings[0]
+    ids = [
+        _value_at(row, mapping["fruit_id"])
+        for table in tables
+        for row in table["rows"]
+    ]
+    ids = [value for value in ids if value]
+    if len(ids) != len(set(ids)):
+        raise ValueError("Duplicate Dryad fruit IDs found")
+    return ids
+
+
 def audit_datasheet(path: Path) -> dict[str, Any]:
     sheets = read_xlsx_sheets(path)
     tables = _detect_sheet_tables(sheets)
