@@ -13,7 +13,8 @@ DRYAD_API_BASE = "https://datadryad.org/api/v2"
 DRYAD_API_VERSION = "2.1.0"
 DRYAD_TOKEN_URL = "https://datadryad.org/oauth/token"
 DEFAULT_DATASET_DOI = "doi:10.25338/B8V308"
-DEFAULT_DATASHEET_PATH = "datasheet.xlsx"\nMAX_SAFE_RANGE_BYTES = 32 * 1024 * 1024
+DEFAULT_DATASHEET_PATH = "datasheet.xlsx"
+MAX_SAFE_RANGE_BYTES = 32 * 1024 * 1024
 
 
 class DryadAccessError(RuntimeError):
