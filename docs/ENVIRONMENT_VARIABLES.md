@@ -70,7 +70,7 @@ immutable snapshot descriptor
 local GPU training
 ```
 
-`DRYAD_TOKEN`은 필요할 때만 사용하는 임시 override입니다. 일반 경로에서는 Client ID/Secret으로 access token을 자동 발급합니다. Render/Cloudflare로 자동수집을 이전할 필요가 생기면 그때 동일 변수명을 배포 secret store로 마이그레이션합니다.
+`DRYAD_TOKEN`은 필요할 때만 사용하는 임시 override입니다. 일반 경로에서는 Client ID/Secret으로 access token을 자동 발급합니다. Render/Cloudflare로 자동수집을 이전할 필요가 생기면 그때 동일 변수명을 배포 secret store로 마이그레이션합니다.\n\n로컬 acquisition + checksum + weight metadata audit은 `python -m ml.data_pipeline.cli dryad-weight-audit` 한 명령으로 실행합니다.
 
 ## 4. Tooling-only 값
 
