@@ -247,6 +247,47 @@ def _transfer_file(
             handle.write(chunk)
 
 
+def fetch_file_range(
+    file_record: dict[str, Any],
+    start: int,
+    end: int,
+    *,
+    access_token: str,
+    timeout: int = 120,
+) -> bytes:
+    """Fetch one inclusive byte range and refuse a full-body fallback."""
+    if start < 0 or end < start:
+        raise ValueError("invalid byte range")
+    request = urllib.request.Request(
+        download_url(file_record),
+        headers={
+            "User-Agent": "Nongtori-Dryad/1.0",
+            "Accept": "application/octet-stream",
+            "Authorization": f"Bearer {access_token}",
+            "X-API-Version": DRYAD_API_VERSION,
+            "Range": f"bytes={start}-{end}",
+        },
+    )
+    try:
+        with _OPENER.open(request, timeout=timeout) as response:
+            status = int(getattr(response, "status", response.getcode()))
+            content_range = str(response.headers.get("Content-Range") or "")
+            if status != 206 or not content_range.lower().startswith("bytes "):
+                raise DryadAccessError(
+                    "Dryad picture archive endpoint did not honor HTTP Range; "
+                    "refusing to download the full multi-GB archive."
+                )
+            payload = response.read(end - start + 1)
+    except urllib.error.HTTPError as exc:
+        raise DryadAccessError(f"Dryad range request failed: HTTP {exc.code}") from exc
+    expected = end - start + 1
+    if len(payload) != expected:
+        raise DryadAccessError(
+            f"Dryad range response length mismatch: got {len(payload)}, expected {expected}"
+        )
+    return payload
+
+
 def download_file(
     file_record: dict[str, Any],
     output: Path,
