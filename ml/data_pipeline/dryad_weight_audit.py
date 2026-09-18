@@ -306,6 +306,28 @@ def photo_metadata_from_datasheet(path: Path) -> dict[str, str]:
     return result
 
 
+def primary_weight_candidate_ids_from_datasheet(path: Path) -> list[str]:
+    """Return fruit IDs with a valid with-calyx target for supervised weight training."""
+    sheets = read_xlsx_sheets(path)
+    tables = _detect_sheet_tables(sheets)
+    if not tables:
+        raise ValueError("No compatible Dryad fruit tables found")
+    mappings = [table["mapping"] for table in tables]
+    if any(mapping != mappings[0] for mapping in mappings[1:]):
+        raise ValueError("Dryad fruit tables have incompatible column mappings")
+    mapping = mappings[0]
+    ids: list[str] = []
+    for table in tables:
+        for row in table["rows"]:
+            fruit_id = _value_at(row, mapping["fruit_id"])
+            primary = _to_float(_value_at(row, mapping.get(PRIMARY_WEIGHT_FIELD)))
+            if fruit_id and primary is not None and primary > 0:
+                ids.append(fruit_id)
+    if len(ids) != len(set(ids)):
+        raise ValueError("Duplicate Dryad primary-weight candidate IDs found")
+    return ids
+
+
 def fruit_ids_from_datasheet(path: Path) -> list[str]:
     """Return canonical fruit IDs from all compatible Dryad fruit tables."""
     sheets = read_xlsx_sheets(path)
