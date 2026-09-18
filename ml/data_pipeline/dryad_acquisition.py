@@ -3,12 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
 
 DRYAD_API_BASE = "https://datadryad.org/api/v2"
+DRYAD_API_VERSION = "2.1.0"
 DRYAD_TOKEN_URL = "https://datadryad.org/oauth/token"
 DEFAULT_DATASET_DOI = "doi:10.25338/B8V308"
 DEFAULT_DATASHEET_PATH = "datasheet.xlsx"
@@ -114,7 +116,14 @@ def encode_doi(doi: str) -> str:
 
 
 def _request_json(url: str, *, timeout: int = 60) -> dict[str, Any]:
-    req = urllib.request.Request(url, headers={"User-Agent": "Nongtori-Dryad/1.0"})
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Nongtori-Dryad/1.0",
+            "Accept": "application/json",
+            "X-API-Version": DRYAD_API_VERSION,
+        },
+    )
     with urllib.request.urlopen(req, timeout=timeout) as response:
         return json.load(response)
 
@@ -175,6 +184,14 @@ def file_id(file_record: dict[str, Any]) -> str:
     return value
 
 
+def download_url(file_record: dict[str, Any]) -> str:
+    links = file_record.get("_links", {}) or {}
+    href = (links.get("stash:download", {}) or {}).get("href")
+    if href:
+        return _absolute_api_url(str(href))
+    return f"{DRYAD_API_BASE}/files/{file_id(file_record)}/download"
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with Path(path).open("rb") as handle:
@@ -205,25 +222,22 @@ def verify_download(path: Path, file_record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def download_file(
+def _transfer_file(
     file_record: dict[str, Any],
     output: Path,
     *,
-    token: str | None = None,
-    timeout: int = 300,
-) -> dict[str, Any]:
-    token = resolve_access_token(token=token, timeout=min(timeout, 60))
-
-    fid = file_id(file_record)
-    url = f"{DRYAD_API_BASE}/files/{fid}/download"
+    access_token: str,
+    timeout: int,
+) -> None:
     request = urllib.request.Request(
-        url,
+        download_url(file_record),
         headers={
             "User-Agent": "Nongtori-Dryad/1.0",
-            "Authorization": f"Bearer {token}",
+            "Accept": "application/octet-stream",
+            "Authorization": f"Bearer {access_token}",
+            "X-API-Version": DRYAD_API_VERSION,
         },
     )
-    output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     with _OPENER.open(request, timeout=timeout) as response, output.open("wb") as handle:
         while True:
@@ -231,6 +245,27 @@ def download_file(
             if not chunk:
                 break
             handle.write(chunk)
+
+
+def download_file(
+    file_record: dict[str, Any],
+    output: Path,
+    *,
+    token: str | None = None,
+    timeout: int = 300,
+) -> dict[str, Any]:
+    output = Path(output)
+    access_token = resolve_access_token(token=token, timeout=min(timeout, 60))
+    try:
+        _transfer_file(file_record, output, access_token=access_token, timeout=timeout)
+    except urllib.error.HTTPError as exc:
+        # Dryad documents 401 as the expired/invalid-token signal. When the
+        # caller did not supply an explicit token, renew once from client
+        # credentials and retry. Bad credentials then fail normally.
+        if exc.code != 401 or token is not None:
+            raise
+        refreshed = request_access_token(timeout=min(timeout, 60))
+        _transfer_file(file_record, output, access_token=refreshed, timeout=timeout)
     return verify_download(output, file_record)
 
 
