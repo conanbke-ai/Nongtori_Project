@@ -376,7 +376,7 @@ Next gate:
 
 ## POLICY_ACK — ChatGPT logical orchestration — 2026-09-18
 
-- Common baseline: `conanbke-ai/Tori_Common_Project@94207d2cff53603345bc38bb1dbebe34c714513d`
+- Common baseline: `conanbke-ai/Tori_Common_Project@aefeefd5d2871194daeba39dbd6273bead5ef38a`
 - tags: `AGENT_ORCHESTRATION,AI_SURFACE,CREDIT,DOCUMENTATION`
 - result: `ADOPTED`
 - Runtime model: ChatGPT logical roles; no Cursor/plugin installation required.
@@ -384,7 +384,12 @@ Next gate:
 - Product-specific contracts in this repository remain authoritative over generic common assumptions.
 
 ### ORCHESTRATION_V3_ACK — 2026-09-18
-- Common baseline: `conanbke-ai/Tori_Common_Project@94207d2cff53603345bc38bb1dbebe34c714513d`
+- Common baseline: `conanbke-ai/Tori_Common_Project@aefeefd5d2871194daeba39dbd6273bead5ef38a`
 - Added logical gates: Runtime Reliability / AI Output Evaluation.
 - Trigger/regression policy: ADOPTED.
 - Product runtime code unchanged by this ACK.
+
+### ROUTING_REGRESSION_ACK — 2026-09-18
+- Common baseline: `conanbke-ai/Tori_Common_Project@aefeefd5d2871194daeba39dbd6273bead5ef38a`
+- Result: `ORCHESTRATION_REGRESSION_PASS` — 15/15 representative scenarios.
+- No product runtime code changed by this ACK.
