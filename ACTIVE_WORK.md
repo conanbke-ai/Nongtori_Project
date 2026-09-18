@@ -294,6 +294,18 @@ python -m ml.data_pipeline.cli dryad-weight-audit --force-download
 
 실제 Client ID/Secret은 `.env.local`에만 두며 Git/CI에는 주입하지 않는다. 따라서 실제 1,611-row 데이터 분포는 로컬 명령 실행 전까지 완료로 주장하지 않는다.
 
+### Published Dryad file inventory
+
+Dryad dataset page 기준 확인:
+
+- `datasheet.xlsx`: 128.08 KB 표시
+- `Pictures_01.zip ~ Pictures_07.zip`: 7 archives
+- picture archive 표시용량 합계: 39.24 GB
+- scan archives: 20
+- 전체 게시 데이터셋: 89.98 GB
+
+위 용량은 Dryad 웹페이지의 human-readable 표시값이다. immutable snapshot/file identity에는 사용하지 않는다. exact byte size / digest / download link는 `dryad-manifest`가 API manifest에서 받아 저장한 값만 canonical로 사용한다.
+
 ## External weight / Dryad status
 
 Canonical source: `DATA-QUAL-002` / UC Davis Dryad `10.25338/B8V308`.
