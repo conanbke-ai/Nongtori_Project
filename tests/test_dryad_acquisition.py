@@ -3,11 +3,14 @@ from __future__ import annotations
 import hashlib
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
 from ml.data_pipeline.dryad_acquisition import (
     DryadAccessError,
+    download_file,
+    download_url,
     file_id,
     load_env_local,
     request_access_token,
@@ -79,6 +82,69 @@ class DryadAcquisitionTests(unittest.TestCase):
         ) as request_token:
             self.assertEqual(resolve_access_token(), "derived-token")
             request_token.assert_called_once()
+
+    def test_download_url_prefers_manifest_download_link(self) -> None:
+        record = {
+            "_links": {
+                "self": {"href": "/api/v2/files/141475"},
+                "stash:download": {"href": "/api/v2/files/141475/download"},
+            }
+        }
+        self.assertEqual(
+            download_url(record),
+            "https://datadryad.org/api/v2/files/141475/download",
+        )
+
+    def test_download_renews_once_after_401_when_token_not_explicit(self) -> None:
+        record = {"size": 2, "_links": {"self": {"href": "/api/v2/files/141475"}}}
+        unauthorized = urllib.error.HTTPError(
+            "https://datadryad.org/api/v2/files/141475/download",
+            401,
+            "Unauthorized",
+            hdrs=None,
+            fp=None,
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "datasheet.xlsx"
+            def transfer(_record, path, *, access_token, timeout):
+                if access_token == "expired-token":
+                    raise unauthorized
+                path.write_bytes(b"PK")
+            with mock.patch(
+                "ml.data_pipeline.dryad_acquisition.resolve_access_token",
+                return_value="expired-token",
+            ), mock.patch(
+                "ml.data_pipeline.dryad_acquisition.request_access_token",
+                return_value="fresh-token",
+            ) as refresh, mock.patch(
+                "ml.data_pipeline.dryad_acquisition._transfer_file",
+                side_effect=transfer,
+            ):
+                result = download_file(record, output)
+            refresh.assert_called_once()
+            self.assertEqual(result["size"], 2)
+
+    def test_explicit_token_does_not_silently_refresh_after_401(self) -> None:
+        record = {"size": 2, "_links": {"self": {"href": "/api/v2/files/141475"}}}
+        unauthorized = urllib.error.HTTPError(
+            "https://datadryad.org/api/v2/files/141475/download",
+            401,
+            "Unauthorized",
+            hdrs=None,
+            fp=None,
+        )
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch(
+            "ml.data_pipeline.dryad_acquisition.resolve_access_token",
+            return_value="explicit-token",
+        ), mock.patch(
+            "ml.data_pipeline.dryad_acquisition._transfer_file",
+            side_effect=unauthorized,
+        ), mock.patch(
+            "ml.data_pipeline.dryad_acquisition.request_access_token"
+        ) as refresh:
+            with self.assertRaises(urllib.error.HTTPError):
+                download_file(record, Path(temp_dir) / "datasheet.xlsx", token="explicit-token")
+            refresh.assert_not_called()
 
 
 if __name__ == "__main__":
