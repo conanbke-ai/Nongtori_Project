@@ -66,7 +66,10 @@
       "note": "Display sizes are human-readable values from the Dryad dataset page. Exact byte sizes and digests must come from the API manifest before immutable snapshotting."
     },
     "public_manifest_command": "python -m ml.data_pipeline.cli dryad-manifest",
-    "acquire_and_audit_command": "python -m ml.data_pipeline.cli dryad-weight-audit"
+    "acquire_and_audit_command": "python -m ml.data_pipeline.cli dryad-weight-audit",
+    "image_join_audit_command": "python -m ml.data_pipeline.cli dryad-image-join-audit",
+    "image_join_audit_mode": "REMOTE_ZIP_CENTRAL_DIRECTORY_ONLY",
+    "full_picture_archive_download_required_for_filename_join": false
   },
   "original_labels": [
     "fruit_identity",
@@ -78,14 +81,16 @@
     "weight_without_calyx"
   ],
   "nongtori_mapping": {
-    "status": "WEIGHT_SOURCE_AUDIT_REQUIRED",
+    "status": "DATASHEET_AUDITED_IMAGE_JOIN_PENDING",
     "role": "COMMERCIAL_WEIGHT_PRETRAINING_CANDIDATE",
     "split_group": "FRUIT_ID",
     "primary_weight_target": "weight_with_calyx",
     "auxiliary_weight_target": "weight_without_calyx",
     "field_weight_protocol": "WITH_CALYX",
     "grade_policy": "PREDICT_WEIGHT_THEN_APPLY_12_16_22G_THRESHOLDS",
-    "acquisition_status": "ONE_COMMAND_ACQUIRE_AUDIT_READY_DATA_BYTES_PENDING"
+    "acquisition_status": "DATASHEET_VERIFIED_IMAGE_JOIN_PENDING",
+    "primary_weight_candidate_count": 1571,
+    "primary_weight_missing_excluded_count": 40
   },
-  "notes": "Nongtori field Weight_g is measured with the strawberry calyx attached. Therefore Dryad weight_with_calyx is the canonical weight target and weight_without_calyx is auxiliary analysis only. Local research credentials use the common TORI .env.local file (DRYAD_CLIENT_ID / DRYAD_CLIENT_SECRET); the acquisition helper mints a short-lived access token automatically, downloads the target file, and verifies size/SHA-256. DRYAD_TOKEN is an optional one-off override only. Before APPROVED: run the real datasheet audit, prove image filename to fruit ID join, require complete with-calyx GT, and split strictly by fruit identity so the 22 views of one berry never cross train/validation/test."
+  "notes": "Real Dryad datasheet audit verified 1,611 fruit identities across 20 sheets, excluded 60 footer rows, and identified 1,571 usable with-calyx primary weight targets (40 missing primary targets excluded). Image filename-to-fruit-ID join remains pending. The image join audit is designed to read only ZIP central-directory metadata via guarded HTTP Range requests and must refuse a full multi-GB fallback. Raw datasets and credentials remain local-only."
 }
