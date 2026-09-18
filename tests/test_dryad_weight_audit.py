@@ -124,6 +124,8 @@ class DryadWeightAuditTests(unittest.TestCase):
             self.assertEqual(report["resolved_columns"]["fruit_id"], 0)
             self.assertEqual(report["resolved_columns"]["weight_with_calyx"], 6)
             self.assertEqual(report["resolved_columns"]["weight_without_calyx"], 7)
+            self.assertEqual(report["resolved_columns"]["photo"], 5)
+            self.assertEqual(report["photo_metadata"]["value_distribution"], {"1": 2})
             self.assertEqual(report["fruit_id_count"], 2)
             self.assertEqual(report["calyx_weight_relation"]["checked"], 2)
 
