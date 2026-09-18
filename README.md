@@ -99,9 +99,9 @@ Sensor / Weather / Image / Manual Input
 
 - canonical 환경계약: [Environment Variables](docs/ENVIRONMENT_VARIABLES.md)
 - machine-readable contract: [configs/environment-contract.json](configs/environment-contract.json)
-- 로컬 템플릿: `.dev.vars.example`
+- 로컬 템플릿: `.env.example` / 실제 값: `.env.local`
 - 실제 secret 값은 Git에 저장하지 않습니다.
-- Dryad/외부 학습 데이터 수집 자격증명은 운영 환경과 분리하며, 현재는 수동 다운로드 + 로컬 audit를 기본으로 합니다.
+- Dryad/외부 학습 데이터 수집 자격증명은 운영 환경과 분리하며, `.env.local`의 Client ID/Secret으로 access token을 자동 발급해 로컬 audit를 진행합니다.
 
 ## 테스트 및 Quality Gate
 
