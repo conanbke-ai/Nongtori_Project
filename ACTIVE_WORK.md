@@ -1,3 +1,12 @@
+## Dryad image join gate — 2026-09-18
+
+- Datasheet audit is canonical on main: 1,611 fruit IDs, 60 footer rows excluded, 1,571 usable with-calyx primary targets, 40 primary-target missing rows excluded.
+- Current workstream: `feat/dryad-image-join-audit`.
+- Next gate: verify all 7 `Pictures_*.zip` filename inventories against the 1,611 canonical fruit IDs and require 22 views per fruit.
+- Default strategy: remote ZIP central-directory metadata only via guarded HTTP Range requests.
+- Safety: if Dryad does not honor HTTP Range, abort; never silently fall back to downloading the ~39.24 GB picture archives.
+- No raw image bytes are committed.
+
 # Nongtori Active Work Registry
 
 
