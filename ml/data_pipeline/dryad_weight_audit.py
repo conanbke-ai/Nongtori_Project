@@ -344,6 +344,15 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
                 "field_weight_protocol": NONGTORI_WEIGHT_PROTOCOL,
             }
 
+    if tables:
+        row_records = [
+            (str(table["sheet"]), row)
+            for table in tables
+            for row in table["rows"]
+        ]
+    else:
+        row_records = [(sheet_name, row) for row in rows]
+
     fruit_ids = [_value_at(row, mapping.get("fruit_id")) for row in rows]
     fruit_ids = [value for value in fruit_ids if value]
     duplicate_ids = sorted(value for value, count in Counter(fruit_ids).items() if count > 1)
@@ -351,21 +360,30 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
     numeric_fields = ["width", "height", PRIMARY_WEIGHT_FIELD, AUXILIARY_WEIGHT_FIELD, "weight_generic"]
     numeric_values: dict[str, list[float]] = defaultdict(list)
     numeric_missing: dict[str, int] = defaultdict(int)
-    for row in rows:
+    numeric_missing_samples: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for source_sheet, row in row_records:
+        fruit_id = _value_at(row, mapping.get("fruit_id"))
         for field in numeric_fields:
             if field not in mapping:
                 continue
             parsed = _to_float(_value_at(row, mapping[field]))
             if parsed is None or parsed <= 0:
                 numeric_missing[field] += 1
+                if fruit_id:
+                    numeric_missing_samples[field].append(
+                        {"fruit_id": fruit_id, "sheet": source_sheet}
+                    )
             else:
                 numeric_values[field].append(parsed)
 
     relation_checked = 0
     relation_violations = 0
     calyx_delta: list[float] = []
+    calyx_relation_violation_samples: list[dict[str, Any]] = []
+    calyx_delta_samples: list[dict[str, Any]] = []
     if PRIMARY_WEIGHT_FIELD in mapping and AUXILIARY_WEIGHT_FIELD in mapping:
-        for row in rows:
+        for source_sheet, row in row_records:
+            fruit_id = _value_at(row, mapping.get("fruit_id"))
             with_calyx = _to_float(_value_at(row, mapping[PRIMARY_WEIGHT_FIELD]))
             without_calyx = _to_float(_value_at(row, mapping[AUXILIARY_WEIGHT_FIELD]))
             if with_calyx is None or without_calyx is None:
@@ -373,8 +391,23 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
             relation_checked += 1
             delta = with_calyx - without_calyx
             calyx_delta.append(delta)
+            sample = {
+                "fruit_id": fruit_id,
+                "sheet": source_sheet,
+                "weight_with_calyx": with_calyx,
+                "weight_without_calyx": without_calyx,
+                "delta_with_minus_without": delta,
+            }
+            calyx_delta_samples.append(sample)
             if delta < -1e-6:
                 relation_violations += 1
+                calyx_relation_violation_samples.append(sample)
+
+    largest_calyx_deltas = sorted(
+        calyx_delta_samples,
+        key=lambda item: float(item["delta_with_minus_without"]),
+        reverse=True,
+    )[:20]
 
     required_semantics = {
         "fruit_id": "fruit_id" in mapping,
@@ -416,12 +449,19 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
         "duplicate_fruit_id_count": len(duplicate_ids),
         "numeric_summary": {field: _numeric_summary(numeric_values[field]) for field in numeric_fields if field in mapping},
         "numeric_missing": {field: numeric_missing[field] for field in numeric_fields if field in mapping},
+        "numeric_missing_samples": {
+            field: numeric_missing_samples[field]
+            for field in numeric_fields
+            if field in mapping and numeric_missing_samples[field]
+        },
         "weight_grade_bins": weight_grade_bins,
         "primary_weight_grade_bins": weight_grade_bins.get(PRIMARY_WEIGHT_FIELD, {}),
         "calyx_weight_relation": {
             "checked": relation_checked,
             "violations_without_gt_with": relation_violations,
+            "violation_samples": calyx_relation_violation_samples,
             "delta_with_minus_without": _numeric_summary(calyx_delta),
+            "largest_positive_deltas": largest_calyx_deltas,
         },
         "target_alignment": "WITH_CALYX_PRIMARY",
         "primary_weight_field": PRIMARY_WEIGHT_FIELD,
