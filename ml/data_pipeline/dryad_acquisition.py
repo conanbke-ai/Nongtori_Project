@@ -9,12 +9,88 @@ from pathlib import Path
 from typing import Any
 
 DRYAD_API_BASE = "https://datadryad.org/api/v2"
+DRYAD_TOKEN_URL = "https://datadryad.org/oauth/token"
 DEFAULT_DATASET_DOI = "doi:10.25338/B8V308"
 DEFAULT_DATASHEET_PATH = "datasheet.xlsx"
 
 
 class DryadAccessError(RuntimeError):
     pass
+
+
+def load_env_local(path: Path = Path(".env.local")) -> None:
+    """Load simple KEY=VALUE pairs without overriding existing process env."""
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
+
+
+def request_access_token(
+    *,
+    client_id: str | None = None,
+    client_secret: str | None = None,
+    timeout: int = 60,
+) -> str:
+    load_env_local()
+    client_id = client_id or os.environ.get("DRYAD_CLIENT_ID")
+    client_secret = client_secret or os.environ.get("DRYAD_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise DryadAccessError(
+            "Dryad credentials are missing. Put DRYAD_CLIENT_ID and DRYAD_CLIENT_SECRET in .env.local."
+        )
+    body = urllib.parse.urlencode({
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "client_credentials",
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        DRYAD_TOKEN_URL,
+        data=body,
+        method="POST",
+        headers={
+            "User-Agent": "Nongtori-Dryad/1.0",
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.load(response)
+    except Exception as exc:
+        raise DryadAccessError(f"Failed to obtain Dryad access token: {exc}") from exc
+    token = str(payload.get("access_token") or "")
+    if not token:
+        raise DryadAccessError("Dryad token endpoint returned no access_token")
+    return token
+
+
+def resolve_access_token(
+    *,
+    token: str | None = None,
+    client_id: str | None = None,
+    client_secret: str | None = None,
+    timeout: int = 60,
+) -> str:
+    load_env_local()
+    token = token or os.environ.get("DRYAD_TOKEN")
+    if token:
+        return token
+    return request_access_token(
+        client_id=client_id,
+        client_secret=client_secret,
+        timeout=timeout,
+    )
 
 
 class _DropAuthOnCrossHostRedirect(urllib.request.HTTPRedirectHandler):
@@ -136,12 +212,7 @@ def download_file(
     token: str | None = None,
     timeout: int = 300,
 ) -> dict[str, Any]:
-    token = token or os.environ.get("DRYAD_TOKEN")
-    if not token:
-        raise DryadAccessError(
-            "Dryad file bytes require DRYAD_TOKEN. Anonymous metadata access is sufficient for manifest audit, "
-            "but not for file download."
-        )
+    token = resolve_access_token(token=token, timeout=min(timeout, 60))
 
     fid = file_id(file_record)
     url = f"{DRYAD_API_BASE}/files/{fid}/download"
