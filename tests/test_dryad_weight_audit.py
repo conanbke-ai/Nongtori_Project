@@ -127,6 +127,28 @@ class DryadWeightAuditTests(unittest.TestCase):
             self.assertEqual(report["fruit_id_count"], 2)
             self.assertEqual(report["calyx_weight_relation"]["checked"], 2)
 
+    def test_footer_rows_without_fruit_id_are_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "datasheet.xlsx"
+            write_xlsx(
+                path,
+                ["ID No.", "Wt w/ calyx", "Wt w/o Calyx", "Max. Width", "Max. Height"],
+                [
+                    ["1", 20.0, 19.5, 30.0, 35.0],
+                    ["2", 18.0, 17.5, 28.0, 33.0],
+                    ["", 38.0, 37.0, 58.0, 68.0],
+                    ["", 19.0, 18.5, 29.0, 34.0],
+                    ["", 2.0, 2.0, 2.0, 2.0],
+                ],
+            )
+            report = audit_datasheet(path)
+            self.assertEqual(report["data_row_count"], 2)
+            self.assertEqual(report["fruit_id_count"], 2)
+            self.assertEqual(report["raw_nonempty_row_count"], 5)
+            self.assertEqual(report["excluded_non_fruit_row_count"], 3)
+            self.assertEqual(report["numeric_summary"]["weight_with_calyx"]["count"], 2)
+            self.assertEqual(report["numeric_summary"]["weight_with_calyx"]["max"], 20.0)
+
     def test_generic_weight_without_with_calyx_column_does_not_pass_metadata_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "datasheet.xlsx"
