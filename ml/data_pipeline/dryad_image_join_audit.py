@@ -16,11 +16,15 @@ from .dryad_acquisition import (
     resolve_access_token,
     resolve_manifest,
 )
-from .dryad_weight_audit import EXPECTED_VIEWS_PER_FRUIT, fruit_ids_from_datasheet
+from .dryad_weight_audit import (
+    EXPECTED_VIEWS_PER_FRUIT,
+    fruit_ids_from_datasheet,
+    photo_metadata_from_datasheet,
+)
 
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
-IMAGE_JOIN_AUDIT_SCHEMA_VERSION = 1
+IMAGE_JOIN_AUDIT_SCHEMA_VERSION = 2
 
 
 class RemoteZipRangeReader(io.RawIOBase):
@@ -258,6 +262,17 @@ def audit_filename_inventory(
         fruit_id for fruit_id in fruit_ids if counts.get(fruit_id, 0) == 0
     ]
 
+    view_count_distribution = Counter(counts.get(fruit_id, 0) for fruit_id in fruit_ids)
+    complete_22_view_ids = [
+        fruit_id for fruit_id in fruit_ids if counts.get(fruit_id, 0) == EXPECTED_VIEWS_PER_FRUIT
+    ]
+    partial_view_ids = [
+        fruit_id for fruit_id in fruit_ids if 0 < counts.get(fruit_id, 0) < EXPECTED_VIEWS_PER_FRUIT
+    ]
+    overcomplete_view_ids = [
+        fruit_id for fruit_id in fruit_ids if counts.get(fruit_id, 0) > EXPECTED_VIEWS_PER_FRUIT
+    ]
+
     expected_images = len(fruit_ids) * EXPECTED_VIEWS_PER_FRUIT
     matched_image_count = sum(counts.values())
     status = (
@@ -280,6 +295,16 @@ def audit_filename_inventory(
         "unmatched_image_count": image_count - matched_image_count,
         "missing_fruit_id_count": len(missing_fruit_ids),
         "wrong_view_count_fruit_count": len(wrong_view_counts),
+        "view_count_distribution": {
+            str(view_count): count
+            for view_count, count in sorted(view_count_distribution.items())
+        },
+        "complete_22_view_fruit_count": len(complete_22_view_ids),
+        "partial_view_fruit_count": len(partial_view_ids),
+        "overcomplete_view_fruit_count": len(overcomplete_view_ids),
+        "complete_22_view_fruit_ids_sample": complete_22_view_ids[:100],
+        "partial_view_fruit_ids_sample": partial_view_ids[:100],
+        "overcomplete_view_fruit_ids_sample": overcomplete_view_ids[:100],
         "missing_fruit_ids_sample": missing_fruit_ids[:100],
         "wrong_view_counts_sample": dict(list(sorted(wrong_view_counts.items()))[:100]),
         "unmatched_filename_sample": unmatched,
@@ -325,6 +350,36 @@ def audit_remote_picture_archives(
         )
 
     audit = audit_filename_inventory(archive_names, fruit_ids=fruit_ids)
+    photo_by_id = photo_metadata_from_datasheet(datasheet)
+    if photo_by_id:
+        photo_join: dict[str, Counter[str]] = {}
+        for fruit_id in fruit_ids:
+            raw_photo = photo_by_id.get(fruit_id, "")
+            key = raw_photo if raw_photo else "<EMPTY>"
+            bucket = photo_join.setdefault(key, Counter())
+            view_count = Counter()
+            # Reuse the already audited per-fruit count from wrong-view and complete status.
+            # The audit exposes samples only, so derive counts from archive names once locally.
+            for names in archive_names.values():
+                for name in names:
+                    if Path(name).suffix.lower() not in _IMAGE_EXTENSIONS:
+                        continue
+                    matched_id, match_status = infer_fruit_id(name, set(fruit_ids))
+                    if match_status == "MATCHED" and matched_id is not None:
+                        view_count[matched_id] += 1
+            count = view_count.get(fruit_id, 0)
+            if count == 0:
+                bucket["ZERO"] += 1
+            elif count == EXPECTED_VIEWS_PER_FRUIT:
+                bucket["COMPLETE_22"] += 1
+            elif count < EXPECTED_VIEWS_PER_FRUIT:
+                bucket["PARTIAL"] += 1
+            else:
+                bucket["OVERCOMPLETE"] += 1
+        audit["photo_metadata_join"] = {
+            photo_value: dict(sorted(bucket.items()))
+            for photo_value, bucket in sorted(photo_join.items())
+        }
     return {
         "dataset_doi": dataset.get("identifier") or dataset.get("doi"),
         "mode": "REMOTE_ZIP_CENTRAL_DIRECTORY_ONLY",
