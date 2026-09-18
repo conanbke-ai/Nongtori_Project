@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import re
@@ -11,6 +12,7 @@ from typing import Any, Callable
 from .dryad_acquisition import (
     DryadAccessError,
     fetch_file_range,
+    sha256_file,
     resolve_access_token,
     resolve_manifest,
 )
@@ -18,6 +20,7 @@ from .dryad_weight_audit import EXPECTED_VIEWS_PER_FRUIT, fruit_ids_from_datashe
 
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
+IMAGE_JOIN_AUDIT_SCHEMA_VERSION = 1
 
 
 class RemoteZipRangeReader(io.RawIOBase):
@@ -116,6 +119,62 @@ def _picture_records(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
     records.sort(key=lambda item: str(item.get("path") or ""))
     return records
+
+
+def build_image_join_cache_identity(
+    datasheet: Path,
+    files: list[dict[str, Any]],
+) -> dict[str, Any]:
+    records = _picture_records(files)
+    archive_identity = [
+        {
+            "path": str(record.get("path") or ""),
+            "size": int(record.get("size") or 0),
+            "digest_type": str(record.get("digestType") or ""),
+            "digest": str(record.get("digest") or ""),
+        }
+        for record in records
+    ]
+    identity = {
+        "schema_version": IMAGE_JOIN_AUDIT_SCHEMA_VERSION,
+        "datasheet_sha256": sha256_file(datasheet),
+        "expected_views_per_fruit": EXPECTED_VIEWS_PER_FRUIT,
+        "picture_archives": archive_identity,
+    }
+    encoded = json.dumps(
+        identity,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return {
+        **identity,
+        "fingerprint": hashlib.sha256(encoded).hexdigest(),
+    }
+
+
+def load_cached_image_join_report(
+    output: Path,
+    *,
+    datasheet: Path,
+    files: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    output = Path(output)
+    if not output.exists():
+        return None
+    try:
+        report = json.loads(output.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    current = build_image_join_cache_identity(datasheet, files)
+    cached = report.get("cache_identity")
+    if not isinstance(cached, dict):
+        return None
+    if cached.get("fingerprint") != current["fingerprint"]:
+        return None
+    if cached.get("schema_version") != IMAGE_JOIN_AUDIT_SCHEMA_VERSION:
+        return None
+    return report
 
 
 def list_remote_zip_names(
@@ -270,6 +329,7 @@ def audit_remote_picture_archives(
         "dataset_doi": dataset.get("identifier") or dataset.get("doi"),
         "mode": "REMOTE_ZIP_CENTRAL_DIRECTORY_ONLY",
         "full_archive_download_performed": False,
+        "cache_identity": build_image_join_cache_identity(datasheet, files),
         "archive_count": len(records),
         "archives": archive_meta,
         "audit": audit,
