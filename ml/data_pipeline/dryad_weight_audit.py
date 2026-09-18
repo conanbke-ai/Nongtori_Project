@@ -222,8 +222,17 @@ def _detect_sheet_tables(
         if "fruit_id" not in mapping or PRIMARY_WEIGHT_FIELD not in mapping:
             continue
         raw_rows = rows[int(best["header_row_index"]) + 1 :]
-        data_rows = [row for row in raw_rows if any(str(cell).strip() for cell in row)]
-        tables.append({**best, "rows": data_rows})
+        nonempty_rows = [row for row in raw_rows if any(str(cell).strip() for cell in row)]
+        fruit_id_index = mapping["fruit_id"]
+        data_rows = [row for row in nonempty_rows if _value_at(row, fruit_id_index)]
+        tables.append(
+            {
+                **best,
+                "rows": data_rows,
+                "raw_nonempty_row_count": len(nonempty_rows),
+                "excluded_non_fruit_row_count": len(nonempty_rows) - len(data_rows),
+            }
+        )
     return tables
 
 
@@ -302,6 +311,8 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
                     "headers": table["headers"],
                     "resolved_columns": table["mapping"],
                     "data_row_count": len(table_rows),
+                    "raw_nonempty_row_count": int(table.get("raw_nonempty_row_count", len(table_rows))),
+                    "excluded_non_fruit_row_count": int(table.get("excluded_non_fruit_row_count", 0)),
                 }
             )
 
@@ -394,6 +405,8 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
         "table_count": len(table_summaries),
         "required_semantics": required_semantics,
         "data_row_count": len(rows),
+        "raw_nonempty_row_count": sum(item["raw_nonempty_row_count"] for item in table_summaries),
+        "excluded_non_fruit_row_count": sum(item["excluded_non_fruit_row_count"] for item in table_summaries),
         "fruit_id_count": fruit_count,
         "expected_fruit_count": EXPECTED_FRUITS,
         "official_count_match": official_count_match,
