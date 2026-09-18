@@ -95,6 +95,38 @@ class DryadWeightAuditTests(unittest.TestCase):
             self.assertEqual(report["primary_weight_grade_bins"]["JM_WEIGHT_CANDIDATE"], 1)
             self.assertFalse(report["weight_training_ready"])
 
+    def test_real_dryad_header_aliases_are_resolved(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "datasheet.xlsx"
+            write_xlsx(
+                path,
+                [
+                    "ID No.",
+                    "Variety",
+                    "Origin",
+                    "Date Picked",
+                    "Date Scanned",
+                    "Photo",
+                    "Wt w/ calyx",
+                    "Wt w/o Calyx",
+                    "Max. Width",
+                    "Max. Height",
+                    "Shape",
+                ],
+                [
+                    ["1", "A", "CA", "", "", "1", 23.0, 22.0, 30.0, 40.0, "normal"],
+                    ["2", "A", "CA", "", "", "1", 17.0, 16.0, 28.0, 38.0, "normal"],
+                ],
+            )
+            report = audit_datasheet(path)
+            self.assertTrue(report["required_semantics"]["fruit_id"])
+            self.assertTrue(report["required_semantics"]["primary_weight_with_calyx"])
+            self.assertEqual(report["resolved_columns"]["fruit_id"], 0)
+            self.assertEqual(report["resolved_columns"]["weight_with_calyx"], 6)
+            self.assertEqual(report["resolved_columns"]["weight_without_calyx"], 7)
+            self.assertEqual(report["fruit_id_count"], 2)
+            self.assertEqual(report["calyx_weight_relation"]["checked"], 2)
+
     def test_generic_weight_without_with_calyx_column_does_not_pass_metadata_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "datasheet.xlsx"
