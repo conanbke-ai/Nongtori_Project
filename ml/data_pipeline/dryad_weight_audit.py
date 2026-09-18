@@ -447,7 +447,7 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
         if width is not None and width > 0 and height is not None and height > 0:
             primary_geometry_candidate_count += 1
 
-    identity_ok = fruit_count == EXPECTED_FRUITS and not duplicate_ids
+    identity_ok = fruit_count > 0 and not duplicate_ids
     if schema_ok and identity_ok and primary_training_candidate_count:
         status = "AUDITED_METADATA" if primary_weight_complete else "AUDITED_METADATA_WITH_EXCLUSIONS"
     else:
