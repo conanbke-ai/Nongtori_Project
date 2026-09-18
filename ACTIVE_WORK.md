@@ -1,5 +1,15 @@
 # Nongtori Active Work Registry
 
+
+## Environment contract refreeze — 2026-09-18
+
+- TORI 공통 canonical local env: `.env.example`(Git 추적) + `.env.local`(실제 로컬 값, Git 제외).
+- Cloudflare runtime resource binding은 `DB`(D1), `FILES`(R2)로 별도 관리하며 문자열 env로 취급하지 않는다.
+- Dryad 로컬 연구 secret은 `DRYAD_CLIENT_ID` + `DRYAD_CLIENT_SECRET`; acquisition helper가 access token을 자동 발급한다. `DRYAD_TOKEN`은 임시 override만 허용.
+- legacy `.dev.vars` 기준과 과도한 `.env*` ignore는 제거했다.
+- machine-readable contract: `configs/environment-contract.json`; human contract: `docs/ENVIRONMENT_VARIABLES.md`.
+- Data Pipeline CI는 credential-flow 변경 기준 PASS.
+
 이 파일은 여러 대화창/세션에서 같은 기능을 중복 구현하지 않기 위한 현재 작업 기준표다. 새 작업 전에 반드시 open PR/branch와 함께 확인한다.
 
 ## 현재 Budget
