@@ -4,6 +4,7 @@
 - Current workstream: `feat/dryad-image-join-audit`.
 - Next gate: verify all 7 `Pictures_*.zip` filename inventories against the 1,611 canonical fruit IDs and require 22 views per fruit.
 - Default strategy: remote ZIP central-directory metadata only via guarded HTTP Range requests.
+- Reuse policy: if datasheet SHA-256 + 7 picture archive manifest identities + image-join audit schema version are unchanged, reuse the verified local image-join audit and make no repeat ZIP Range requests.
 - Safety: if Dryad does not honor HTTP Range, abort; never silently fall back to downloading the ~39.24 GB picture archives.
 - No raw image bytes are committed.
 
@@ -290,9 +291,10 @@ resolve Dryad API manifest once
 → audit real 20-sheet datasheet
 → exclude 60 footer rows
 → retain 1,571 usable with-calyx primary targets
-→ inspect all 7 Pictures_*.zip central directories via guarded HTTP Range
+→ reuse image-join-audit.json when immutable source fingerprint is unchanged
+→ otherwise inspect all 7 Pictures_*.zip central directories via guarded HTTP Range
 → verify fruit_id ↔ 22-view join
-→ save image-join-audit.json
+→ save image-join-audit.json with cache identity
 ```
 
 Default outputs:
