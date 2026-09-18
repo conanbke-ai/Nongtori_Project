@@ -34,7 +34,7 @@
 | Pest scouting operations V2 | `main`, PR #32 | MERGED / IMPLEMENTED | 실제 현장 데이터로 freshness/종료 정책 calibration |
 | Field data readiness v001 | existing workstream | IN_PROGRESS | readiness validator + tests → PR/CI → merge |
 | Ripeness further tuning | existing experiment branches | PAUSED / SEPARATE | field/photo/video + label freeze 후 successor snapshot에서 재개 |
-| Dryad Weight Estimation V1 | `main`, PR #35~#39 + 2026-09-18 env refreeze | CLIENT_CREDENTIAL_LOCAL / DATA_BYTES_PENDING | `.env.local` Client ID/Secret → 자동 token/download → datasheet 실감사 → 22-view join → snapshot |
+| Dryad Weight Estimation V1 | `main`, PR #35~#39 + 2026-09-18 acquisition integration | ONE_COMMAND_ACQUIRE_AUDIT_READY / DATA_BYTES_PENDING | 로컬 `dryad-weight-audit` 실행 → 실제 datasheet 결과 검토 → image inventory/join → snapshot |
 | Environment / deployment contract | `main` | CANONICAL / CLOUDFLARE_TARGET | D1/R2 bindings + capability secrets만 유지; 미사용 키 선제 추가 금지 |
 
 ## Pest scouting canonical state
@@ -250,6 +250,41 @@ Current stop condition:
 6. video frame sampling / duplicate / Group_ID·session leakage policy 확정.
 7. successor immutable snapshot(v002+) 생성.
 8. 새 snapshot에서 clean baseline 재측정 후 historical tuning 재사용 여부 결정.
+
+### 2026-09-18 one-command acquisition/audit
+
+구현 완료:
+
+- OAuth client-credentials token 발급
+- API v2 manifest resolution
+- manifest download link 우선 사용
+- Authorization cross-host redirect stripping
+- HTTP 401이면 Client ID/Secret으로 access token 1회 자동 갱신
+- download size / SHA-256 verification
+- legacy hardcoded `downloads/file_stream/141475` 경로 제거
+- acquisition과 XLSX audit 역할 분리
+- data-pipeline CLI에 acquisition → checksum → audit → JSON report 통합
+
+로컬 실행:
+
+```bash
+python -m ml.data_pipeline.cli dryad-weight-audit
+```
+
+기본 산출물:
+
+```text
+data/raw/dryad/DATA-QUAL-002/datasheet.xlsx
+data/audit/dryad/DATA-QUAL-002/datasheet-audit.json
+```
+
+이미 받은 파일을 다시 받으려면:
+
+```bash
+python -m ml.data_pipeline.cli dryad-weight-audit --force-download
+```
+
+실제 Client ID/Secret은 `.env.local`에만 두며 Git/CI에는 주입하지 않는다. 따라서 실제 1,611-row 데이터 분포는 로컬 명령 실행 전까지 완료로 주장하지 않는다.
 
 ## External weight / Dryad status
 
