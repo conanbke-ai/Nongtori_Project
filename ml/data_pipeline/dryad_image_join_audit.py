@@ -20,6 +20,7 @@ from .dryad_weight_audit import (
     EXPECTED_VIEWS_PER_FRUIT,
     fruit_ids_from_datasheet,
     photo_metadata_from_datasheet,
+    primary_weight_candidate_ids_from_datasheet,
 )
 
 
@@ -299,6 +300,10 @@ def audit_filename_inventory(
             str(view_count): count
             for view_count, count in sorted(view_count_distribution.items())
         },
+        "view_counts_by_fruit": {
+            fruit_id: counts.get(fruit_id, 0)
+            for fruit_id in fruit_ids
+        },
         "complete_22_view_fruit_count": len(complete_22_view_ids),
         "partial_view_fruit_count": len(partial_view_ids),
         "overcomplete_view_fruit_count": len(overcomplete_view_ids),
@@ -350,6 +355,11 @@ def audit_remote_picture_archives(
         )
 
     audit = audit_filename_inventory(archive_names, fruit_ids=fruit_ids)
+    view_counts = {
+        fruit_id: int(count)
+        for fruit_id, count in audit["view_counts_by_fruit"].items()
+    }
+
     photo_by_id = photo_metadata_from_datasheet(datasheet)
     if photo_by_id:
         photo_join: dict[str, Counter[str]] = {}
@@ -357,17 +367,7 @@ def audit_remote_picture_archives(
             raw_photo = photo_by_id.get(fruit_id, "")
             key = raw_photo if raw_photo else "<EMPTY>"
             bucket = photo_join.setdefault(key, Counter())
-            view_count = Counter()
-            # Reuse the already audited per-fruit count from wrong-view and complete status.
-            # The audit exposes samples only, so derive counts from archive names once locally.
-            for names in archive_names.values():
-                for name in names:
-                    if Path(name).suffix.lower() not in _IMAGE_EXTENSIONS:
-                        continue
-                    matched_id, match_status = infer_fruit_id(name, set(fruit_ids))
-                    if match_status == "MATCHED" and matched_id is not None:
-                        view_count[matched_id] += 1
-            count = view_count.get(fruit_id, 0)
+            count = view_counts.get(fruit_id, 0)
             if count == 0:
                 bucket["ZERO"] += 1
             elif count == EXPECTED_VIEWS_PER_FRUIT:
@@ -380,6 +380,23 @@ def audit_remote_picture_archives(
             photo_value: dict(sorted(bucket.items()))
             for photo_value, bucket in sorted(photo_join.items())
         }
+
+    primary_ids = set(primary_weight_candidate_ids_from_datasheet(datasheet))
+    picture_ids = {fruit_id for fruit_id, count in view_counts.items() if count > 0}
+    complete_ids = {
+        fruit_id
+        for fruit_id, count in view_counts.items()
+        if count == EXPECTED_VIEWS_PER_FRUIT
+    }
+    audit["training_candidate_overlap"] = {
+        "primary_weight_candidate_count": len(primary_ids),
+        "primary_with_any_picture_count": len(primary_ids & picture_ids),
+        "primary_with_complete_22_views_count": len(primary_ids & complete_ids),
+        "primary_missing_all_pictures_count": len(primary_ids - picture_ids),
+        "primary_incomplete_picture_count": len(
+            (primary_ids & picture_ids) - complete_ids
+        ),
+    }
     return {
         "dataset_doi": dataset.get("identifier") or dataset.get("doi"),
         "mode": "REMOTE_ZIP_CENTRAL_DIRECTORY_ONLY",
