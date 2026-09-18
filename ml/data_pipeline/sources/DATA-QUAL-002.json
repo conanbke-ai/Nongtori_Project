@@ -65,11 +65,12 @@
       "scan_archive_count": 20,
       "note": "Display sizes are human-readable values from the Dryad dataset page. Exact byte sizes and digests must come from the API manifest before immutable snapshotting."
     },
-    "public_manifest_command": "python -m ml.data_pipeline.cli dryad-manifest",
+    "public_manifest_command": "OPTIONAL_DIAGNOSTIC: python -m ml.data_pipeline.cli dryad-manifest",
     "acquire_and_audit_command": "python -m ml.data_pipeline.cli dryad-weight-audit",
-    "image_join_audit_command": "python -m ml.data_pipeline.cli dryad-image-join-audit",
+    "image_join_audit_command": "OPTIONAL_DIAGNOSTIC: python -m ml.data_pipeline.cli dryad-image-join-audit",
     "image_join_audit_mode": "REMOTE_ZIP_CENTRAL_DIRECTORY_ONLY",
-    "full_picture_archive_download_required_for_filename_join": false
+    "full_picture_archive_download_required_for_filename_join": false,
+    "normal_command": "python -m ml.data_pipeline.cli dryad-weight-audit"
   },
   "original_labels": [
     "fruit_identity",
@@ -88,9 +89,9 @@
     "auxiliary_weight_target": "weight_without_calyx",
     "field_weight_protocol": "WITH_CALYX",
     "grade_policy": "PREDICT_WEIGHT_THEN_APPLY_12_16_22G_THRESHOLDS",
-    "acquisition_status": "DATASHEET_VERIFIED_IMAGE_JOIN_PENDING",
+    "acquisition_status": "ONE_COMMAND_DATASHEET_AND_IMAGE_JOIN_READY",
     "primary_weight_candidate_count": 1571,
     "primary_weight_missing_excluded_count": 40
   },
-  "notes": "Real Dryad datasheet audit verified 1,611 fruit identities across 20 sheets, excluded 60 footer rows, and identified 1,571 usable with-calyx primary weight targets (40 missing primary targets excluded). Image filename-to-fruit-ID join remains pending. The image join audit is designed to read only ZIP central-directory metadata via guarded HTTP Range requests and must refuse a full multi-GB fallback. Raw datasets and credentials remain local-only."
+  "notes": "Real Dryad datasheet audit verified 1,611 fruit identities across 20 sheets, excluded 60 footer rows, and identified 1,571 usable with-calyx primary weight targets (40 missing primary targets excluded). Normal user flow is one command: dryad-weight-audit. It resolves/saves the manifest, verifies or reacquires datasheet.xlsx, audits metadata, then performs remote ZIP central-directory image-join audit without full picture-archive download. dryad-manifest and dryad-image-join-audit remain optional diagnostic commands."
 }
