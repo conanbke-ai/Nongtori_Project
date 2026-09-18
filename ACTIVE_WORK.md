@@ -24,6 +24,7 @@
 | Pest scouting operations V2 | `main`, PR #32 | MERGED / IMPLEMENTED | 실제 현장 데이터로 freshness/종료 정책 calibration |
 | Field data readiness v001 | existing workstream | IN_PROGRESS | readiness validator + tests → PR/CI → merge |
 | Ripeness further tuning | existing experiment branches | PAUSED / SEPARATE | field/photo/video + label freeze 후 successor snapshot에서 재개 |
+| Dryad Weight Estimation V1 | `main`, PR #35~#38 | ACQUISITION_GATE_MERGED / DATA_BYTES_BLOCKED | `DRYAD_TOKEN` → datasheet 실감사 → 22-view join → immutable snapshot candidate |
 
 ## Pest scouting canonical state
 
@@ -238,6 +239,35 @@ Current stop condition:
 6. video frame sampling / duplicate / Group_ID·session leakage policy 확정.
 7. successor immutable snapshot(v002+) 생성.
 8. 새 snapshot에서 clean baseline 재측정 후 historical tuning 재사용 여부 결정.
+
+## External weight / Dryad status
+
+Canonical source: `DATA-QUAL-002` / UC Davis Dryad `10.25338/B8V308`.
+
+Frozen facts:
+- 1,611 individual strawberries, 22 controlled RGB views per fruit
+- width / height / shape + weight with and without calyx
+- Nongtori primary GT: `weight_with_calyx`
+- `weight_without_calyx`: auxiliary analysis only
+- split boundary: `FRUIT_ID`; 22 views of one fruit must never cross train/validation/test
+- commercial-use candidate under Dryad CC0 policy; final field acceptance still requires Nongtori Seolhyang data
+
+Acquisition state:
+- PR #38 added official Dryad API manifest resolution, token-aware file download, cross-host auth stripping, size verification and SHA-256 verification.
+- Anonymous metadata/manifest lookup is available.
+- File bytes require a Dryad API token exposed locally as `DRYAD_TOKEN`.
+- Without the token, real `datasheet.xlsx` row/header/weight-distribution audit is **NOT RUN** and must not be represented as completed.
+
+Next gate:
+```text
+DRYAD_TOKEN
+→ datasheet.xlsx download + checksum verification
+→ real 1,611-row audit
+→ picture archive inventory
+→ fruit ID ↔ 22-view join verification
+→ WEIGHT-DRYAD-V001 immutable snapshot candidate
+→ geometry / RGB weight baselines
+```
 
 ## Logging / Observability
 
