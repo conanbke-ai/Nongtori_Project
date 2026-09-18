@@ -242,6 +242,25 @@ def _value_at(row: list[str], index: int | None) -> str:
     return row[index].strip()
 
 
+def _row_context(
+    row: list[str],
+    mapping: dict[str, int],
+    *,
+    source_sheet: str,
+) -> dict[str, Any]:
+    context: dict[str, Any] = {
+        "fruit_id": _value_at(row, mapping.get("fruit_id")),
+        "sheet": source_sheet,
+    }
+    for field in ("variety", "shape"):
+        if field in mapping:
+            context[field] = _value_at(row, mapping[field])
+    for field in ("width", "height", PRIMARY_WEIGHT_FIELD, AUXILIARY_WEIGHT_FIELD):
+        if field in mapping:
+            context[field] = _to_float(_value_at(row, mapping[field]))
+    return context
+
+
 def _numeric_summary(values: list[float]) -> dict[str, Any]:
     if not values:
         return {"count": 0}
@@ -371,7 +390,7 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
                 numeric_missing[field] += 1
                 if fruit_id:
                     numeric_missing_samples[field].append(
-                        {"fruit_id": fruit_id, "sheet": source_sheet}
+                        _row_context(row, mapping, source_sheet=source_sheet)
                     )
             else:
                 numeric_values[field].append(parsed)
@@ -391,13 +410,8 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
             relation_checked += 1
             delta = with_calyx - without_calyx
             calyx_delta.append(delta)
-            sample = {
-                "fruit_id": fruit_id,
-                "sheet": source_sheet,
-                "weight_with_calyx": with_calyx,
-                "weight_without_calyx": without_calyx,
-                "delta_with_minus_without": delta,
-            }
+            sample = _row_context(row, mapping, source_sheet=source_sheet)
+            sample["delta_with_minus_without"] = delta
             calyx_delta_samples.append(sample)
             if delta < -1e-6:
                 relation_violations += 1
@@ -420,12 +434,33 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
     official_count_match = fruit_count == EXPECTED_FRUITS if fruit_ids else False
     primary_values = numeric_values[PRIMARY_WEIGHT_FIELD]
     primary_weight_complete = bool(primary_values) and len(primary_values) == len(rows)
-    status = "AUDITED_METADATA" if schema_ok and fruit_count > 0 and not duplicate_ids and primary_weight_complete else "REVIEW_REQUIRED"
+
+    primary_training_candidate_count = 0
+    primary_geometry_candidate_count = 0
+    for _, row in row_records:
+        primary = _to_float(_value_at(row, mapping.get(PRIMARY_WEIGHT_FIELD)))
+        if primary is None or primary <= 0:
+            continue
+        primary_training_candidate_count += 1
+        width = _to_float(_value_at(row, mapping.get("width")))
+        height = _to_float(_value_at(row, mapping.get("height")))
+        if width is not None and width > 0 and height is not None and height > 0:
+            primary_geometry_candidate_count += 1
+
+    identity_ok = fruit_count == EXPECTED_FRUITS and not duplicate_ids
+    if schema_ok and identity_ok and primary_training_candidate_count:
+        status = "AUDITED_METADATA" if primary_weight_complete else "AUDITED_METADATA_WITH_EXCLUSIONS"
+    else:
+        status = "REVIEW_REQUIRED"
 
     weight_fields = [field for field in (PRIMARY_WEIGHT_FIELD, AUXILIARY_WEIGHT_FIELD, "weight_generic") if field in mapping]
     weight_grade_bins = {field: _grade_bins(numeric_values[field]) for field in weight_fields}
 
-    next_gate = "IMAGE_FILENAME_TO_FRUIT_ID_JOIN_AUDIT" if status == "AUDITED_METADATA" else "DATASHEET_SCHEMA_OR_VALUE_REVIEW"
+    next_gate = (
+        "IMAGE_FILENAME_TO_FRUIT_ID_JOIN_AUDIT"
+        if status in {"AUDITED_METADATA", "AUDITED_METADATA_WITH_EXCLUSIONS"}
+        else "DATASHEET_SCHEMA_OR_VALUE_REVIEW"
+    )
 
     return {
         "source_id": "DATA-QUAL-002",
@@ -453,6 +488,22 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
             field: numeric_missing_samples[field]
             for field in numeric_fields
             if field in mapping and numeric_missing_samples[field]
+        },
+        "training_candidate_summary": {
+            "primary_target_total_rows": len(rows),
+            "primary_target_usable_count": primary_training_candidate_count,
+            "primary_target_excluded_missing_count": len(rows) - primary_training_candidate_count,
+            "primary_geometry_usable_count": primary_geometry_candidate_count,
+            "primary_missing_policy": "EXCLUDE_FROM_SUPERVISED_WEIGHT_TRAINING",
+            "auxiliary_missing_policy": "RETAIN_IF_PRIMARY_TARGET_IS_VALID",
+            "calyx_relation_anomaly_policy": "FLAG_FOR_REVIEW_DO_NOT_AUTO_EXCLUDE",
+        },
+        "data_quality_review": {
+            "required": bool(
+                relation_violations
+                or any(item["delta_with_minus_without"] > 3.0 for item in calyx_delta_samples)
+            ),
+            "reason": "CALYX_RELATION_ANOMALIES_PRESENT" if calyx_delta_samples else "NO_PAIRED_CALYX_VALUES",
         },
         "weight_grade_bins": weight_grade_bins,
         "primary_weight_grade_bins": weight_grade_bins.get(PRIMARY_WEIGHT_FIELD, {}),
