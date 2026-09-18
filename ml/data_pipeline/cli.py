@@ -9,6 +9,8 @@ from .annotation_audit import audit_kgcv_json, audit_strawberry_ds_yolo, write_a
 from .archive import extract_archive
 from .audit import audit_directory
 from .dedup import deduplicate_manifest
+from .dryad_acquisition import DryadAccessError, acquire_datasheet
+from .dryad_weight_audit import audit_datasheet, write_audit_report as write_dryad_weight_audit_report
 from .downloader import DatasetDownloader
 from .field_audit import audit_field_csv
 from .incremental import incremental_scan_csv
@@ -33,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("audit"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("audit-strawberry-ds"); p.add_argument("--labels-dir", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("audit-kgcv"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
+    p = sub.add_parser("dryad-weight-audit"); p.add_argument("--datasheet", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/datasheet.xlsx")); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/datasheet-audit.json")); p.add_argument("--force-download", action="store_true"); p.add_argument("--timeout", type=int, default=300)
     p = sub.add_parser("snapshot"); p.add_argument("source_id"); p.add_argument("--audit-dir", type=Path, required=True); p.add_argument("--snapshot-root", type=Path, required=True); p.add_argument("--snapshot-id", required=True)
     p = sub.add_parser("incremental-scan"); p.add_argument("--input", type=Path, required=True); p.add_argument("--ledger", type=Path, required=True); p.add_argument("--output-ledger", type=Path, required=True); p.add_argument("--key-field", action="append", default=[]); p.add_argument("--ignore-field", action="append", default=[])
     p = sub.add_parser("field-audit"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path)
@@ -61,6 +64,19 @@ def main(argv: list[str] | None = None) -> int:
         report = audit_strawberry_ds_yolo(args.labels_dir); write_audit_report(report, args.output); print(json.dumps(report, ensure_ascii=False, indent=2)); return 0
     if args.command == "audit-kgcv":
         report = audit_kgcv_json(args.input); write_audit_report(report, args.output); print(json.dumps(report, ensure_ascii=False, indent=2)); return 0
+    if args.command == "dryad-weight-audit":
+        try:
+            acquisition = None
+            if args.force_download or not args.datasheet.exists():
+                acquisition = acquire_datasheet(args.datasheet, timeout=args.timeout)
+            report = audit_datasheet(args.datasheet)
+            payload = {"acquisition": acquisition, "audit": report}
+            write_dryad_weight_audit_report(payload, args.output)
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0 if report["status"] == "AUDITED_METADATA" else 2
+        except DryadAccessError as exc:
+            print(json.dumps({"status": "ACQUISITION_FAILED", "error": str(exc)}, ensure_ascii=False, indent=2))
+            return 3
     if args.command == "snapshot":
         source = registry.get(args.source_id); print(create_snapshot(args.snapshot_id, source.source_id, source.version_or_revision or "unversioned", args.audit_dir, args.snapshot_root)); return 0
     if args.command == "incremental-scan":
