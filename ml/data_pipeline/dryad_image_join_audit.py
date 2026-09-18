@@ -232,11 +232,14 @@ def audit_filename_inventory(
 def audit_remote_picture_archives(
     datasheet: Path,
     *,
+    dataset: dict[str, Any] | None = None,
+    files: list[dict[str, Any]] | None = None,
     timeout: int = 120,
     min_chunk_size: int = 1024 * 1024,
 ) -> dict[str, Any]:
     fruit_ids = fruit_ids_from_datasheet(datasheet)
-    dataset, files = resolve_manifest(timeout=min(timeout, 60))
+    if dataset is None or files is None:
+        dataset, files = resolve_manifest(timeout=min(timeout, 60))
     records = _picture_records(files)
     if len(records) != 7:
         raise DryadAccessError(
