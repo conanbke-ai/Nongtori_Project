@@ -34,11 +34,18 @@ class DryadImageJoinAuditTests(unittest.TestCase):
         self.assertEqual(report["expected_image_count"], 44)
         self.assertEqual(report["matched_image_count"], 44)
         self.assertEqual(report["wrong_view_count_fruit_count"], 0)
+        self.assertEqual(report["view_count_distribution"], {"22": 2})
+        self.assertEqual(report["complete_22_view_fruit_count"], 2)
+        self.assertEqual(report["partial_view_fruit_count"], 0)
+        self.assertEqual(report["overcomplete_view_fruit_count"], 0)
 
         names["Pictures_02.zip"] = names["Pictures_02.zip"][:-1]
         broken = audit_filename_inventory(names, fruit_ids=fruit_ids)
         self.assertEqual(broken["status"], "REVIEW_REQUIRED")
         self.assertEqual(broken["wrong_view_count_fruit_count"], 1)
+        self.assertEqual(broken["view_count_distribution"], {"21": 1, "22": 1})
+        self.assertEqual(broken["complete_22_view_fruit_count"], 1)
+        self.assertEqual(broken["partial_view_fruit_count"], 1)
 
     def test_image_join_cache_reuses_only_matching_source_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
