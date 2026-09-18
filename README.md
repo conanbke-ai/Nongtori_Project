@@ -93,6 +93,16 @@ Sensor / Weather / Image / Manual Input
 - 긴 설명보다 상태 → 이유 → 권장 행동 순서
 - 정상 / 주의 / 이상 징후를 색상과 아이콘으로 함께 구분
 
+## Environment & Secrets
+
+농토리의 애플리케이션 배포 기준은 Cloudflare D1/R2 기반입니다.
+
+- canonical 환경계약: [Environment Variables](docs/ENVIRONMENT_VARIABLES.md)
+- machine-readable contract: [configs/environment-contract.json](configs/environment-contract.json)
+- 로컬 템플릿: `.dev.vars.example`
+- 실제 secret 값은 Git에 저장하지 않습니다.
+- Dryad/외부 학습 데이터 수집 자격증명은 운영 환경과 분리하며, 현재는 수동 다운로드 + 로컬 audit를 기본으로 합니다.
+
 ## 테스트 및 Quality Gate
 
 ```text
