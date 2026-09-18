@@ -1,21 +1,31 @@
 ## Dryad image join gate — 2026-09-18
 
-- Datasheet audit is canonical on main: 1,611 fruit IDs, 60 footer rows excluded, 1,571 usable with-calyx primary targets, 40 primary-target missing rows excluded.
-- Current workstream: `feat/dryad-image-join-audit` / PR #42.
-- Actual authenticated remote validation completed for ZIP metadata access:
-  - 7/7 `Pictures_*.zip` central directories read successfully with HTTP Range.
-  - `full_archive_download_performed=false`.
-  - actual published image entries observed: 12,062.
-  - filename→datasheet fruit-ID matching: 12,062 / 12,062.
-  - unmatched filenames: 0.
-  - ambiguous filenames: 0.
-- Therefore the parser/range transport is validated; the remaining issue is published-photo coverage, not filename parsing.
-- The original blanket expectation `1,611 × 22 = 35,442 published files` is not treated as an acceptance invariant until the datasheet `Photo` field and actual per-fruit view-count distribution are reconciled.
-- Next diagnostic (schema v2): audit datasheet `Photo` values, full per-fruit view-count distribution, complete/partial/overcomplete fruit counts, and overlap with the 1,571 primary-weight candidates.
-- Reuse policy: if datasheet SHA-256 + 7 picture archive manifest identities + image-join audit schema version are unchanged, reuse verified image-join audit with no repeat ZIP Range requests.
-- Schema v2 intentionally invalidates the prior v1 image-join cache once, so the new coverage diagnostics require one metadata-only Range refresh; no image bodies are downloaded.
-- Safety: if Dryad does not honor HTTP Range, abort; never silently fall back to downloading the ~39.24 GB picture archives.
-- No raw image bytes are committed.
+- Datasheet audit canonical facts:
+  - 1,611 fruit IDs.
+  - 60 footer rows excluded.
+  - 1,571 usable with-calyx primary targets.
+  - 40 primary-target missing rows excluded.
+- Real remote picture validation:
+  - 7/7 picture archive central directories read by HTTP Range.
+  - full archive download not performed.
+  - 12,062 published image entries observed.
+  - filename→fruit-ID matches: 12,062 / 12,062.
+  - unmatched: 0; ambiguous: 0.
+- Datasheet Photo reconciliation:
+  - Photo=NO: 1,062 fruits, all zero published images.
+  - Photo=YES: 549 fruits, all have published images.
+  - among Photo=YES: 541 exact-22, 7 partial, 1 overcomplete.
+- Weight×RGB overlap:
+  - primary with-calyx candidates: 1,571 fruits.
+  - primary candidates with any published picture: 532.
+  - primary candidates with exact 22 published views: 524.
+  - strict RGB-weight candidate: 524 fruits / 11,528 images.
+  - split boundary remains FRUIT_ID; the 22 views of one fruit must never cross train/validation/test.
+- Acceptance status: PUBLISHED_SUBSET_VERIFIED_WITH_VIEW_EXCEPTIONS.
+- Strict snapshot policy: VALID_WITH_CALYX_WEIGHT_AND_EXACTLY_22_PUBLISHED_VIEWS.
+- Partial/overcomplete photo fruits remain review-only and are excluded from the strict snapshot candidate.
+- Cache: schema-v2 source fingerprint stays valid; final acceptance derivation is local-only and does not require another ZIP Range refresh.
+- Safety: no full multi-GB picture archive download; raw images/credentials never committed.
 
 # Nongtori Active Work Registry
 
@@ -65,7 +75,7 @@ Branch deletion for the two DELETE entries is pending only because the connected
 | Pest scouting operations V2 | `main`, PR #32 | MERGED / IMPLEMENTED | 실제 현장 데이터로 freshness/종료 정책 calibration |
 | Field data readiness v001 | existing workstream | IN_PROGRESS | readiness validator + tests → PR/CI → merge |
 | Ripeness further tuning | PR #26 / `feat/ripeness-v010-convnext-tiny` | PAUSED / RESULT_PENDING | field/photo/video + label freeze 후 successor snapshot에서 재개; V009 rejected result는 main에 보존 |
-| Dryad Weight Estimation V1 | `main` + PR #42 | DATASHEET_AUDITED / REMOTE_JOIN_TRANSPORT_VERIFIED / PHOTO_SUBSET_REVIEW | schema-v2 coverage audit → usable photo×weight candidate freeze → snapshot gate |
+| Dryad Weight Estimation V1 | `main` + PR #42 | PUBLISHED_SUBSET_VERIFIED_WITH_VIEW_EXCEPTIONS | strict 524-fruit / 11,528-image candidate freeze → immutable snapshot descriptor → RGB/geometry baselines |
 | Environment / deployment contract | `main` | CANONICAL / CLOUDFLARE_TARGET | D1/R2 bindings + capability secrets만 유지; 미사용 키 선제 추가 금지 |
 
 ## Pest scouting canonical state
