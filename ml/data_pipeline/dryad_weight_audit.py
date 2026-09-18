@@ -296,6 +296,8 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
                 "headers": headers,
                 "resolved_columns": mapping,
                 "data_row_count": len(rows),
+                "raw_nonempty_row_count": len(rows),
+                "excluded_non_fruit_row_count": 0,
             }
         ]
     else:
@@ -405,8 +407,8 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
         "table_count": len(table_summaries),
         "required_semantics": required_semantics,
         "data_row_count": len(rows),
-        "raw_nonempty_row_count": sum(item["raw_nonempty_row_count"] for item in table_summaries),
-        "excluded_non_fruit_row_count": sum(item["excluded_non_fruit_row_count"] for item in table_summaries),
+        "raw_nonempty_row_count": sum(item.get("raw_nonempty_row_count", item["data_row_count"]) for item in table_summaries),
+        "excluded_non_fruit_row_count": sum(item.get("excluded_non_fruit_row_count", 0) for item in table_summaries),
         "fruit_id_count": fruit_count,
         "expected_fruit_count": EXPECTED_FRUITS,
         "official_count_match": official_count_match,
