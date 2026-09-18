@@ -201,6 +201,30 @@ Do not increase patience solely to compensate for LR `5e-5`. Keep this result as
 
 ---
 
+# EXP-RIP-009 — Rank-Consistent Ordinal Head
+
+Status: **REJECTED / VALIDATION ONLY / NO MULTI-SEED CONFIRMATION**
+
+Seed `20260910`, frozen `KGCV-RIPENESS-V001`, test set not evaluated.
+
+| Metric | EfficientNet softmax | Ordinal head |
+|---|---:|---:|
+| Accuracy | **0.9753** | 0.9527 |
+| Macro F1 | **0.9741** | 0.9464 |
+| Ordinal MAE ↓ | **0.0309** | 0.0514 |
+| Weighted Kappa | **0.9781** | 0.9670 |
+| M1 F1 | **0.9502** | 0.8856 |
+
+The ordinal head reduced M0→M1 false positives but collapsed M1 recall (`0.9459 → 0.8018`) and regressed the primary/supporting metrics.
+
+Decision: `REJECT CURRENT ORDERED-CUMULATIVE ORDINAL HEAD`.
+
+Do not run paired confirmation or rescue tuning for this formulation. Preserve as negative evidence that this specific ordinal-head design does not improve the current frozen benchmark.
+
+Detailed result: `docs/experiments/ripeness/EXP-RIP-009_ORDINAL_HEAD_RESULT.md`.
+
+---
+
 # Current preferred recipe
 
 ```text
