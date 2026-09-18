@@ -310,11 +310,10 @@ def audit_datasheet(path: Path) -> dict[str, Any]:
         sheet_name = tables[0]["sheet"] if len(tables) == 1 else "MULTI_SHEET"
         header_row_index = int(tables[0]["header_row_index"])
 
-        canonical_keys = set(mapping)
         incompatible = [
             item["sheet"]
             for item in tables
-            if set(item["mapping"]) != canonical_keys
+            if item["mapping"] != mapping
         ]
         if incompatible:
             return {
