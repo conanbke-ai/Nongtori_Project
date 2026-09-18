@@ -46,13 +46,26 @@ class DryadAcquisitionTests(unittest.TestCase):
             with self.assertRaises(DryadAccessError):
                 verify_download(path, {"size": len(payload) + 1})
 
-    def test_download_requires_token_before_network(self) -> None:
-        from ml.data_pipeline import dryad_acquisition
+    def test_resolve_access_token_prefers_temporary_token(self) -> None:
+        with mock.patch.dict("os.environ", {"DRYAD_TOKEN": "temporary-token"}, clear=True):
+            self.assertEqual(resolve_access_token(), "temporary-token")
 
-        record = {"path": "datasheet.xlsx", "_links": {"self": {"href": "/api/v2/files/141475"}}}
-        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict("os.environ", {}, clear=True):
-            with self.assertRaisesRegex(DryadAccessError, "DRYAD_TOKEN"):
-                dryad_acquisition.download_file(record, Path(temp_dir) / "datasheet.xlsx")
+    def test_request_access_token_requires_client_credentials_before_network(self) -> None:
+        with mock.patch.dict("os.environ", {}, clear=True):
+            with self.assertRaisesRegex(DryadAccessError, "DRYAD_CLIENT_ID"):
+                request_access_token()
+
+    def test_resolve_access_token_requests_token_from_client_credentials(self) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {"DRYAD_CLIENT_ID": "client-id", "DRYAD_CLIENT_SECRET": "client-secret"},
+            clear=True,
+        ), mock.patch(
+            "ml.data_pipeline.dryad_acquisition.request_access_token",
+            return_value="derived-token",
+        ) as request_token:
+            self.assertEqual(resolve_access_token(), "derived-token")
+            request_token.assert_called_once()
 
 
 if __name__ == "__main__":
