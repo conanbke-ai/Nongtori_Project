@@ -293,3 +293,58 @@ def acquire_datasheet(
         },
         "verification": verification,
     }
+
+
+def build_public_manifest_inventory(
+    doi: str = DEFAULT_DATASET_DOI,
+    *,
+    timeout: int = 60,
+) -> dict[str, Any]:
+    dataset, files = resolve_manifest(doi, timeout=timeout)
+    inventory = []
+    for record in files:
+        path = str(record.get("path") or "")
+        inventory.append({
+            "id": file_id(record),
+            "path": path,
+            "size": record.get("size"),
+            "mime_type": record.get("mimeType"),
+            "digest_type": record.get("digestType"),
+            "digest": record.get("digest"),
+            "download_url": download_url(record),
+            "role": (
+                "DATASHEET"
+                if path == DEFAULT_DATASHEET_PATH
+                else "PICTURE_ARCHIVE"
+                if path.lower().startswith("pictures_")
+                else "SCAN_ARCHIVE"
+                if path.lower().startswith("scans_")
+                else "OTHER"
+            ),
+        })
+    picture_archives = [item for item in inventory if item["role"] == "PICTURE_ARCHIVE"]
+    scan_archives = [item for item in inventory if item["role"] == "SCAN_ARCHIVE"]
+    return {
+        "dataset_doi": dataset.get("identifier") or dataset.get("doi") or doi,
+        "publication_date": dataset.get("publicationDate"),
+        "version_number": dataset.get("versionNumber"),
+        "file_count": len(inventory),
+        "picture_archive_count": len(picture_archives),
+        "scan_archive_count": len(scan_archives),
+        "picture_archive_bytes": sum(int(item["size"] or 0) for item in picture_archives),
+        "scan_archive_bytes": sum(int(item["size"] or 0) for item in scan_archives),
+        "files": inventory,
+    }
+
+
+def write_manifest_inventory(
+    output: Path,
+    *,
+    doi: str = DEFAULT_DATASET_DOI,
+    timeout: int = 60,
+) -> dict[str, Any]:
+    report = build_public_manifest_inventory(doi, timeout=timeout)
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return report
