@@ -55,7 +55,7 @@ Branch deletion for the two DELETE entries is pending only because the connected
 | Pest scouting operations V2 | `main`, PR #32 | MERGED / IMPLEMENTED | 실제 현장 데이터로 freshness/종료 정책 calibration |
 | Field data readiness v001 | existing workstream | IN_PROGRESS | readiness validator + tests → PR/CI → merge |
 | Ripeness further tuning | PR #26 / `feat/ripeness-v010-convnext-tiny` | PAUSED / RESULT_PENDING | field/photo/video + label freeze 후 successor snapshot에서 재개; V009 rejected result는 main에 보존 |
-| Dryad Weight Estimation V1 | `main`, PR #35~#39 + 2026-09-18 acquisition integration | ONE_COMMAND_ACQUIRE_AUDIT_READY / DATA_BYTES_PENDING | 로컬 `dryad-weight-audit` 실행 → 실제 datasheet 결과 검토 → image inventory/join → snapshot |
+| Dryad Weight Estimation V1 | `main` + PR #42 | DATASHEET_AUDITED / IMAGE_JOIN_IN_PROGRESS | `dryad-weight-audit` 한 명령으로 manifest 저장 → datasheet 검증/재사용 → metadata audit → remote ZIP image join → snapshot gate |
 | Environment / deployment contract | `main` | CANONICAL / CLOUDFLARE_TARGET | D1/R2 bindings + capability secrets만 유지; 미사용 키 선제 추가 금지 |
 
 ## Pest scouting canonical state
@@ -274,46 +274,48 @@ Current stop condition:
 
 ### 2026-09-18 one-command acquisition/audit
 
-구현 완료:
-
-- OAuth client-credentials token 발급
-- API v2 manifest resolution
-- manifest download link 우선 사용
-- Authorization cross-host redirect stripping
-- HTTP 401이면 Client ID/Secret으로 access token 1회 자동 갱신
-- download size / SHA-256 verification
-- legacy hardcoded `downloads/file_stream/141475` 경로 제거
-- acquisition과 XLSX audit 역할 분리
-- data-pipeline CLI에 acquisition → checksum → audit → JSON report 통합
-
-공개 manifest inventory(자격증명 불필요):
-
-```bash
-python -m ml.data_pipeline.cli dryad-manifest
-```
-
-기본 산출물: `data/audit/dryad/DATA-QUAL-002/public-manifest.json`
-
-로컬 acquisition + audit:
+Canonical normal command:
 
 ```bash
 python -m ml.data_pipeline.cli dryad-weight-audit
 ```
 
-기본 산출물:
+Normal flow:
+
+```text
+resolve Dryad API manifest once
+→ save public-manifest.json automatically
+→ verify existing datasheet.xlsx against exact size/SHA-256
+→ reuse if verified / reacquire automatically if stale or corrupt
+→ audit real 20-sheet datasheet
+→ exclude 60 footer rows
+→ retain 1,571 usable with-calyx primary targets
+→ inspect all 7 Pictures_*.zip central directories via guarded HTTP Range
+→ verify fruit_id ↔ 22-view join
+→ save image-join-audit.json
+```
+
+Default outputs:
 
 ```text
 data/raw/dryad/DATA-QUAL-002/datasheet.xlsx
+data/audit/dryad/DATA-QUAL-002/public-manifest.json
 data/audit/dryad/DATA-QUAL-002/datasheet-audit.json
+data/audit/dryad/DATA-QUAL-002/image-join-audit.json
 ```
 
-이미 받은 파일을 다시 받으려면:
+Optional diagnostics only:
 
 ```bash
-python -m ml.data_pipeline.cli dryad-weight-audit --force-download
+python -m ml.data_pipeline.cli dryad-manifest
+python -m ml.data_pipeline.cli dryad-image-join-audit
 ```
 
-실제 Client ID/Secret은 `.env.local`에만 두며 Git/CI에는 주입하지 않는다. 따라서 실제 1,611-row 데이터 분포는 로컬 명령 실행 전까지 완료로 주장하지 않는다.
+Safety:
+- local credentials only in `.env.local`
+- `DRYAD_CLIENT_ID` + `DRYAD_CLIENT_SECRET`; `DRYAD_TOKEN` is optional one-off override
+- picture archive join audit must use HTTP Range and refuse full-body fallback
+- no raw Dryad images or credentials are committed
 
 ### Published Dryad file inventory
 
@@ -345,16 +347,14 @@ Acquisition state:
 - Dryad credentials are local-research secrets, not Nongtori runtime deployment secrets.
 - Canonical local files are `.env.example` / `.env.local` across TORI projects.
 - `DRYAD_CLIENT_ID` + `DRYAD_CLIENT_SECRET` mint a short-lived token automatically; `DRYAD_TOKEN` is optional override only.
-- Real `datasheet.xlsx` row/header/weight-distribution audit is **NOT RUN** until automatic acquisition completes and checksum is verified.
+- Real `datasheet.xlsx` audit is complete: 1,611 fruit IDs, 60 footer rows excluded, 1,571 usable with-calyx primary targets, 40 primary-target missing rows excluded.
 
 Next gate:
 ```text
-.env.local client credentials
-→ automatic access token
-→ automatic datasheet.xlsx download
-→ checksum verification
-→ real 1,611-row audit
-→ picture archive inventory
+normal one-command dryad-weight-audit
+→ manifest save + datasheet verification/reuse
+→ completed 1,611-row audit
+→ remote picture archive central-directory inventory
 → fruit ID ↔ 22-view join verification
 → WEIGHT-DRYAD-V001 immutable snapshot candidate
 → geometry / RGB weight baselines
