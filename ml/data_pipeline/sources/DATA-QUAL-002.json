@@ -90,7 +90,7 @@
     "weight_without_calyx"
   ],
   "nongtori_mapping": {
-    "status": "PUBLISHED_PHOTO_SUBSET_VERIFIED_WITH_VIEW_EXCEPTIONS",
+    "status": "STRICT_RGB_WEIGHT_MANIFEST_PENDING_LOCAL_BUILD",
     "role": "COMMERCIAL_WEIGHT_PRETRAINING_CANDIDATE",
     "split_group": "FRUIT_ID",
     "primary_weight_target": "weight_with_calyx",
@@ -106,7 +106,10 @@
     "primary_with_complete_22_views_count": 524,
     "strict_rgb_weight_candidate_fruit_count": 524,
     "strict_rgb_weight_candidate_image_count": 11528,
-    "snapshot_policy": "STRICT_VALID_WITH_CALYX_AND_EXACTLY_22_PUBLISHED_VIEWS"
+    "snapshot_policy": "STRICT_VALID_WITH_CALYX_AND_EXACTLY_22_PUBLISHED_VIEWS",
+    "asset_manifest_schema": "STRICT_CANDIDATE_MANIFEST_V1",
+    "asset_materialization_policy": "SELECTIVE_ONLY_NO_FULL_ARCHIVE_DOWNLOAD",
+    "asset_cache_policy": "REUSE_VERIFIED_LOCAL_MEMBER_BYTES_BY_HASH"
   },
-  "notes": "Real Dryad datasheet audit verified 1,611 fruit identities. The published picture archives contain 12,062 images, all matched to canonical fruit IDs. Datasheet Photo metadata reconciles exactly with publication coverage: Photo=NO 1,062 fruits all have zero images; Photo=YES 549 fruits all have images. Among Photo=YES fruits, 541 have exactly 22 views, 7 are partial, and 1 is overcomplete. Of 1,571 valid with-calyx weight targets, 532 have at least one published picture and 524 have exactly 22 published views. Strict RGB-weight candidate policy is therefore 524 fruit identities / 11,528 images with FRUIT_ID as the split boundary. View-count exceptions remain review-only and are excluded from the strict snapshot candidate."
+  "notes": "Published subset audit is frozen: 549 Photo=YES fruits, 541 exact-22, 7 partial, 1 overcomplete; strict RGB-weight candidate is 524 fruits / 11,528 images with valid with-calyx targets. Next gate is a strict candidate member manifest that records archive/member identity and ZIP offsets without downloading image bodies. After that, only strict candidate members are materialized with resumable hash-verified reuse; full picture archives must not be downloaded."
 }

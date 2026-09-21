@@ -1,3 +1,20 @@
+## Dryad strict candidate asset gate — 2026-09-18
+
+- Canonical strict policy: `VALID_WITH_CALYX_WEIGHT_AND_EXACTLY_22_PUBLISHED_VIEWS`.
+- Strict candidate: 524 fruit IDs / 11,528 RGB images.
+- Current workstream: `feat/dryad-strict-candidate-manifest`.
+- Candidate manifest records archive path/digest/file-id, member filename, uncompressed/compressed size, compression method, CRC32 and ZIP local-header offset.
+- Candidate manifest cache identity derives from the verified image-join source fingerprint + policy/schema version.
+- If candidate manifest fingerprint matches, reuse it with no repeat ZIP central-directory Range requests.
+- First manifest build requires one metadata-only central-directory pass because prior audit cache did not persist member filenames/offsets.
+- No image bodies are downloaded at manifest stage.
+- Next stage materializes only strict candidate members and must:
+  - skip already-present files after hash verification;
+  - resume safely after interruption;
+  - never download full picture archives as fallback;
+  - produce per-image SHA-256 before immutable snapshot freeze.
+- Split boundary remains FRUIT_ID.
+
 ## Dryad image join gate — 2026-09-18
 
 - Datasheet audit canonical facts:
@@ -75,7 +92,7 @@ Branch deletion for the two DELETE entries is pending only because the connected
 | Pest scouting operations V2 | `main`, PR #32 | MERGED / IMPLEMENTED | 실제 현장 데이터로 freshness/종료 정책 calibration |
 | Field data readiness v001 | existing workstream | IN_PROGRESS | readiness validator + tests → PR/CI → merge |
 | Ripeness further tuning | PR #26 / `feat/ripeness-v010-convnext-tiny` | PAUSED / RESULT_PENDING | field/photo/video + label freeze 후 successor snapshot에서 재개; V009 rejected result는 main에 보존 |
-| Dryad Weight Estimation V1 | `main` + PR #42 | PUBLISHED_SUBSET_VERIFIED_WITH_VIEW_EXCEPTIONS | strict 524-fruit / 11,528-image candidate freeze → immutable snapshot descriptor → RGB/geometry baselines |
+| Dryad Weight Estimation V1 | `main` + strict-manifest workstream | STRICT_524_FRUIT_CANDIDATE_FROZEN / ASSET_MANIFEST_IN_PROGRESS | member manifest → selective resumable materialization → per-image SHA-256 → FRUIT_ID split → WEIGHT-DRYAD-V001 |
 | Environment / deployment contract | `main` | CANONICAL / CLOUDFLARE_TARGET | D1/R2 bindings + capability secrets만 유지; 미사용 키 선제 추가 금지 |
 
 ## Pest scouting canonical state
