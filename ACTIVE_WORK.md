@@ -1,3 +1,15 @@
+## Dryad selective materialization gate — 2026-09-21
+
+- Upstream strict candidate manifest is merged on `main`: 524 fruit IDs / 11,528 images.
+- Current workstream: `feat/dryad-selective-materialization`.
+- Materialization is selective-only through HTTP Range backed ZIP reads; full picture ZIP download fallback remains forbidden.
+- Existing local members are verified by exact size + CRC32 + SHA-256 and reused without member download.
+- Missing/corrupt members are re-materialized atomically via `.part` replacement.
+- Per-image SHA-256 is persisted to `strict-materialized-assets.json`.
+- Checkpoint manifest is written during progress; interrupted runs safely re-adopt already verified local files.
+- ZIP member paths are validated against absolute/path-traversal writes.
+- Next gate after real local completion: FRUIT_ID-grouped immutable train/valid/test split + WEIGHT-DRYAD-V001 snapshot freeze.
+
 ## Dryad strict candidate asset gate — 2026-09-18
 
 - Canonical strict policy: `VALID_WITH_CALYX_WEIGHT_AND_EXACTLY_22_PUBLISHED_VIEWS`.
