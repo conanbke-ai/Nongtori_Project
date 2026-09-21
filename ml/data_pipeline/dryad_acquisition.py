@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -319,6 +320,145 @@ def fetch_file_range(
             f"Dryad range response length mismatch: got {len(payload)}, expected {expected}"
         )
     return payload
+
+
+def _http_retry_after_seconds(exc: urllib.error.HTTPError) -> float | None:
+    if exc.headers is None:
+        return None
+    raw = exc.headers.get("Retry-After")
+    if raw is None:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def download_file_resumable(
+    file_record: dict[str, Any],
+    output: Path,
+    *,
+    token: str | None = None,
+    timeout: int = 300,
+    max_retries: int = 10,
+    base_backoff_seconds: float = 5.0,
+    max_backoff_seconds: float = 120.0,
+    max_retry_after_seconds: float = 600.0,
+    sleeper=time.sleep,
+    opener=None,
+) -> dict[str, Any]:
+    """Download one Dryad file sequentially with .part resume and verification."""
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    part = output.with_name(output.name + ".part")
+    opener = opener or _OPENER
+    expected_size = int(file_record.get("size") or 0)
+
+    if output.exists():
+        try:
+            verification = verify_download(output, file_record)
+            return {"action": "REUSED_VERIFIED", **verification}
+        except DryadAccessError:
+            output.unlink(missing_ok=True)
+
+    if part.exists() and expected_size > 0 and part.stat().st_size > expected_size:
+        part.unlink()
+
+    if part.exists() and expected_size > 0 and part.stat().st_size == expected_size:
+        try:
+            verification = verify_download(part, file_record)
+            part.replace(output)
+            return {"action": "RESUMED_VERIFIED", **verification, "path": str(output)}
+        except DryadAccessError:
+            part.unlink()
+
+    access_token = resolve_access_token(token=token, timeout=min(timeout, 60))
+    retries = 0
+    auth_refreshed = False
+    resumed = bool(part.exists() and part.stat().st_size > 0)
+
+    while True:
+        start = part.stat().st_size if part.exists() else 0
+        headers = {
+            "User-Agent": "Nongtori-Dryad/1.0",
+            "Accept": "application/octet-stream",
+            "Authorization": f"Bearer {access_token}",
+            "X-API-Version": DRYAD_API_VERSION,
+        }
+        if start > 0:
+            headers["Range"] = f"bytes={start}-"
+        request = urllib.request.Request(download_url(file_record), headers=headers)
+
+        try:
+            with opener.open(request, timeout=timeout) as response:
+                status = int(getattr(response, "status", response.getcode()))
+                if start > 0 and status == 206:
+                    mode = "ab"
+                elif status == 200:
+                    mode = "wb"
+                    if start > 0:
+                        start = 0
+                elif start == 0 and status == 206:
+                    mode = "wb"
+                else:
+                    raise DryadAccessError(
+                        f"Unexpected Dryad archive response status: HTTP {status}"
+                    )
+
+                with part.open(mode) as handle:
+                    while True:
+                        chunk = response.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        handle.write(chunk)
+
+            actual_size = part.stat().st_size
+            if expected_size > 0 and actual_size < expected_size:
+                retries += 1
+                if retries > max_retries:
+                    raise DryadAccessError(
+                        f"Dryad archive download remained incomplete after retries: "
+                        f"{actual_size}/{expected_size} bytes"
+                    )
+                resumed = True
+                sleeper(min(max_backoff_seconds, base_backoff_seconds * (2 ** (retries - 1))))
+                continue
+
+            verification = verify_download(part, file_record)
+            part.replace(output)
+            return {
+                "action": "RESUMED_AND_VERIFIED" if resumed else "DOWNLOADED_VERIFIED",
+                **verification,
+                "path": str(output),
+            }
+
+        except urllib.error.HTTPError as exc:
+            if exc.code == 401 and token is None and not auth_refreshed:
+                access_token = request_access_token(timeout=min(timeout, 60))
+                auth_refreshed = True
+                continue
+
+            if exc.code == 429 and retries < max_retries:
+                retry_after = _http_retry_after_seconds(exc)
+                if retry_after is None:
+                    delay = min(
+                        max_backoff_seconds,
+                        base_backoff_seconds * (2 ** retries),
+                    )
+                else:
+                    delay = min(max_retry_after_seconds, retry_after)
+                retries += 1
+                sleeper(delay)
+                continue
+
+            if exc.code == 429:
+                raise DryadRateLimitError(
+                    "Dryad archive download failed after HTTP 429 retries",
+                    retry_after=_http_retry_after_seconds(exc),
+                ) from exc
+            raise DryadAccessError(
+                f"Dryad archive download failed: HTTP {exc.code}"
+            ) from exc
 
 
 def download_file(
