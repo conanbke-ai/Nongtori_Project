@@ -2,7 +2,7 @@
 
 - Member-by-member HTTP Range materialization is retired after repeated Dryad HTTP 429 rate limiting.
 - Strict candidate remains frozen: 524 fruit IDs / 11,528 images; candidate row identity is unchanged.
-- Canonical materialization mode: `SEQUENTIAL_ARCHIVE_CACHE`.
+- Canonical materialization mode: `SEQUENTIAL_ARCHIVE_CACHE` (PR #49 workstream).
 - Process one `Pictures_*.zip` at a time:
   - resumable `.part` archive download;
   - official exact byte-size + SHA-256 verification;
