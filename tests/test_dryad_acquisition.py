@@ -11,6 +11,7 @@ from ml.data_pipeline.dryad_acquisition import (
     DryadAccessError,
     build_public_manifest_inventory,
     download_file,
+    download_file_resumable,
     download_url,
     ensure_datasheet,
     file_id,
@@ -216,6 +217,63 @@ class DryadAcquisitionTests(unittest.TestCase):
         self.assertEqual(report["picture_archive_bytes"], 200)
         self.assertEqual(report["scan_archive_bytes"], 300)
         self.assertEqual([item["role"] for item in report["files"]], ["DATASHEET", "PICTURE_ARCHIVE", "SCAN_ARCHIVE"])
+
+
+    def test_resumable_archive_download_appends_from_partial_file(self) -> None:
+        payload = b"abcdefghijklmnopqrstuvwxyz"
+        record = {
+            "path": "Pictures_01.zip",
+            "size": len(payload),
+            "digestType": "sha-256",
+            "digest": hashlib.sha256(payload).hexdigest(),
+            "_links": {"self": {"href": "/api/v2/files/101"}},
+        }
+
+        class Response:
+            status = 206
+            def __init__(self, body):
+                self.body = body
+                self.offset = 0
+            def getcode(self):
+                return self.status
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self, size=-1):
+                if self.offset >= len(self.body):
+                    return b""
+                if size < 0:
+                    size = len(self.body) - self.offset
+                out = self.body[self.offset:self.offset + size]
+                self.offset += len(out)
+                return out
+
+        class Opener:
+            def __init__(self):
+                self.range_headers = []
+            def open(self, request, timeout):
+                self.range_headers.append(request.headers.get("Range"))
+                return Response(payload[10:])
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "Pictures_01.zip"
+            part = output.with_name(output.name + ".part")
+            part.write_bytes(payload[:10])
+            opener = Opener()
+            with mock.patch(
+                "ml.data_pipeline.dryad_acquisition.resolve_access_token",
+                return_value="token",
+            ):
+                result = download_file_resumable(
+                    record,
+                    output,
+                    opener=opener,
+                    sleeper=lambda _delay: None,
+                )
+            self.assertEqual(output.read_bytes(), payload)
+            self.assertEqual(opener.range_headers, ["bytes=10-"])
+            self.assertEqual(result["action"], "RESUMED_AND_VERIFIED")
 
 
 if __name__ == "__main__":

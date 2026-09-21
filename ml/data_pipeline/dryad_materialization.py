@@ -9,8 +9,12 @@ from collections import defaultdict
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
-from .dryad_acquisition import DryadAccessError, resolve_access_token, resolve_manifest, sha256_file
-from .dryad_image_join_audit import RemoteZipRangeReader
+from .dryad_acquisition import (
+    DryadAccessError,
+    download_file_resumable,
+    resolve_manifest,
+    sha256_file,
+)
 
 MATERIALIZATION_SCHEMA_VERSION = 1
 VERIFIED_CANDIDATE_STATUS = "STRICT_CANDIDATE_MANIFEST_VERIFIED"
@@ -142,16 +146,18 @@ def materialize_strict_candidates(
     output_root: Path,
     output_manifest: Path,
     *,
-    timeout: int = 120,
-    range_chunk_mb: int = 32,
+    timeout: int = 300,
     checkpoint_every: int = 25,
-    reader_factory: Callable[..., Any] = RemoteZipRangeReader,
+    archive_cache_dir: Path = Path("data/cache/dryad/DATA-QUAL-002/picture-archives"),
+    keep_archives: bool = False,
+    archive_downloader=download_file_resumable,
 ) -> dict[str, Any]:
     candidate = load_candidate_manifest(candidate_manifest)
     rows = candidate["rows"]
     candidate_rows_sha256 = str(candidate["rows_sha256"])
     output_root = Path(output_root)
     output_manifest = Path(output_manifest)
+    archive_cache_dir = Path(archive_cache_dir)
     previous_sha = _previous_sha_by_key(output_manifest, candidate_rows_sha256)
 
     _, official_files = resolve_manifest(timeout=min(timeout, 60))
@@ -179,15 +185,16 @@ def materialize_strict_candidates(
         relative_paths.add(relative)
         by_archive[archive_path].append(row)
 
-    access_token = resolve_access_token(timeout=min(timeout, 60))
     materialized: list[dict[str, Any]] = []
     reused_count = 0
     downloaded_count = 0
     repaired_count = 0
+    archive_download_count = 0
 
     for archive_path in sorted(by_archive):
         record = picture_records[archive_path]
         pending: list[tuple[dict[str, Any], Path, bool]] = []
+
         for row in by_archive[archive_path]:
             relative = _relative_output_path(row)
             destination = output_root / relative
@@ -207,71 +214,98 @@ def materialize_strict_candidates(
             else:
                 pending.append((row, destination, destination.exists()))
 
-        if pending:
-            pending.sort(key=lambda item: int(item[0].get("header_offset") or 0))
-            reader = reader_factory(
-                record,
-                access_token=access_token,
-                timeout=timeout,
-                min_chunk_size=max(1, range_chunk_mb) * 1024 * 1024,
-                min_request_interval_seconds=0.25,
-            )
-            try:
-                with zipfile.ZipFile(reader) as archive:
-                    info_by_name = {info.filename: info for info in archive.infolist() if not info.is_dir()}
-                    for row, destination, existed_before in pending:
-                        filename = str(row["filename"])
-                        info = info_by_name.get(filename)
-                        if info is None:
-                            raise DryadAccessError(
-                                f"Candidate member disappeared from {archive_path}: {filename}"
-                            )
-                        payload = archive.read(info)
-                        if len(payload) != int(row["file_size"]):
-                            raise DryadAccessError(
-                                f"Uncompressed size mismatch for {archive_path}:{filename}"
-                            )
-                        crc = f"{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
-                        if crc != str(row["crc32"]).lower():
-                            raise DryadAccessError(
-                                f"CRC32 mismatch for {archive_path}:{filename}"
-                            )
-                        digest = hashlib.sha256(payload).hexdigest()
-                        _atomic_write(destination, payload)
-                        if _verify_existing(destination, row, digest) != digest:
-                            raise DryadAccessError(
-                                f"Post-write verification failed for {destination}"
-                            )
-                        downloaded_count += 1
-                        if existed_before:
-                            repaired_count += 1
-                        relative = _relative_output_path(row)
-                        materialized.append({
-                            "fruit_id": row["fruit_id"],
-                            "archive_path": archive_path,
-                            "filename": filename,
-                            "relative_path": relative.as_posix(),
-                            "size": int(row["file_size"]),
-                            "crc32": crc,
-                            "sha256": digest,
-                        })
-                        if checkpoint_every > 0 and len(materialized) % checkpoint_every == 0:
-                            checkpoint = _materialization_report(
-                                candidate,
-                                sorted(materialized, key=lambda item: (item["fruit_id"], item["archive_path"], item["filename"])),
-                                root=output_root,
-                                reused_count=reused_count,
-                                downloaded_count=downloaded_count,
-                                repaired_count=repaired_count,
-                                complete=False,
-                            )
-                            _write_report_atomic(checkpoint, output_manifest)
-            except zipfile.BadZipFile as exc:
-                raise DryadAccessError(
-                    f"Cannot read remote ZIP for selective materialization: {archive_path}: {exc}"
-                ) from exc
+        if not pending:
+            continue
 
-    materialized.sort(key=lambda item: (item["fruit_id"], item["archive_path"], item["filename"]))
+        archive_cache_dir.mkdir(parents=True, exist_ok=True)
+        archive_file = archive_cache_dir / Path(archive_path).name
+        archive_result = archive_downloader(
+            record,
+            archive_file,
+            timeout=timeout,
+        )
+        if archive_result.get("action") != "REUSED_VERIFIED":
+            archive_download_count += 1
+
+        try:
+            with zipfile.ZipFile(archive_file) as archive:
+                info_by_name = {
+                    info.filename: info
+                    for info in archive.infolist()
+                    if not info.is_dir()
+                }
+                for row, destination, existed_before in pending:
+                    filename = str(row["filename"])
+                    info = info_by_name.get(filename)
+                    if info is None:
+                        raise DryadAccessError(
+                            f"Candidate member disappeared from {archive_path}: {filename}"
+                        )
+                    payload = archive.read(info)
+                    if len(payload) != int(row["file_size"]):
+                        raise DryadAccessError(
+                            f"Uncompressed size mismatch for {archive_path}:{filename}"
+                        )
+                    crc = f"{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
+                    if crc != str(row["crc32"]).lower():
+                        raise DryadAccessError(
+                            f"CRC32 mismatch for {archive_path}:{filename}"
+                        )
+                    digest = hashlib.sha256(payload).hexdigest()
+                    _atomic_write(destination, payload)
+                    if _verify_existing(destination, row, digest) != digest:
+                        raise DryadAccessError(
+                            f"Post-write verification failed for {destination}"
+                        )
+                    downloaded_count += 1
+                    if existed_before:
+                        repaired_count += 1
+                    relative = _relative_output_path(row)
+                    materialized.append({
+                        "fruit_id": row["fruit_id"],
+                        "archive_path": archive_path,
+                        "filename": filename,
+                        "relative_path": relative.as_posix(),
+                        "size": int(row["file_size"]),
+                        "crc32": crc,
+                        "sha256": digest,
+                    })
+
+                    if checkpoint_every > 0 and len(materialized) % checkpoint_every == 0:
+                        checkpoint = _materialization_report(
+                            candidate,
+                            sorted(
+                                materialized,
+                                key=lambda item: (
+                                    item["fruit_id"],
+                                    item["archive_path"],
+                                    item["filename"],
+                                ),
+                            ),
+                            root=output_root,
+                            reused_count=reused_count,
+                            downloaded_count=downloaded_count,
+                            repaired_count=repaired_count,
+                            complete=False,
+                        )
+                        checkpoint["archive_download_count"] = archive_download_count
+                        checkpoint["materialization_mode"] = "SEQUENTIAL_ARCHIVE_CACHE"
+                        _write_report_atomic(checkpoint, output_manifest)
+        except zipfile.BadZipFile as exc:
+            raise DryadAccessError(
+                f"Cannot read verified local archive {archive_path}: {exc}"
+            ) from exc
+        finally:
+            if not keep_archives:
+                archive_file.unlink(missing_ok=True)
+
+    materialized.sort(
+        key=lambda item: (
+            item["fruit_id"],
+            item["archive_path"],
+            item["filename"],
+        )
+    )
     complete = len(materialized) == int(candidate["image_count"])
     report = _materialization_report(
         candidate,
@@ -282,5 +316,9 @@ def materialize_strict_candidates(
         repaired_count=repaired_count,
         complete=complete,
     )
+    report["archive_download_count"] = archive_download_count
+    report["materialization_mode"] = "SEQUENTIAL_ARCHIVE_CACHE"
+    report["archive_cache_dir"] = str(archive_cache_dir)
+    report["keep_archives"] = keep_archives
     _write_report_atomic(report, output_manifest)
     return report
