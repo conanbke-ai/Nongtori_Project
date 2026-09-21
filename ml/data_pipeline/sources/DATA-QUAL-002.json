@@ -70,7 +70,15 @@
     "image_join_audit_command": "OPTIONAL_DIAGNOSTIC: python -m ml.data_pipeline.cli dryad-image-join-audit",
     "image_join_audit_mode": "REMOTE_ZIP_CENTRAL_DIRECTORY_ONLY",
     "full_picture_archive_download_required_for_filename_join": false,
-    "normal_command": "python -m ml.data_pipeline.cli dryad-weight-audit"
+    "normal_command": "python -m ml.data_pipeline.cli dryad-weight-audit",
+    "manifest_audit_command": "python -m ml.data_pipeline.cli dryad-manifest-audit",
+    "manifest_audit_output": "data/audit/dryad/DATA-QUAL-002/manifest-audit.json",
+    "manifest_expected_files": {
+      "total": 28,
+      "datasheet": 1,
+      "picture_archives": 7,
+      "scan_archives": 20
+    }
   },
   "original_labels": [
     "fruit_identity",
