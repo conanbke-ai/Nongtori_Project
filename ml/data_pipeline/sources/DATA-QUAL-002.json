@@ -80,7 +80,10 @@
       "scan_archives": 20
     },
     "materialize_candidates_command": "python -m ml.data_pipeline.cli dryad-materialize-candidates",
-    "materialized_assets_output": "data/audit/dryad/DATA-QUAL-002/strict-materialized-assets.json"
+    "materialized_assets_output": "data/audit/dryad/DATA-QUAL-002/strict-materialized-assets.json",
+    "materialization_mode": "SEQUENTIAL_ARCHIVE_CACHE",
+    "archive_cache_dir": "data/cache/dryad/DATA-QUAL-002/picture-archives",
+    "archive_cache_policy": "ONE_ARCHIVE_AT_A_TIME_RESUMABLE_VERIFY_EXTRACT_DELETE"
   },
   "original_labels": [
     "fruit_identity",
@@ -110,8 +113,8 @@
     "strict_rgb_weight_candidate_image_count": 11528,
     "snapshot_policy": "STRICT_VALID_WITH_CALYX_AND_EXACTLY_22_PUBLISHED_VIEWS",
     "asset_manifest_schema": "STRICT_CANDIDATE_MANIFEST_V1",
-    "asset_materialization_policy": "SELECTIVE_HTTP_RANGE_RESUMABLE_HASH_VERIFIED",
+    "asset_materialization_policy": "SEQUENTIAL_ARCHIVE_CACHE_RESUMABLE_SHA256_VERIFIED",
     "asset_cache_policy": "REUSE_VERIFIED_LOCAL_MEMBER_BYTES_BY_HASH"
   },
-  "notes": "Strict RGB-weight candidate manifest is frozen at 524 fruits / 11,528 images. Selective materialization reads only required ZIP members through guarded HTTP Range, atomically writes them, verifies exact size/CRC32/SHA-256, reuses already verified local members, and persists a resumable per-image hash manifest. Full picture archive fallback remains prohibited. After real local completion, split strictly by FRUIT_ID and freeze WEIGHT-DRYAD-V001."
+  "notes": "Strict RGB-weight candidate manifest is frozen at 524 fruits / 11,528 images. Because this covers nearly all published RGB images, member-by-member HTTP Range materialization was abandoned after sustained HTTP 429 rate limits. Canonical materialization now downloads one Pictures_*.zip at a time with resumable .part support, verifies official byte size/SHA-256, extracts only strict candidate members with CRC32/SHA-256 verification, then deletes the archive by default to bound peak disk usage. After real local completion, split strictly by FRUIT_ID and freeze WEIGHT-DRYAD-V001."
 }
