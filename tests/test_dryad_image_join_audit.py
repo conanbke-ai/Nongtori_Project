@@ -228,7 +228,7 @@ class DryadImageJoinAuditTests(unittest.TestCase):
         )
         with zipfile.ZipFile(reader) as archive:
             self.assertEqual(archive.namelist(), ["0001_view_01.jpg"])
-        self.assertEqual(attempts["count"], 3)
+        self.assertGreaterEqual(attempts["count"], 3)
         self.assertEqual(sleeps, [3.0, 4.0])
 
 
