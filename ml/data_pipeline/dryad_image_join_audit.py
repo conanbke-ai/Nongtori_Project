@@ -11,7 +11,9 @@ from typing import Any, Callable
 
 from .dryad_acquisition import (
     DryadAccessError,
+    DryadUnauthorizedError,
     fetch_file_range,
+    request_access_token,
     sha256_file,
     resolve_access_token,
     resolve_manifest,
@@ -38,6 +40,7 @@ class RemoteZipRangeReader(io.RawIOBase):
         timeout: int = 120,
         min_chunk_size: int = 1024 * 1024,
         fetcher: Callable[..., bytes] = fetch_file_range,
+        token_refresher: Callable[..., str] = request_access_token,
     ) -> None:
         self.record = record
         self.size = int(record.get("size") or 0)
@@ -47,6 +50,7 @@ class RemoteZipRangeReader(io.RawIOBase):
         self.timeout = timeout
         self.min_chunk_size = max(64 * 1024, int(min_chunk_size))
         self.fetcher = fetcher
+        self.token_refresher = token_refresher
         self.position = 0
         self.cache_start = -1
         self.cache = b""
@@ -102,13 +106,23 @@ class RemoteZipRangeReader(io.RawIOBase):
 
         fetch_len = max(n, self.min_chunk_size)
         end = min(self.size - 1, self.position + fetch_len - 1)
-        payload = self.fetcher(
-            self.record,
-            self.position,
-            end,
-            access_token=self.access_token,
-            timeout=self.timeout,
-        )
+        try:
+            payload = self.fetcher(
+                self.record,
+                self.position,
+                end,
+                access_token=self.access_token,
+                timeout=self.timeout,
+            )
+        except DryadUnauthorizedError:
+            self.access_token = self.token_refresher(timeout=min(self.timeout, 60))
+            payload = self.fetcher(
+                self.record,
+                self.position,
+                end,
+                access_token=self.access_token,
+                timeout=self.timeout,
+            )
         self.cache_start = self.position
         self.cache = payload
         out = payload[:n]
