@@ -143,7 +143,7 @@ def materialize_strict_candidates(
     output_manifest: Path,
     *,
     timeout: int = 120,
-    range_chunk_mb: int = 8,
+    range_chunk_mb: int = 32,
     checkpoint_every: int = 25,
     reader_factory: Callable[..., Any] = RemoteZipRangeReader,
 ) -> dict[str, Any]:
@@ -214,6 +214,7 @@ def materialize_strict_candidates(
                 access_token=access_token,
                 timeout=timeout,
                 min_chunk_size=max(1, range_chunk_mb) * 1024 * 1024,
+                min_request_interval_seconds=0.25,
             )
             try:
                 with zipfile.ZipFile(reader) as archive:

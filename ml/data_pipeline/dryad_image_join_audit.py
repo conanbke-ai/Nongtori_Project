@@ -44,10 +44,12 @@ class RemoteZipRangeReader(io.RawIOBase):
         fetcher: Callable[..., bytes] = fetch_file_range,
         token_refresher: Callable[..., str] = request_access_token,
         sleeper: Callable[[float], None] = time.sleep,
-        max_rate_limit_retries: int = 6,
+        max_rate_limit_retries: int = 10,
         base_backoff_seconds: float = 2.0,
         max_backoff_seconds: float = 60.0,
         max_retry_after_seconds: float = 300.0,
+        min_request_interval_seconds: float = 0.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.record = record
         self.size = int(record.get("size") or 0)
@@ -69,6 +71,12 @@ class RemoteZipRangeReader(io.RawIOBase):
             self.max_backoff_seconds,
             float(max_retry_after_seconds),
         )
+        self.min_request_interval_seconds = max(
+            0.0,
+            float(min_request_interval_seconds),
+        )
+        self.clock = clock
+        self.last_request_at: float | None = None
         self.position = 0
         self.cache_start = -1
         self.cache = b""
@@ -108,6 +116,19 @@ class RemoteZipRangeReader(io.RawIOBase):
         take = min(n, available)
         return self.cache[rel : rel + take]
 
+    def _throttle_request(self) -> None:
+        if self.min_request_interval_seconds <= 0:
+            return
+        now = self.clock()
+        if self.last_request_at is not None:
+            remaining = self.min_request_interval_seconds - (
+                now - self.last_request_at
+            )
+            if remaining > 0:
+                self.sleeper(remaining)
+                now = self.clock()
+        self.last_request_at = now
+
     def read(self, n: int = -1) -> bytes:
         if self.position >= self.size:
             return b""
@@ -128,6 +149,7 @@ class RemoteZipRangeReader(io.RawIOBase):
         auth_refreshed = False
         while True:
             try:
+                self._throttle_request()
                 payload = self.fetcher(
                     self.record,
                     self.position,
