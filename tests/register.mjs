@@ -17,7 +17,7 @@ registerHooks({
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
-    if (url === 'test:cloudflare') return { format: 'module', source: 'export const env = globalThis.nongtoriTestEnv;', shortCircuit: true };
+    if (url === 'test:cloudflare') return { format: 'module', source: 'export const env = new Proxy({}, { get(_target, key) { return globalThis.nongtoriTestEnv?.[key]; } });', shortCircuit: true };
     if (/\.(ts|tsx)$/.test(url)) return { format: 'module', shortCircuit: true, source: ts.transpileModule(readFileSync(fileURLToPath(url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText };
     return nextLoad(url, context);
   },

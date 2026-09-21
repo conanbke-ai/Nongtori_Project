@@ -21,6 +21,7 @@ from .dryad_image_join_audit import (
     load_cached_image_join_report,
     write_image_join_report,
 )
+from .dryad_manifest_audit import audit_official_manifest, write_manifest_audit
 from .dryad_weight_audit import audit_datasheet, write_audit_report as write_dryad_weight_audit_report
 from .downloader import DatasetDownloader
 from .field_audit import audit_field_csv
@@ -47,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("audit-strawberry-ds"); p.add_argument("--labels-dir", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("audit-kgcv"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("dryad-manifest"); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/public-manifest.json")); p.add_argument("--timeout", type=int, default=60)
+    p = sub.add_parser("dryad-manifest-audit"); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/manifest-audit.json")); p.add_argument("--timeout", type=int, default=60)
     p = sub.add_parser("dryad-weight-audit"); p.add_argument("--datasheet", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/datasheet.xlsx")); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/datasheet-audit.json")); p.add_argument("--manifest-output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/public-manifest.json")); p.add_argument("--image-join-output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/image-join-audit.json")); p.add_argument("--force-download", action="store_true"); p.add_argument("--skip-image-join", action="store_true"); p.add_argument("--range-chunk-mb", type=int, default=1); p.add_argument("--timeout", type=int, default=300)
     p = sub.add_parser("dryad-image-join-audit"); p.add_argument("--datasheet", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/datasheet.xlsx")); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/image-join-audit.json")); p.add_argument("--timeout", type=int, default=120); p.add_argument("--range-chunk-mb", type=int, default=1)
     p = sub.add_parser("snapshot"); p.add_argument("source_id"); p.add_argument("--audit-dir", type=Path, required=True); p.add_argument("--snapshot-root", type=Path, required=True); p.add_argument("--snapshot-id", required=True)
@@ -81,6 +83,15 @@ def main(argv: list[str] | None = None) -> int:
         report = write_manifest_inventory(args.output, timeout=args.timeout)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
+    if args.command == "dryad-manifest-audit":
+        try:
+            report = audit_official_manifest(timeout=args.timeout)
+            write_manifest_audit(report, args.output)
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+            return 0 if report["status"] == "MANIFEST_VERIFIED" else 2
+        except DryadAccessError as exc:
+            print(json.dumps({"status": "MANIFEST_AUDIT_FAILED", "error": str(exc)}, ensure_ascii=False, indent=2))
+            return 3
     if args.command == "dryad-weight-audit":
         try:
             dataset, files = resolve_manifest(timeout=min(args.timeout, 60))
