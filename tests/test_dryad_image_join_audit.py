@@ -233,7 +233,7 @@ class DryadImageJoinAuditTests(unittest.TestCase):
 
 
     def test_remote_zip_range_reader_paces_requests(self) -> None:
-        raw = b"0123456789"
+        raw = bytes((index % 251 for index in range(200_000)))
         times = iter([0.0, 0.1, 0.35])
         sleeps: list[float] = []
         requests: list[tuple[int, int]] = []
@@ -245,15 +245,15 @@ class DryadImageJoinAuditTests(unittest.TestCase):
         reader = RemoteZipRangeReader(
             {"size": len(raw), "path": "Pictures_01.zip"},
             access_token="token",
-            min_chunk_size=2,
+            min_chunk_size=64 * 1024,
             fetcher=fetcher,
             sleeper=sleeps.append,
             min_request_interval_seconds=0.25,
             clock=lambda: next(times),
         )
-        self.assertEqual(reader.read(2), b"01")
-        reader.seek(4)
-        self.assertEqual(reader.read(2), b"45")
+        self.assertEqual(reader.read(2), raw[:2])
+        reader.seek(100_000)
+        self.assertEqual(reader.read(2), raw[100_000:100_002])
         self.assertEqual(sleeps, [0.15])
         self.assertEqual(len(requests), 2)
 
