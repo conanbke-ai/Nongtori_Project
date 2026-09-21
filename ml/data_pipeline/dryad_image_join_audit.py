@@ -47,6 +47,7 @@ class RemoteZipRangeReader(io.RawIOBase):
         max_rate_limit_retries: int = 6,
         base_backoff_seconds: float = 2.0,
         max_backoff_seconds: float = 60.0,
+        max_retry_after_seconds: float = 300.0,
     ) -> None:
         self.record = record
         self.size = int(record.get("size") or 0)
@@ -63,6 +64,10 @@ class RemoteZipRangeReader(io.RawIOBase):
         self.max_backoff_seconds = max(
             self.base_backoff_seconds,
             float(max_backoff_seconds),
+        )
+        self.max_retry_after_seconds = max(
+            self.max_backoff_seconds,
+            float(max_retry_after_seconds),
         )
         self.position = 0
         self.cache_start = -1
@@ -149,7 +154,7 @@ class RemoteZipRangeReader(io.RawIOBase):
                     )
                 else:
                     retry_after = min(
-                        self.max_backoff_seconds,
+                        self.max_retry_after_seconds,
                         max(0.0, retry_after),
                     )
                 self.sleeper(retry_after)
