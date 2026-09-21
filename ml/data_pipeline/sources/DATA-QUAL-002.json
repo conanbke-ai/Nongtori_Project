@@ -78,7 +78,9 @@
       "datasheet": 1,
       "picture_archives": 7,
       "scan_archives": 20
-    }
+    },
+    "materialize_candidates_command": "python -m ml.data_pipeline.cli dryad-materialize-candidates",
+    "materialized_assets_output": "data/audit/dryad/DATA-QUAL-002/strict-materialized-assets.json"
   },
   "original_labels": [
     "fruit_identity",
@@ -90,7 +92,7 @@
     "weight_without_calyx"
   ],
   "nongtori_mapping": {
-    "status": "STRICT_RGB_WEIGHT_MANIFEST_PENDING_LOCAL_BUILD",
+    "status": "STRICT_RGB_WEIGHT_SELECTIVE_MATERIALIZATION_READY",
     "role": "COMMERCIAL_WEIGHT_PRETRAINING_CANDIDATE",
     "split_group": "FRUIT_ID",
     "primary_weight_target": "weight_with_calyx",
@@ -108,8 +110,8 @@
     "strict_rgb_weight_candidate_image_count": 11528,
     "snapshot_policy": "STRICT_VALID_WITH_CALYX_AND_EXACTLY_22_PUBLISHED_VIEWS",
     "asset_manifest_schema": "STRICT_CANDIDATE_MANIFEST_V1",
-    "asset_materialization_policy": "SELECTIVE_ONLY_NO_FULL_ARCHIVE_DOWNLOAD",
+    "asset_materialization_policy": "SELECTIVE_HTTP_RANGE_RESUMABLE_HASH_VERIFIED",
     "asset_cache_policy": "REUSE_VERIFIED_LOCAL_MEMBER_BYTES_BY_HASH"
   },
-  "notes": "Published subset audit is frozen: 549 Photo=YES fruits, 541 exact-22, 7 partial, 1 overcomplete; strict RGB-weight candidate is 524 fruits / 11,528 images with valid with-calyx targets. Next gate is a strict candidate member manifest that records archive/member identity and ZIP offsets without downloading image bodies. After that, only strict candidate members are materialized with resumable hash-verified reuse; full picture archives must not be downloaded."
+  "notes": "Strict RGB-weight candidate manifest is frozen at 524 fruits / 11,528 images. Selective materialization reads only required ZIP members through guarded HTTP Range, atomically writes them, verifies exact size/CRC32/SHA-256, reuses already verified local members, and persists a resumable per-image hash manifest. Full picture archive fallback remains prohibited. After real local completion, split strictly by FRUIT_ID and freeze WEIGHT-DRYAD-V001."
 }
