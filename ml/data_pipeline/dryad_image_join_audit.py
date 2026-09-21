@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import re
+import time
 import zipfile
 from collections import Counter
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any, Callable
 
 from .dryad_acquisition import (
     DryadAccessError,
+    DryadRateLimitError,
     DryadUnauthorizedError,
     fetch_file_range,
     request_access_token,
@@ -41,6 +43,10 @@ class RemoteZipRangeReader(io.RawIOBase):
         min_chunk_size: int = 1024 * 1024,
         fetcher: Callable[..., bytes] = fetch_file_range,
         token_refresher: Callable[..., str] = request_access_token,
+        sleeper: Callable[[float], None] = time.sleep,
+        max_rate_limit_retries: int = 6,
+        base_backoff_seconds: float = 2.0,
+        max_backoff_seconds: float = 60.0,
     ) -> None:
         self.record = record
         self.size = int(record.get("size") or 0)
@@ -51,6 +57,13 @@ class RemoteZipRangeReader(io.RawIOBase):
         self.min_chunk_size = max(64 * 1024, int(min_chunk_size))
         self.fetcher = fetcher
         self.token_refresher = token_refresher
+        self.sleeper = sleeper
+        self.max_rate_limit_retries = max(0, int(max_rate_limit_retries))
+        self.base_backoff_seconds = max(0.1, float(base_backoff_seconds))
+        self.max_backoff_seconds = max(
+            self.base_backoff_seconds,
+            float(max_backoff_seconds),
+        )
         self.position = 0
         self.cache_start = -1
         self.cache = b""
@@ -106,23 +119,41 @@ class RemoteZipRangeReader(io.RawIOBase):
 
         fetch_len = max(n, self.min_chunk_size)
         end = min(self.size - 1, self.position + fetch_len - 1)
-        try:
-            payload = self.fetcher(
-                self.record,
-                self.position,
-                end,
-                access_token=self.access_token,
-                timeout=self.timeout,
-            )
-        except DryadUnauthorizedError:
-            self.access_token = self.token_refresher(timeout=min(self.timeout, 60))
-            payload = self.fetcher(
-                self.record,
-                self.position,
-                end,
-                access_token=self.access_token,
-                timeout=self.timeout,
-            )
+        rate_limit_retries = 0
+        auth_refreshed = False
+        while True:
+            try:
+                payload = self.fetcher(
+                    self.record,
+                    self.position,
+                    end,
+                    access_token=self.access_token,
+                    timeout=self.timeout,
+                )
+                break
+            except DryadUnauthorizedError:
+                if auth_refreshed:
+                    raise
+                self.access_token = self.token_refresher(
+                    timeout=min(self.timeout, 60)
+                )
+                auth_refreshed = True
+            except DryadRateLimitError as exc:
+                if rate_limit_retries >= self.max_rate_limit_retries:
+                    raise
+                retry_after = exc.retry_after
+                if retry_after is None:
+                    retry_after = min(
+                        self.max_backoff_seconds,
+                        self.base_backoff_seconds * (2 ** rate_limit_retries),
+                    )
+                else:
+                    retry_after = min(
+                        self.max_backoff_seconds,
+                        max(0.0, retry_after),
+                    )
+                self.sleeper(retry_after)
+                rate_limit_retries += 1
         self.cache_start = self.position
         self.cache = payload
         out = payload[:n]
