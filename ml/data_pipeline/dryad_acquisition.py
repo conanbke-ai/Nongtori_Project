@@ -21,6 +21,10 @@ class DryadAccessError(RuntimeError):
     pass
 
 
+class DryadUnauthorizedError(DryadAccessError):
+    """Range/download authorization expired or was rejected."""
+
+
 def load_env_local(path: Path = Path(".env.local")) -> None:
     """Load simple KEY=VALUE pairs without overriding existing process env."""
     if not path.exists():
@@ -284,6 +288,8 @@ def fetch_file_range(
                 )
             payload = response.read(end - start + 1)
     except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            raise DryadUnauthorizedError("Dryad range request failed: HTTP 401") from exc
         raise DryadAccessError(f"Dryad range request failed: HTTP {exc.code}") from exc
     expected = end - start + 1
     if len(payload) != expected:

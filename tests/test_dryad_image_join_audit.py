@@ -7,6 +7,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from ml.data_pipeline.dryad_acquisition import DryadUnauthorizedError
 from ml.data_pipeline.dryad_image_join_audit import (
     RemoteZipRangeReader,
     audit_filename_inventory,
@@ -166,6 +167,38 @@ class DryadImageJoinAuditTests(unittest.TestCase):
             )
         self.assertTrue(requests)
         self.assertTrue(all((end - start + 1) <= len(raw) for start, end in requests))
+
+
+    def test_remote_zip_range_reader_refreshes_once_after_401(self) -> None:
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr("0001_view_01.jpg", b"x")
+        raw = payload.getvalue()
+        tokens: list[str] = []
+        refreshes: list[int] = []
+
+        def fetcher(record, start, end, *, access_token, timeout):
+            tokens.append(access_token)
+            if access_token == "expired-token":
+                raise DryadUnauthorizedError("expired")
+            return raw[start : end + 1]
+
+        def refresh_token(*, timeout):
+            refreshes.append(timeout)
+            return "fresh-token"
+
+        reader = RemoteZipRangeReader(
+            {"size": len(raw), "path": "Pictures_01.zip"},
+            access_token="expired-token",
+            min_chunk_size=64 * 1024,
+            fetcher=fetcher,
+            token_refresher=refresh_token,
+        )
+        with zipfile.ZipFile(reader) as archive:
+            self.assertEqual(archive.namelist(), ["0001_view_01.jpg"])
+        self.assertIn("expired-token", tokens)
+        self.assertIn("fresh-token", tokens)
+        self.assertEqual(len(refreshes), 1)
 
 
 if __name__ == "__main__":
