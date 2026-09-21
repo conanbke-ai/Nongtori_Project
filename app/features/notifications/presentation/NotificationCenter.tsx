@@ -65,7 +65,10 @@ export function NotificationCenter({ farmId, language, onOpenScouting }: {
     }
   }, [farmId, text.loadError]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const handle = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(handle);
+  }, [load]);
   useEffect(() => {
     if (!open) return;
     const handle = (event: MouseEvent) => {
