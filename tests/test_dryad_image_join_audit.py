@@ -7,7 +7,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from ml.data_pipeline.dryad_acquisition import DryadUnauthorizedError
+from ml.data_pipeline.dryad_acquisition import DryadRateLimitError, DryadUnauthorizedError
 from ml.data_pipeline.dryad_image_join_audit import (
     RemoteZipRangeReader,
     audit_filename_inventory,
@@ -199,6 +199,37 @@ class DryadImageJoinAuditTests(unittest.TestCase):
         self.assertIn("expired-token", tokens)
         self.assertIn("fresh-token", tokens)
         self.assertEqual(len(refreshes), 1)
+
+
+    def test_remote_zip_range_reader_retries_429_with_backoff(self) -> None:
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr("0001_view_01.jpg", b"x")
+        raw = payload.getvalue()
+        attempts = {"count": 0}
+        sleeps: list[float] = []
+
+        def fetcher(record, start, end, *, access_token, timeout):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                raise DryadRateLimitError("slow down", retry_after=3.0)
+            if attempts["count"] == 2:
+                raise DryadRateLimitError("slow down")
+            return raw[start : end + 1]
+
+        reader = RemoteZipRangeReader(
+            {"size": len(raw), "path": "Pictures_01.zip"},
+            access_token="token",
+            min_chunk_size=64 * 1024,
+            fetcher=fetcher,
+            sleeper=sleeps.append,
+            base_backoff_seconds=2.0,
+            max_rate_limit_retries=3,
+        )
+        with zipfile.ZipFile(reader) as archive:
+            self.assertEqual(archive.namelist(), ["0001_view_01.jpg"])
+        self.assertGreaterEqual(attempts["count"], 3)
+        self.assertEqual(sleeps, [3.0, 4.0])
 
 
 if __name__ == "__main__":

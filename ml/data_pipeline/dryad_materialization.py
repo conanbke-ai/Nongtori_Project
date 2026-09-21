@@ -143,7 +143,7 @@ def materialize_strict_candidates(
     output_manifest: Path,
     *,
     timeout: int = 120,
-    range_chunk_mb: int = 1,
+    range_chunk_mb: int = 8,
     checkpoint_every: int = 25,
     reader_factory: Callable[..., Any] = RemoteZipRangeReader,
 ) -> dict[str, Any]:
@@ -208,6 +208,7 @@ def materialize_strict_candidates(
                 pending.append((row, destination, destination.exists()))
 
         if pending:
+            pending.sort(key=lambda item: int(item[0].get("header_offset") or 0))
             reader = reader_factory(
                 record,
                 access_token=access_token,
