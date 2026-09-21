@@ -1,3 +1,19 @@
+## Dryad archive-cache materialization gate — 2026-09-21
+
+- Member-by-member HTTP Range materialization is retired after repeated Dryad HTTP 429 rate limiting.
+- Strict candidate remains frozen: 524 fruit IDs / 11,528 images; candidate row identity is unchanged.
+- Canonical materialization mode: `SEQUENTIAL_ARCHIVE_CACHE`.
+- Process one `Pictures_*.zip` at a time:
+  - resumable `.part` archive download;
+  - official exact byte-size + SHA-256 verification;
+  - extract strict candidate members only;
+  - member size + CRC32 + SHA-256 verification;
+  - delete archive after extraction by default;
+  - `--keep-archives` is diagnostic/optional only.
+- Existing verified extracted members are reused, so interrupted reruns skip finished assets.
+- Peak transient archive storage is bounded to one picture ZIP rather than all seven.
+- Next gate after 11,528/11,528 verification: FRUIT_ID atomic split → WEIGHT-DRYAD-V001.
+
 ## Dryad selective materialization gate — 2026-09-21
 
 - Upstream strict candidate manifest is merged on `main`: 524 fruit IDs / 11,528 images.
@@ -20,11 +36,8 @@
 - If candidate manifest fingerprint matches, reuse it with no repeat ZIP central-directory Range requests.
 - First manifest build requires one metadata-only central-directory pass because prior audit cache did not persist member filenames/offsets.
 - No image bodies are downloaded at manifest stage.
-- Next stage materializes only strict candidate members and must:
-  - skip already-present files after hash verification;
-  - resume safely after interruption;
-  - never download full picture archives as fallback;
-  - produce per-image SHA-256 before immutable snapshot freeze.
+- Materialization stage now uses one verified picture archive at a time because member-level Range requests triggered sustained Dryad 429 limits.
+- It skips already-present files after hash verification, resumes interrupted archive downloads via `.part`, extracts only strict candidates, deletes the archive by default, and produces per-image SHA-256 before immutable snapshot freeze.
 - Split boundary remains FRUIT_ID.
 
 ## Dryad image join gate — 2026-09-18
