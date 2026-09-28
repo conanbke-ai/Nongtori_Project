@@ -328,6 +328,42 @@ def primary_weight_candidate_ids_from_datasheet(path: Path) -> list[str]:
     return ids
 
 
+def primary_weight_records_from_datasheet(path: Path) -> dict[str, dict[str, Any]]:
+    """Return supervised with-calyx target records keyed by canonical fruit ID."""
+    sheets = read_xlsx_sheets(path)
+    tables = _detect_sheet_tables(sheets)
+    if not tables:
+        raise ValueError("No compatible Dryad fruit tables found")
+    mappings = [table["mapping"] for table in tables]
+    if any(mapping != mappings[0] for mapping in mappings[1:]):
+        raise ValueError("Dryad fruit tables have incompatible column mappings")
+    mapping = mappings[0]
+
+    result: dict[str, dict[str, Any]] = {}
+    for table in tables:
+        for row in table["rows"]:
+            fruit_id = _value_at(row, mapping["fruit_id"])
+            primary = _to_float(_value_at(row, mapping.get(PRIMARY_WEIGHT_FIELD)))
+            if not fruit_id or primary is None or primary <= 0:
+                continue
+            if fruit_id in result:
+                raise ValueError(f"Duplicate Dryad primary-weight candidate ID: {fruit_id}")
+            result[fruit_id] = {
+                "fruit_id": fruit_id,
+                "weight_with_calyx_g": primary,
+                "weight_without_calyx_g": _to_float(
+                    _value_at(row, mapping.get(AUXILIARY_WEIGHT_FIELD))
+                ),
+                "width_mm": _to_float(_value_at(row, mapping.get("width"))),
+                "height_mm": _to_float(_value_at(row, mapping.get("height"))),
+                "variety": _value_at(row, mapping.get("variety")),
+                "shape": _value_at(row, mapping.get("shape")),
+                "photo": _value_at(row, mapping.get("photo")),
+                "source_sheet": str(table["sheet"]),
+            }
+    return result
+
+
 def fruit_ids_from_datasheet(path: Path) -> list[str]:
     """Return canonical fruit IDs from all compatible Dryad fruit tables."""
     sheets = read_xlsx_sheets(path)
