@@ -36,6 +36,33 @@ class SnapshotRow:
     sha256: str
 
 
+class WeightViewDataset:
+    """Pickle-safe dataset for Windows DataLoader spawn workers."""
+
+    def __init__(self, items: list[SnapshotRow], asset_root: Path, transform):
+        self.items = items
+        self.asset_root = Path(asset_root)
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, index: int):
+        import torch
+        from PIL import Image
+
+        row = self.items[index]
+        path = self.asset_root / Path(row.relative_path)
+        image = Image.open(path).convert("RGB")
+        tensor = self.transform(image)
+        return (
+            tensor,
+            torch.tensor(row.target_g, dtype=torch.float32),
+            row.fruit_id,
+            row.split,
+        )
+
+
 def _to_float(value: Any, field: str) -> float:
     try:
         number = float(value)
@@ -247,15 +274,14 @@ def _seed_all(seed: int = SEED) -> None:
 def _runtime_imports():
     try:
         import torch
-        from PIL import Image
         from torch import nn
-        from torch.utils.data import DataLoader, Dataset
+        from torch.utils.data import DataLoader
         from torchvision import models, transforms
     except ImportError as exc:
         raise RuntimeError(
             "RGB baseline requires torch, torchvision, and Pillow in the local ML environment"
         ) from exc
-    return torch, Image, nn, DataLoader, Dataset, models, transforms
+    return torch, nn, DataLoader, models, transforms
 
 
 def run_rgb_baseline(
@@ -265,7 +291,7 @@ def run_rgb_baseline(
     device_name: str | None = None,
     workers: int = 4,
 ) -> dict[str, Any]:
-    torch, Image, nn, DataLoader, Dataset, models, transforms = _runtime_imports()
+    torch, nn, DataLoader, models, transforms = _runtime_imports()
     snapshot_dir = Path(snapshot_dir)
     output_dir = Path(output_dir)
 
@@ -284,21 +310,6 @@ def run_rgb_baseline(
     for split, items in split_rows.items():
         if not items:
             raise ValueError(f"weight snapshot has empty {split} image split")
-
-    class WeightViewDataset(Dataset):
-        def __init__(self, items: list[SnapshotRow], transform):
-            self.items = items
-            self.transform = transform
-
-        def __len__(self):
-            return len(self.items)
-
-        def __getitem__(self, index: int):
-            row = self.items[index]
-            path = asset_root / Path(row.relative_path)
-            image = Image.open(path).convert("RGB")
-            tensor = self.transform(image)
-            return tensor, torch.tensor(row.target_g, dtype=torch.float32), row.fruit_id, row.split
 
     normalize = transforms.Normalize(
         mean=[0.485, 0.456, 0.406],
@@ -329,7 +340,7 @@ def run_rgb_baseline(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     train_loader = DataLoader(
-        WeightViewDataset(split_rows["train"], train_transform),
+        WeightViewDataset(split_rows["train"], asset_root, train_transform),
         batch_size=BATCH_SIZE,
         shuffle=True,
         num_workers=workers,
@@ -337,7 +348,7 @@ def run_rgb_baseline(
         persistent_workers=workers > 0,
     )
     validation_loader = DataLoader(
-        WeightViewDataset(split_rows["validation"], eval_transform),
+        WeightViewDataset(split_rows["validation"], asset_root, eval_transform),
         batch_size=BATCH_SIZE,
         shuffle=False,
         num_workers=workers,
@@ -345,7 +356,7 @@ def run_rgb_baseline(
         persistent_workers=workers > 0,
     )
     test_loader = DataLoader(
-        WeightViewDataset(split_rows["test"], eval_transform),
+        WeightViewDataset(split_rows["test"], asset_root, eval_transform),
         batch_size=BATCH_SIZE,
         shuffle=False,
         num_workers=workers,
