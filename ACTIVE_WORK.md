@@ -1,3 +1,19 @@
+## WEIGHT RGB baseline V001 — 2026-09-28
+
+- WEIGHT-DRYAD-V001 is now frozen locally: 524 fruits / 11,528 RGB views.
+- Geometry V001 real baseline completed:
+  - test MAE 1.4125g
+  - test RMSE 2.1850g
+  - test R² 0.9003
+  - test grade accuracy 0.8205
+- Current workstream: `feat/weight-rgb-baseline-v1`.
+- RGB training unit is one view; evaluation unit is one FRUIT_ID.
+- Each fruit prediction is the mean of exactly 22 view-level predictions.
+- Fixed model: EfficientNet-B0 ImageNet pretrained.
+- Checkpoint selection: best validation FRUIT_ID-level MAE only.
+- Test set is report-once and excluded from tuning.
+- Next after real RGB result: geometry-vs-RGB paired comparison on identical fruit test IDs, then optional combined model.
+
 ## WEIGHT threshold residual audit V001 — 2026-09-28
 
 - Geometry baseline V001 is merged on main.
