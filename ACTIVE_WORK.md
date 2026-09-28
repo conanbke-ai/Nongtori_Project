@@ -1,3 +1,14 @@
+## WEIGHT threshold residual audit V001 — 2026-09-28
+
+- Geometry baseline V001 is merged on main.
+- Current workstream: `feat/weight-threshold-residual-audit-v1`.
+- Input: `artifacts/weight/geometry-v001/geometry_predictions.csv`.
+- Primary prediction column: `linear_width_height_area_pred_g`.
+- Fixed Nongtori weight boundaries remain 12g / 16g / 22g.
+- Audit measures threshold crossings, grade errors, distance-to-boundary bands, within-2g boundary error rates, and top absolute errors by split.
+- Policy is analysis-only: no threshold tuning from validation/test results.
+- Next after real audit result: RGB-only weight regression baseline on the same WEIGHT-DRYAD-V001 split.
+
 ## WEIGHT geometry baseline V001 — 2026-09-28
 
 - PR #50 merged: WEIGHT-DRYAD-V001 freeze gate is now on main.
