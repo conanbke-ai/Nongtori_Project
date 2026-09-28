@@ -6,6 +6,8 @@ from pathlib import Path
 
 from ml.weight_baseline.rgb_v001 import (
     EXPECTED_VIEWS_PER_FRUIT,
+    SnapshotRow,
+    WeightViewDataset,
     aggregate_fruit_predictions,
     evaluate_fruit_records,
 )
@@ -36,6 +38,18 @@ class WeightRgbBaselineTest(unittest.TestCase):
         report = evaluate_fruit_records(aggregated)
         self.assertEqual(report["n_fruits"], 2)
         self.assertGreater(report["mae_g"], 0)
+
+    def test_dataset_class_is_module_level_and_pickleable_shape(self):
+        row = SnapshotRow(
+            fruit_id="A",
+            split="train",
+            target_g=12.3,
+            relative_path="a.jpg",
+            sha256="a" * 64,
+        )
+        dataset = WeightViewDataset([row], Path("."), transform=lambda image: image)
+        self.assertEqual(dataset.__class__.__qualname__, "WeightViewDataset")
+        self.assertEqual(dataset.items[0].fruit_id, "A")
 
     def test_blocks_wrong_view_count(self):
         records = [
