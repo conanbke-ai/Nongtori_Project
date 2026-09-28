@@ -1,3 +1,15 @@
+## WEIGHT geometry baseline V001 — 2026-09-28
+
+- PR #50 merged: WEIGHT-DRYAD-V001 freeze gate is now on main.
+- Current workstream: `feat/weight-geometry-baseline-v1`.
+- Baseline unit is one `FRUIT_ID`, not one RGB view; the 22 views are not duplicated as geometry regression samples.
+- Fixed models: TRAIN_MEAN, LINEAR_WIDTH_HEIGHT, LINEAR_WIDTH_HEIGHT_AREA.
+- Primary model is predeclared as LINEAR_WIDTH_HEIGHT_AREA; no validation-driven model selection in V001.
+- Metrics: MAE/RMSE/R²/Bias/MaxAE + 12/16/22g grade accuracy/confusion.
+- Test split is report-once and must not be used for tuning.
+- Execution blocks until an actual frozen `WEIGHT-DRYAD-V001` exists locally.
+- Next after real geometry baseline: threshold residual audit → RGB-only baseline → geometry vs RGB comparison → optional combined model.
+
 ## Dryad WEIGHT-DRYAD-V001 freeze gate — 2026-09-28
 
 - Next gate implementation is now in progress on `feat/dryad-weight-snapshot-v1`.
