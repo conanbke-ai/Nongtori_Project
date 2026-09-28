@@ -28,6 +28,7 @@ from .dryad_image_join_audit import (
 )
 from .dryad_manifest_audit import audit_official_manifest, write_manifest_audit
 from .dryad_materialization import materialize_strict_candidates
+from .dryad_weight_snapshot import freeze_dryad_weight_snapshot
 from .dryad_weight_audit import audit_datasheet, write_audit_report as write_dryad_weight_audit_report
 from .downloader import DatasetDownloader
 from .field_audit import audit_field_csv
@@ -58,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("dryad-weight-audit"); p.add_argument("--datasheet", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/datasheet.xlsx")); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/datasheet-audit.json")); p.add_argument("--manifest-output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/public-manifest.json")); p.add_argument("--image-join-output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/image-join-audit.json")); p.add_argument("--candidate-manifest-output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/strict-candidate-manifest.json")); p.add_argument("--force-download", action="store_true"); p.add_argument("--skip-image-join", action="store_true"); p.add_argument("--skip-candidate-manifest", action="store_true"); p.add_argument("--range-chunk-mb", type=int, default=1); p.add_argument("--timeout", type=int, default=300)
     p = sub.add_parser("dryad-image-join-audit"); p.add_argument("--datasheet", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/datasheet.xlsx")); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/image-join-audit.json")); p.add_argument("--timeout", type=int, default=120); p.add_argument("--range-chunk-mb", type=int, default=1)
     p = sub.add_parser("dryad-materialize-candidates"); p.add_argument("--candidate-manifest", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/strict-candidate-manifest.json")); p.add_argument("--output-root", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/strict-rgb")); p.add_argument("--output-manifest", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/strict-materialized-assets.json")); p.add_argument("--archive-cache-dir", type=Path, default=Path("data/cache/dryad/DATA-QUAL-002/picture-archives")); p.add_argument("--keep-archives", action="store_true"); p.add_argument("--timeout", type=int, default=300); p.add_argument("--checkpoint-every", type=int, default=25)
+    p = sub.add_parser("dryad-freeze-weight-snapshot"); p.add_argument("--candidate-manifest", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/strict-candidate-manifest.json")); p.add_argument("--materialized-manifest", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/strict-materialized-assets.json")); p.add_argument("--datasheet", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/datasheet.xlsx")); p.add_argument("--snapshot-root", type=Path, default=Path("data/snapshots")); p.add_argument("--snapshot-id", default="WEIGHT-DRYAD-V001"); p.add_argument("--seed", default="dryad-weight-v1"); p.add_argument("--train-ratio", type=float, default=0.70); p.add_argument("--val-ratio", type=float, default=0.15); p.add_argument("--test-ratio", type=float, default=0.15)
     p = sub.add_parser("snapshot"); p.add_argument("source_id"); p.add_argument("--audit-dir", type=Path, required=True); p.add_argument("--snapshot-root", type=Path, required=True); p.add_argument("--snapshot-id", required=True)
     p = sub.add_parser("incremental-scan"); p.add_argument("--input", type=Path, required=True); p.add_argument("--ledger", type=Path, required=True); p.add_argument("--output-ledger", type=Path, required=True); p.add_argument("--key-field", action="append", default=[]); p.add_argument("--ignore-field", action="append", default=[])
     p = sub.add_parser("field-audit"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path)
@@ -273,6 +275,24 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if report["status"] == "STRICT_CANDIDATE_ASSETS_VERIFIED" else 2
         except DryadAccessError as exc:
             print(json.dumps({"status": "MATERIALIZATION_FAILED", "error": str(exc)}, ensure_ascii=False, indent=2))
+            return 3
+    if args.command == "dryad-freeze-weight-snapshot":
+        try:
+            report = freeze_dryad_weight_snapshot(
+                candidate_manifest=args.candidate_manifest,
+                materialized_manifest=args.materialized_manifest,
+                datasheet=args.datasheet,
+                snapshot_root=args.snapshot_root,
+                snapshot_id=args.snapshot_id,
+                seed=args.seed,
+                train_ratio=args.train_ratio,
+                val_ratio=args.val_ratio,
+                test_ratio=args.test_ratio,
+            )
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+            return 0
+        except (DryadAccessError, ValueError) as exc:
+            print(json.dumps({"status": "WEIGHT_SNAPSHOT_FREEZE_FAILED", "error": str(exc)}, ensure_ascii=False, indent=2))
             return 3
     if args.command == "snapshot":
         source = registry.get(args.source_id); print(create_snapshot(args.snapshot_id, source.source_id, source.version_or_revision or "unversioned", args.audit_dir, args.snapshot_root)); return 0
