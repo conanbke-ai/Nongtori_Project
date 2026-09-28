@@ -28,8 +28,14 @@ python -m ml.data_pipeline.cli normalize-external --input external.csv --mapping
 python -m ml.data_pipeline.cli dedup --input work/normalized.csv --output work/dedup.csv
 python -m ml.data_pipeline.cli split --input work/dedup.csv --output work/split.csv --seed nongtori-v1
 python -m ml.data_pipeline.cli training-snapshot --snapshot-id STRAWBERRY_RIPENESS_v001 --normalized work/normalized.csv --dedup work/dedup.csv --split work/split.csv --snapshot-root data/snapshots --label-mapping-version MAP-FIELD-001-v1 --source-id DATA-FIELD-001
+python -m ml.data_pipeline.cli dryad-materialize-candidates
+python -m ml.data_pipeline.cli dryad-freeze-weight-snapshot
 ```
 
 Exact duplicate는 `content_sha256`가 있을 때만 제거한다. 해시가 없는 행을 추정 중복으로 버리지 않는다. Split은 `atomic_group` 단위로 결정한다. field image는 `Group_ID`, video는 capture/session, external은 source sequence/group을 사용한다. 동일 atomic group과 동일 SHA-256은 active split을 넘을 수 없다.
 
 현재 외부 mapping은 `strawberry_ds_v1.json`, `agml_growth_v1.json`이다. AgML `turning red`는 decimal-stage audit 전까지 `UNMAPPED` 및 training exclusion 상태다.
+
+## Dryad weight snapshot gate
+
+`dryad-freeze-weight-snapshot` only succeeds after the strict Dryad materialization manifest reports all 11,528 candidate images as hash-verified. The snapshot freezes 524 fruit IDs atomically by `FRUIT_ID`, verifies every local asset SHA-256 again, writes `fruit-splits.csv` and `sample-manifest.csv`, and records upstream artifact hashes in `WEIGHT_SNAPSHOT.json`. Existing snapshot IDs are immutable and cannot be overwritten.
