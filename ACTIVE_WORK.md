@@ -1,3 +1,15 @@
+## Dryad WEIGHT-DRYAD-V001 freeze gate — 2026-09-28
+
+- Next gate implementation is now in progress on `feat/dryad-weight-snapshot-v1`.
+- Freeze command: `python -m ml.data_pipeline.cli dryad-freeze-weight-snapshot`.
+- Hard prerequisite: materialization manifest must be `STRICT_CANDIDATE_ASSETS_VERIFIED` with exactly 11,528/11,528 verified image rows.
+- Freeze re-verifies every local asset SHA-256, enforces 22 views per fruit, loads with-calyx primary target metadata from the Dryad datasheet, and rejects candidate/materialized identity drift.
+- Split boundary is strictly `FRUIT_ID`; all 22 views of a fruit stay in one split.
+- Snapshot artifacts: `fruit-splits.csv`, `sample-manifest.csv`, `WEIGHT_SNAPSHOT.json`.
+- Snapshot records candidate/materialized/datasheet hashes plus deterministic split and asset-row digests.
+- Existing snapshot ID is immutable; rerun against an existing `WEIGHT-DRYAD-V001` directory is rejected.
+- This code gate does not claim the real snapshot is frozen until local materialization is complete.
+
 ## Dryad archive-cache materialization gate — 2026-09-21
 
 - Member-by-member HTTP Range materialization is retired after repeated Dryad HTTP 429 rate limiting.

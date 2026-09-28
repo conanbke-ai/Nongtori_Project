@@ -83,7 +83,9 @@
     "materialized_assets_output": "data/audit/dryad/DATA-QUAL-002/strict-materialized-assets.json",
     "materialization_mode": "SEQUENTIAL_ARCHIVE_CACHE",
     "archive_cache_dir": "data/cache/dryad/DATA-QUAL-002/picture-archives",
-    "archive_cache_policy": "ONE_ARCHIVE_AT_A_TIME_RESUMABLE_VERIFY_EXTRACT_DELETE"
+    "archive_cache_policy": "ONE_ARCHIVE_AT_A_TIME_RESUMABLE_VERIFY_EXTRACT_DELETE",
+    "freeze_weight_snapshot_command": "python -m ml.data_pipeline.cli dryad-freeze-weight-snapshot",
+    "weight_snapshot_root": "data/snapshots"
   },
   "original_labels": [
     "fruit_identity",
@@ -95,7 +97,7 @@
     "weight_without_calyx"
   ],
   "nongtori_mapping": {
-    "status": "STRICT_RGB_WEIGHT_SELECTIVE_MATERIALIZATION_READY",
+    "status": "WEIGHT_SNAPSHOT_GATE_READY",
     "role": "COMMERCIAL_WEIGHT_PRETRAINING_CANDIDATE",
     "split_group": "FRUIT_ID",
     "primary_weight_target": "weight_with_calyx",
@@ -114,7 +116,9 @@
     "snapshot_policy": "STRICT_VALID_WITH_CALYX_AND_EXACTLY_22_PUBLISHED_VIEWS",
     "asset_manifest_schema": "STRICT_CANDIDATE_MANIFEST_V1",
     "asset_materialization_policy": "SEQUENTIAL_ARCHIVE_CACHE_RESUMABLE_SHA256_VERIFIED",
-    "asset_cache_policy": "REUSE_VERIFIED_LOCAL_MEMBER_BYTES_BY_HASH"
+    "asset_cache_policy": "REUSE_VERIFIED_LOCAL_MEMBER_BYTES_BY_HASH",
+    "weight_snapshot_id": "WEIGHT-DRYAD-V001",
+    "weight_snapshot_gate": "REQUIRES_11528_OF_11528_HASH_VERIFIED_ASSETS"
   },
-  "notes": "Strict RGB-weight candidate manifest is frozen at 524 fruits / 11,528 images. Because this covers nearly all published RGB images, member-by-member HTTP Range materialization was abandoned after sustained HTTP 429 rate limits. Canonical materialization now downloads one Pictures_*.zip at a time with resumable .part support, verifies official byte size/SHA-256, extracts only strict candidate members with CRC32/SHA-256 verification, then deletes the archive by default to bound peak disk usage. After real local completion, split strictly by FRUIT_ID and freeze WEIGHT-DRYAD-V001."
+  "notes": "Strict RGB-weight candidate manifest is frozen at 524 fruits / 11,528 images. Canonical materialization downloads one Pictures_*.zip at a time with resumable .part support, verifies official byte size/SHA-256, extracts only strict candidate members with CRC32/SHA-256 verification, then deletes the archive by default. The WEIGHT-DRYAD-V001 freeze gate is implemented but must refuse to freeze until all 11,528 assets are verified locally; it then splits atomically by FRUIT_ID and records immutable manifest/upstream hashes."
 }

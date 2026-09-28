@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import tempfile
 import unittest
@@ -9,6 +10,7 @@ from pathlib import Path
 from ml.data_pipeline.audit import audit_directory
 from ml.data_pipeline.dedup import deduplicate_manifest
 from ml.data_pipeline.field_audit import audit_field_rows
+from ml.data_pipeline.dryad_weight_snapshot import freeze_dryad_weight_snapshot
 from ml.data_pipeline.incremental import scan_incremental_rows
 from ml.data_pipeline.models import SourceRecord
 from ml.data_pipeline.normalize import ExternalMapping, LabelContractError, normalize_external_row, normalize_field_row, write_normalized
@@ -128,6 +130,129 @@ class NormalizeSplitSnapshotTest(unittest.TestCase):
             split = root / "split.csv"; create_split_manifest(dedup, split, seed="test-seed")
             snapshot = create_training_snapshot("train-snap-001", normalized_manifest=normalized, dedup_manifest=dedup, split_manifest=split, snapshot_root=root / "snapshots", label_mapping_version="MAP-FIELD-001-v1", source_ids=["DATA-FIELD-001"])
             self.assertTrue((snapshot / "TRAINING_SNAPSHOT.json").exists())
+
+
+class DryadWeightSnapshotTest(unittest.TestCase):
+    def _fixture(self, root: Path, *, complete: bool = True):
+        asset_root = root / "strict-rgb"
+        rows = []
+        files = []
+        weights = {}
+        for fruit_id, weight in (("0001", 23.0), ("0002", 15.0)):
+            weights[fruit_id] = {
+                "weight_with_calyx_g": weight,
+                "weight_without_calyx_g": weight - 1.0,
+                "width_mm": 30.0,
+                "height_mm": 40.0,
+                "variety": "fixture",
+                "shape": "conical",
+            }
+            for view in range(1, 23):
+                filename = f"{fruit_id}_view_{view:02d}.jpg"
+                relative = f"Pictures_01/{filename}"
+                payload = f"{fruit_id}-{view}".encode("utf-8")
+                path = asset_root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(payload)
+                digest = hashlib.sha256(payload).hexdigest()
+                rows.append({
+                    "fruit_id": fruit_id,
+                    "archive_path": "Pictures_01.zip",
+                    "filename": filename,
+                    "file_size": len(payload),
+                    "crc32": "",
+                })
+                files.append({
+                    "fruit_id": fruit_id,
+                    "archive_path": "Pictures_01.zip",
+                    "filename": filename,
+                    "relative_path": relative,
+                    "size": len(payload),
+                    "crc32": "",
+                    "sha256": digest,
+                })
+
+        candidate = {
+            "status": "STRICT_CANDIDATE_MANIFEST_VERIFIED",
+            "fruit_count": 2,
+            "image_count": 44,
+            "rows_sha256": "c" * 64,
+            "rows": rows,
+        }
+        candidate_path = root / "candidate.json"
+        candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
+
+        materialized_files = files if complete else files[:-1]
+        materialized = {
+            "status": "STRICT_CANDIDATE_ASSETS_VERIFIED" if complete else "PARTIAL_MATERIALIZATION",
+            "candidate_rows_sha256": candidate["rows_sha256"],
+            "candidate_image_count": 44,
+            "verified_file_count": len(materialized_files),
+            "root": str(asset_root),
+            "files": materialized_files,
+        }
+        materialized_path = root / "materialized.json"
+        materialized_path.write_text(json.dumps(materialized), encoding="utf-8")
+        datasheet = root / "datasheet.xlsx"
+        datasheet.write_bytes(b"fixture-datasheet")
+        return candidate_path, materialized_path, datasheet, weights
+
+    def test_freezes_exact_fruit_atomic_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate, materialized, datasheet, weights = self._fixture(root)
+            report = freeze_dryad_weight_snapshot(
+                candidate_manifest=candidate,
+                materialized_manifest=materialized,
+                datasheet=datasheet,
+                snapshot_root=root / "snapshots",
+                seed="fixture-seed",
+                train_ratio=0.5,
+                val_ratio=0.0,
+                test_ratio=0.5,
+                weight_loader=lambda _path: weights,
+            )
+            self.assertEqual(report["status"], "WEIGHT_SNAPSHOT_FROZEN")
+            self.assertEqual(report["fruit_count"], 2)
+            self.assertEqual(report["image_count"], 44)
+            self.assertEqual(report["split_policy"]["fruit_counts"], {"test": 1, "train": 1})
+            self.assertEqual(report["split_policy"]["image_counts"], {"test": 22, "train": 22})
+            snapshot_dir = Path(report["snapshot_dir"])
+            self.assertTrue((snapshot_dir / "WEIGHT_SNAPSHOT.json").exists())
+            with (snapshot_dir / "sample-manifest.csv").open(encoding="utf-8", newline="") as handle:
+                samples = list(csv.DictReader(handle))
+            split_by_fruit = {}
+            for row in samples:
+                split_by_fruit.setdefault(row["fruit_id"], row["split"])
+                self.assertEqual(split_by_fruit[row["fruit_id"]], row["split"])
+            self.assertEqual({row["weight_grade"] for row in samples if row["fruit_id"] == "0001"}, {"SP_WEIGHT"})
+            self.assertEqual({row["weight_grade"] for row in samples if row["fruit_id"] == "0002"}, {"MD_WEIGHT"})
+
+            with self.assertRaisesRegex(Exception, "already exists"):
+                freeze_dryad_weight_snapshot(
+                    candidate_manifest=candidate,
+                    materialized_manifest=materialized,
+                    datasheet=datasheet,
+                    snapshot_root=root / "snapshots",
+                    seed="fixture-seed",
+                    train_ratio=0.5,
+                    val_ratio=0.0,
+                    test_ratio=0.5,
+                    weight_loader=lambda _path: weights,
+                )
+
+    def test_blocks_partial_materialization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate, materialized, datasheet, weights = self._fixture(root, complete=False)
+            with self.assertRaisesRegex(Exception, "complete materialization"):
+                freeze_dryad_weight_snapshot(
+                    candidate_manifest=candidate,
+                    materialized_manifest=materialized,
+                    datasheet=datasheet,
+                    snapshot_root=root / "snapshots",
+                    weight_loader=lambda _path: weights,
+                )
 
 
 class PipelineTest(unittest.TestCase):
