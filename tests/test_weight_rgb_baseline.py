@@ -8,6 +8,8 @@ from ml.weight_baseline.rgb_v001 import (
     EXPECTED_VIEWS_PER_FRUIT,
     SnapshotRow,
     WeightViewDataset,
+    _open_snapshot_rgb,
+    _sha256_file,
     aggregate_fruit_predictions,
     evaluate_fruit_records,
 )
@@ -50,6 +52,42 @@ class WeightRgbBaselineTest(unittest.TestCase):
         dataset = WeightViewDataset([row], Path("."), transform=lambda image: image)
         self.assertEqual(dataset.__class__.__qualname__, "WeightViewDataset")
         self.assertEqual(dataset.items[0].fruit_id, "A")
+
+    def test_decode_failure_rejects_changed_asset_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bad.jpg"
+            path.write_bytes(b"not-a-jpeg")
+            actual = _sha256_file(path)
+            self.assertEqual(len(actual), 64)
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "no longer matches frozen SHA-256",
+            ):
+                _open_snapshot_rgb(path, "0" * 64)
+
+    def test_hash_verified_truncated_jpeg_uses_controlled_fallback(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "truncated.jpg"
+            image = Image.new("RGB", (128, 128))
+            image.putdata(
+                [
+                    ((x * 17) % 256, (y * 29) % 256, ((x + y) * 13) % 256)
+                    for y in range(128)
+                    for x in range(128)
+                ]
+            )
+            image.save(path, format="JPEG", quality=95)
+            payload = path.read_bytes()
+            # Remove a bounded tail while retaining a recognizable JPEG stream.
+            path.write_bytes(payload[:-128])
+            expected = _sha256_file(path)
+            decoded = _open_snapshot_rgb(path, expected)
+            self.assertEqual(decoded.mode, "RGB")
+            self.assertEqual(decoded.size, (128, 128))
 
     def test_blocks_wrong_view_count(self):
         records = [
