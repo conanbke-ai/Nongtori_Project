@@ -93,6 +93,18 @@ class WeightRgbBaselineTest(unittest.TestCase):
             self.assertEqual(decoded.mode, "RGB")
             self.assertEqual(decoded.size, (128, 128))
 
+    def test_dataset_requires_asset_root_for_eval_loader_shape(self):
+        row = SnapshotRow(
+            fruit_id="A",
+            split="train",
+            target_g=12.3,
+            relative_path="a.jpg",
+            sha256="a" * 64,
+        )
+        dataset = WeightViewDataset([row], Path("assets"), transform=lambda image: image)
+        self.assertEqual(dataset.asset_root, Path("assets"))
+        self.assertEqual(dataset.items[0].relative_path, "a.jpg")
+
     def test_blocks_wrong_view_count(self):
         records = [
             {
