@@ -5,11 +5,14 @@ import unittest
 from pathlib import Path
 
 from ml.weight_baseline.rgb_v001 import (
+    EPOCHS,
+    PATIENCE,
     EXPECTED_VIEWS_PER_FRUIT,
     SnapshotRow,
     WeightViewDataset,
     _open_snapshot_rgb,
     _sha256_file,
+    _training_history_state,
     aggregate_fruit_predictions,
     evaluate_fruit_records,
 )
@@ -104,6 +107,34 @@ class WeightRgbBaselineTest(unittest.TestCase):
         dataset = WeightViewDataset([row], Path("assets"), transform=lambda image: image)
         self.assertEqual(dataset.asset_root, Path("assets"))
         self.assertEqual(dataset.items[0].relative_path, "a.jpg")
+
+    def test_completed_history_resumes_final_evaluation(self):
+        history = []
+        for epoch in range(1, PATIENCE + 2):
+            history.append(
+                {
+                    "epoch": epoch,
+                    "validation_fruit_metrics": {
+                        "mae_g": 1.0 if epoch == 1 else 2.0 + epoch,
+                    },
+                }
+            )
+        state = _training_history_state(history)
+        self.assertTrue(state["complete"])
+        self.assertEqual(state["best_epoch"], 1)
+        self.assertGreaterEqual(state["stale_epochs"], PATIENCE)
+
+    def test_full_epoch_history_is_complete_even_without_patience(self):
+        history = [
+            {
+                "epoch": epoch,
+                "validation_fruit_metrics": {"mae_g": 10.0 - epoch * 0.1},
+            }
+            for epoch in range(1, EPOCHS + 1)
+        ]
+        state = _training_history_state(history)
+        self.assertTrue(state["complete"])
+        self.assertEqual(state["best_epoch"], EPOCHS)
 
     def test_blocks_wrong_view_count(self):
         records = [
