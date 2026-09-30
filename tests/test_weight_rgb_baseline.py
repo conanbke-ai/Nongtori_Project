@@ -54,6 +54,10 @@ class WeightRgbBaselineTest(unittest.TestCase):
         self.assertEqual(dataset.items[0].fruit_id, "A")
 
     def test_decode_failure_rejects_changed_asset_bytes(self):
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("Pillow unavailable")
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "bad.jpg"
             path.write_bytes(b"not-a-jpeg")
