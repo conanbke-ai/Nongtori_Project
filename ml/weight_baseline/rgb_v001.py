@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import random
@@ -36,6 +37,46 @@ class SnapshotRow:
     sha256: str
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _open_snapshot_rgb(path: Path, expected_sha256: str):
+    """Decode one frozen RGB asset, allowing truncation only for hash-identical source bytes."""
+    from PIL import Image, ImageFile
+
+    path = Path(path)
+    try:
+        with Image.open(path) as source:
+            return source.convert("RGB")
+    except OSError as strict_error:
+        actual_sha256 = _sha256_file(path)
+        if actual_sha256.lower() != expected_sha256.lower():
+            raise RuntimeError(
+                f"RGB asset failed strict decode and no longer matches frozen SHA-256: "
+                f"{path} expected={expected_sha256} actual={actual_sha256}"
+            ) from strict_error
+
+        previous = ImageFile.LOAD_TRUNCATED_IMAGES
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+        try:
+            with Image.open(path) as source:
+                image = source.convert("RGB")
+                image.load()
+                return image
+        except OSError as fallback_error:
+            raise RuntimeError(
+                f"Hash-verified RGB asset cannot be decoded even with truncated-JPEG fallback: "
+                f"{path}"
+            ) from fallback_error
+        finally:
+            ImageFile.LOAD_TRUNCATED_IMAGES = previous
+
+
 class WeightViewDataset:
     """Pickle-safe dataset for Windows DataLoader spawn workers."""
 
@@ -49,11 +90,10 @@ class WeightViewDataset:
 
     def __getitem__(self, index: int):
         import torch
-        from PIL import Image
 
         row = self.items[index]
         path = self.asset_root / Path(row.relative_path)
-        image = Image.open(path).convert("RGB")
+        image = _open_snapshot_rgb(path, row.sha256)
         tensor = self.transform(image)
         return (
             tensor,
