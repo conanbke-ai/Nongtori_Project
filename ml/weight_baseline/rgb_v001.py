@@ -279,6 +279,31 @@ def evaluate_fruit_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     return report
 
 
+def _training_history_state(history: list[dict[str, Any]]) -> dict[str, Any]:
+    """Reconstruct early-stopping state and detect a completed prior training loop."""
+    best_validation_mae = float("inf")
+    best_epoch = 0
+    stale_epochs = 0
+    for item in history:
+        epoch = int(item["epoch"])
+        validation_mae = float(item["validation_fruit_metrics"]["mae_g"])
+        if validation_mae < best_validation_mae - 1e-4:
+            best_validation_mae = validation_mae
+            best_epoch = epoch
+            stale_epochs = 0
+        else:
+            stale_epochs += 1
+    complete = bool(history) and (
+        len(history) >= EPOCHS or stale_epochs >= PATIENCE
+    )
+    return {
+        "complete": complete,
+        "best_validation_mae": best_validation_mae,
+        "best_epoch": best_epoch,
+        "stale_epochs": stale_epochs,
+    }
+
+
 def _verify_assets(snapshot_dir: Path, descriptor: dict[str, Any], rows: list[SnapshotRow]) -> Path:
     asset_root_text = str(descriptor.get("materialized_asset_root") or "").strip()
     if not asset_root_text:
@@ -482,16 +507,38 @@ def run_rgb_baseline(
     best_validation_mae = float("inf")
     best_epoch = 0
     stale_epochs = 0
+    resume_final_evaluation = False
+
+    if history_path.exists() and checkpoint_path.exists():
+        try:
+            loaded_history = json.loads(history_path.read_text(encoding="utf-8"))
+            if isinstance(loaded_history, list):
+                state = _training_history_state(loaded_history)
+                if state["complete"]:
+                    history = loaded_history
+                    best_validation_mae = float(state["best_validation_mae"])
+                    best_epoch = int(state["best_epoch"])
+                    stale_epochs = int(state["stale_epochs"])
+                    resume_final_evaluation = True
+                    print(
+                        f"[재개] 완료된 학습 이력 감지 · best epoch={best_epoch} · "
+                        f"validation MAE={best_validation_mae:.4f}g · "
+                        "재학습 없이 최종 평가부터 재개",
+                        flush=True,
+                    )
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            resume_final_evaluation = False
 
     total_train_batches = len(train_loader)
     progress_every = max(1, total_train_batches // 20)
-    print(
-        f"[학습 시작] 최대 {EPOCHS} epochs · batch={BATCH_SIZE} · "
-        f"train batches={total_train_batches}",
-        flush=True,
-    )
+    if not resume_final_evaluation:
+        print(
+            f"[학습 시작] 최대 {EPOCHS} epochs · batch={BATCH_SIZE} · "
+            f"train batches={total_train_batches}",
+            flush=True,
+        )
 
-    for epoch in range(1, EPOCHS + 1):
+    for epoch in ([] if resume_final_evaluation else range(1, EPOCHS + 1)):
         model.train()
         train_loss_sum = 0.0
         train_count = 0
@@ -599,7 +646,14 @@ def run_rgb_baseline(
         f"validation MAE={best_validation_mae:.4f}g",
         flush=True,
     )
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    try:
+        checkpoint = torch.load(
+            checkpoint_path,
+            map_location=device,
+            weights_only=True,
+        )
+    except TypeError:
+        checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
 
     split_loaders = {
