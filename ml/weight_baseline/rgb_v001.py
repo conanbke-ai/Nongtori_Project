@@ -7,6 +7,7 @@ import json
 import math
 import random
 import shutil
+import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -379,6 +380,20 @@ def run_rgb_baseline(
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    device_label = (
+        f"{device} · {torch.cuda.get_device_name(device)}"
+        if device.type == "cuda"
+        else str(device)
+    )
+    print(
+        f"[RGB baseline] snapshot={descriptor.get('snapshot_id')} · "
+        f"train {len(split_rows['train']):,} views / "
+        f"validation {len(split_rows['validation']):,} / "
+        f"test {len(split_rows['test']):,} · workers={workers}",
+        flush=True,
+    )
+    print(f"[RGB baseline] device={device_label}", flush=True)
+
     train_loader = DataLoader(
         WeightViewDataset(split_rows["train"], asset_root, train_transform),
         batch_size=BATCH_SIZE,
@@ -404,11 +419,16 @@ def run_rgb_baseline(
         persistent_workers=workers > 0,
     )
 
+    print(
+        "[초기화] EfficientNet-B0 ImageNet pretrained weights 준비 중...",
+        flush=True,
+    )
     weights = models.EfficientNet_B0_Weights.IMAGENET1K_V1
     model = models.efficientnet_b0(weights=weights)
     in_features = model.classifier[1].in_features
     model.classifier[1] = nn.Linear(in_features, 1)
     model.to(device)
+    print("[초기화] 모델 준비 완료", flush=True)
 
     criterion = nn.SmoothL1Loss(beta=HUBER_BETA)
     optimizer = torch.optim.AdamW(
@@ -463,11 +483,25 @@ def run_rgb_baseline(
     best_epoch = 0
     stale_epochs = 0
 
+    total_train_batches = len(train_loader)
+    progress_every = max(1, total_train_batches // 20)
+    print(
+        f"[학습 시작] 최대 {EPOCHS} epochs · batch={BATCH_SIZE} · "
+        f"train batches={total_train_batches}",
+        flush=True,
+    )
+
     for epoch in range(1, EPOCHS + 1):
         model.train()
         train_loss_sum = 0.0
         train_count = 0
-        for images, targets, _fruit_ids, _splits in train_loader:
+        epoch_started = time.perf_counter()
+        print(f"\n[Epoch {epoch}/{EPOCHS}] 학습 시작", flush=True)
+
+        for batch_index, (images, targets, _fruit_ids, _splits) in enumerate(
+            train_loader,
+            start=1,
+        ):
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
@@ -482,9 +516,27 @@ def run_rgb_baseline(
             torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP_NORM)
             scaler.step(optimizer)
             scaler.update()
-            train_loss_sum += float(loss.item()) * int(targets.shape[0])
-            train_count += int(targets.shape[0])
+            batch_count = int(targets.shape[0])
+            train_loss_sum += float(loss.item()) * batch_count
+            train_count += batch_count
 
+            if (
+                batch_index == 1
+                or batch_index % progress_every == 0
+                or batch_index == total_train_batches
+            ):
+                elapsed = max(time.perf_counter() - epoch_started, 1e-9)
+                progress_pct = 100.0 * batch_index / max(1, total_train_batches)
+                avg_loss = train_loss_sum / max(1, train_count)
+                throughput = train_count / elapsed
+                print(
+                    f"  train {batch_index:>3}/{total_train_batches} "
+                    f"({progress_pct:5.1f}%) · loss {avg_loss:.4f} · "
+                    f"{throughput:.1f} img/s · {elapsed:.0f}s",
+                    flush=True,
+                )
+
+        print(f"[Epoch {epoch}/{EPOCHS}] validation 평가 중...", flush=True)
         validation_views, validation_loss = infer(validation_loader)
         validation_fruits = aggregate_fruit_predictions(validation_views)
         validation_metrics = evaluate_fruit_records(validation_fruits)
@@ -501,7 +553,8 @@ def run_rgb_baseline(
         )
 
         validation_mae = float(validation_metrics["mae_g"])
-        if validation_mae < best_validation_mae - 1e-4:
+        improved = validation_mae < best_validation_mae - 1e-4
+        if improved:
             best_validation_mae = validation_mae
             best_epoch = epoch
             stale_epochs = 0
@@ -517,18 +570,41 @@ def run_rgb_baseline(
             )
         else:
             stale_epochs += 1
-            if stale_epochs >= PATIENCE:
-                break
+
+        epoch_elapsed = time.perf_counter() - epoch_started
+        print(
+            f"[Epoch {epoch}/{EPOCHS}] 완료 · "
+            f"train loss {epoch_report['train_view_loss']:.4f} · "
+            f"val MAE {validation_mae:.4f}g · "
+            f"RMSE {validation_metrics['rmse_g']:.4f}g · "
+            f"R² {validation_metrics['r2']:.4f} · "
+            f"{'★ best 저장' if improved else f'no improve {stale_epochs}/{PATIENCE}'} · "
+            f"{epoch_elapsed:.0f}s",
+            flush=True,
+        )
+
+        if stale_epochs >= PATIENCE:
+            print(
+                f"[Early stop] {PATIENCE} epochs 연속 개선 없음 · "
+                f"best epoch={best_epoch}, MAE={best_validation_mae:.4f}g",
+                flush=True,
+            )
+            break
 
     if not checkpoint_path.exists():
         raise RuntimeError("RGB baseline training produced no checkpoint")
 
+    print(
+        f"\n[최종 평가] best epoch={best_epoch} · "
+        f"validation MAE={best_validation_mae:.4f}g",
+        flush=True,
+    )
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
 
     split_loaders = {
         "train": DataLoader(
-            WeightViewDataset(split_rows["train"], eval_transform),
+            WeightViewDataset(split_rows["train"], asset_root, eval_transform),
             batch_size=BATCH_SIZE,
             shuffle=False,
             num_workers=workers,
@@ -542,6 +618,7 @@ def run_rgb_baseline(
     evaluations: dict[str, Any] = {}
     fruit_predictions: list[dict[str, Any]] = []
     for split in ("train", "validation", "test"):
+        print(f"[최종 평가] {split} · 22-view 예측 집계 중...", flush=True)
         view_records, view_loss = infer(split_loaders[split])
         fruit_records = aggregate_fruit_predictions(view_records)
         metrics = evaluate_fruit_records(fruit_records)
@@ -549,6 +626,12 @@ def run_rgb_baseline(
         metrics["n_views"] = len(view_records)
         evaluations[split] = metrics
         fruit_predictions.extend(fruit_records)
+        print(
+            f"  {split}: MAE {metrics['mae_g']:.4f}g · "
+            f"RMSE {metrics['rmse_g']:.4f}g · R² {metrics['r2']:.4f} · "
+            f"grade {metrics['grade_accuracy']:.1%}",
+            flush=True,
+        )
 
     prediction_path = output_dir / "rgb_fruit_predictions.csv"
     with prediction_path.open("w", encoding="utf-8", newline="") as handle:
