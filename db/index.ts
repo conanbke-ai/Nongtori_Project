@@ -665,6 +665,26 @@ const definitions = [
     FOREIGN KEY (capture_session_id) REFERENCES capture_sessions(id) ON DELETE SET NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_fruit_assessments_created ON fruit_assessments(created_at)`,
+  `CREATE TABLE IF NOT EXISTS fruit_weight_observations (
+    id TEXT PRIMARY KEY NOT NULL, fruit_assessment_id TEXT NOT NULL,
+    source TEXT NOT NULL, weight_g REAL NOT NULL, confidence REAL,
+    model_name TEXT, model_version TEXT, source_ref TEXT, measured_at TEXT,
+    created_by_member_id TEXT, created_at TEXT NOT NULL,
+    FOREIGN KEY (fruit_assessment_id) REFERENCES fruit_assessments(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by_member_id) REFERENCES farm_members(id) ON DELETE SET NULL,
+    CHECK (source IN ('SENSOR_MEASURED', 'MANUAL_MEASURED', 'VISION_ESTIMATED')),
+    CHECK (weight_g > 0),
+    CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+    CHECK (
+      (source = 'VISION_ESTIMATED' AND model_name IS NOT NULL AND model_version IS NOT NULL)
+      OR
+      (source != 'VISION_ESTIMATED' AND model_name IS NULL AND model_version IS NULL AND confidence IS NULL)
+    )
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_fruit_weight_observations_assessment_created
+    ON fruit_weight_observations(fruit_assessment_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_fruit_weight_observations_assessment_source
+    ON fruit_weight_observations(fruit_assessment_id, source, created_at)`,
   `CREATE TABLE IF NOT EXISTS observations (
     id TEXT PRIMARY KEY NOT NULL, farm_id TEXT NOT NULL, house_id TEXT NOT NULL, bed_id TEXT NOT NULL,
     zone_id TEXT NOT NULL, plant_id TEXT, leaf_id TEXT, cultivar TEXT NOT NULL, pest_species TEXT NOT NULL,
