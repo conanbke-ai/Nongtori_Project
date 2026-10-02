@@ -179,6 +179,46 @@ class WeightPairedResidualAuditTest(unittest.TestCase):
                     root / "out.csv",
                 )
 
+    def test_allows_float32_roundtrip_target_noise(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            geometry = root / "geometry.csv"
+            rgb = root / "rgb.csv"
+            self._write_geometry(
+                geometry,
+                [{
+                    "fruit_id": "A",
+                    "split": "test",
+                    "width_mm": "1",
+                    "height_mm": "1",
+                    "actual_weight_g": "21.28",
+                    "train_mean_pred_g": "21",
+                    "linear_width_height_pred_g": "21",
+                    "linear_width_height_area_pred_g": "21",
+                }],
+            )
+            self._write_rgb(
+                rgb,
+                [{
+                    "fruit_id": "A",
+                    "split": "test",
+                    "actual_weight_g": "21.280000686645508",
+                    "predicted_weight_g": "21.1",
+                    "view_count": "22",
+                }],
+            )
+            report = compare_weight_predictions(
+                geometry,
+                rgb,
+                root / "out.json",
+                root / "out.csv",
+            )
+            self.assertEqual(report["status"], "WEIGHT_PAIRED_RESIDUAL_AUDIT_COMPLETE")
+            self.assertEqual(
+                report["target_alignment_policy"],
+                "GEOMETRY_SNAPSHOT_GT_CANONICAL_RGB_FLOAT32_ROUNDTRIP_TOLERATED",
+            )
+
     def test_blocks_actual_weight_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
