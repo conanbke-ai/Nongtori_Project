@@ -51,8 +51,11 @@
 - 동일 scan session 내 Tracking
 - multi-frame Ripeness
 - Harvest Decision
+- 비전 기반 Weight Estimation capability 검증
 - Quality / Grade
 - `FRESH / PROCESSING_JAM / REJECT` 용도 판단
+
+비전 Weight Estimation은 특정 수확기 하드웨어의 센서 구성을 전제로 하지 않는 포트폴리오 capability다. 실제 장비가 신뢰 가능한 중량 실측값을 제공하면 해당 값을 우선 사용하고, 비전 추정은 수확 전 판단 또는 sensor fallback으로 사용할 수 있게 설계한다.
 
 `FULL = JAM` 같은 단순 규칙은 금지한다. 숙도 외에도 크기, 형태, 외관, 병징, 상품성을 함께 본다.
 
@@ -94,6 +97,7 @@
 ### MUST — 기한 내 실제 구현/검증 대상
 - 현재 데이터 ingestion / provenance / snapshot 계약
 - 과실 baseline + 숙도/품질/수확 판단의 설명 가능한 파이프라인
+- Weight Estimation geometry/RGB baseline과 12/16/22g boundary error 분석
 - 병해충 catalog와 응애 첫 예찰 Strategy
 - 병해충 의심구역 목록/상세 화면
 - CASE/history와 반복 알림 억제

@@ -75,7 +75,23 @@ RT45 = 수집 당시 임의로 정한 45도 관측
 
 ## 7. 측정값
 
-`Length`, `Width`, `Weight_g`는 ground truth다.
+`Length`, `Width`, `Weight_g`는 현재 field source에서 직접 기록된 ground truth다.
+
+`Weight_g`를 RGB weight model의 **예측 출력 컬럼**으로 재해석하지 않는다. 학습에서는 target/ground truth로 사용한다.
+
+향후 runtime에서 로봇/선별기/작업자/비전 모델이 무게값을 제공할 경우 source provenance를 별도 필드로 관리하는 것을 목표 계약으로 둔다.
+
+```text
+weight_g
+weight_source =
+  SENSOR_MEASURED
+  MANUAL_MEASURED
+  VISION_ESTIMATED
+```
+
+단, 이 runtime source field는 현재 Google Sheet 원본 schema에 추가하지 않는다. 실제 DB/API 구현 시 별도 migration/versioned contract로 도입한다.
+
+실측값이 존재하면 `VISION_ESTIMATED`가 이를 덮어쓰지 않는다.
 
 NULL 처리:
 - NULL 자체를 자동 오류로 판정하지 않는다.

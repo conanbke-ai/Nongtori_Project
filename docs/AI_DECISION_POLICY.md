@@ -72,6 +72,35 @@ Harvest Decision 모델에서 `Grade`를 input feature로 넣지 않는다. Grad
 
 ## 5. 등급 / 용도
 
+### 5.1 무게 입력 source 정책
+
+포트폴리오 V1에서는 특정 수확기/선별기의 load-cell 탑재 여부가 확정되지 않았으므로 RGB 기반 무게 추정을 독립 capability로 검증한다.
+
+단, 실제 장비가 신뢰 가능한 측정값을 제공하는 경우 AI 추정치보다 실측값을 우선한다.
+
+```text
+SENSOR_MEASURED
+→ MANUAL_MEASURED
+→ VISION_ESTIMATED
+```
+
+현재 `WEIGHT-DRYAD-V001` 실험은 `VISION_ESTIMATED` 가능성 검증이다. 모든 수확기가 저울을 갖지 않는다고 가정하거나, AI가 저울보다 우수하다고 주장하지 않는다.
+
+무게 기반 임시 등급은 다음 고정 경계를 사용한다.
+
+```text
+>=22g → SP_WEIGHT
+>=16g → HI_WEIGHT
+>=12g → MD_WEIGHT
+<12g  → JM_WEIGHT_CANDIDATE
+```
+
+이 값은 최종 field `Grade`와 동일 개념이 아니다. 특히 `JM_WEIGHT_CANDIDATE != Grade=JM`이다.
+
+무게 예측 모델 평가는 MAE만으로 끝내지 않고 12/16/22g threshold crossing과 grade confusion을 함께 본다. 1~2g 이하의 오차도 경계 근처에서는 실제 등급을 바꿀 수 있기 때문이다.
+
+상세 계약은 `WEIGHT_ESTIMATION_PRODUCT_ROLE_V1.md`를 따른다.
+
 `FULL = JAM` 같은 단순 매핑을 금지한다. 가공/출하 판단은 다음을 종합한다.
 
 - 숙도

@@ -13,6 +13,31 @@ This baseline is the RGB-only comparison stage for the frozen `WEIGHT-DRYAD-V001
 
 This prevents 22 views of one physical strawberry from being counted as 22 independent evaluation samples.
 
+## Product role
+
+RGB V001 is a **vision weight-estimation baseline**, not a claim that Nongtori should replace a physical scale.
+
+The portfolio target harvesting hardware is not fixed, so this module proves that Nongtori can estimate weight without depending on a particular load-cell interface.
+
+Future runtime priority:
+
+```text
+SENSOR_MEASURED
+→ MANUAL_MEASURED
+→ VISION_ESTIMATED
+```
+
+A trusted measured value should take precedence over the model estimate.
+
+The RGB baseline remains useful for:
+
+- pre-harvest weight/grade estimation;
+- devices that do not expose weight measurement;
+- sensor fallback;
+- paired residual/fusion experiments with geometry.
+
+See `WEIGHT_ESTIMATION_PRODUCT_ROLE_V1.md`.
+
 ## Fixed V001 model
 
 - EfficientNet-B0
@@ -46,8 +71,12 @@ At fruit level:
 - R²
 - bias
 - max absolute error
-- 12/16/22g grade accuracy
+- 12/16/22g weight-grade accuracy
 - grade confusion
+- 12g / 16g / 22g threshold crossing behavior
+- error concentration by distance to the nearest grade boundary
+
+A lower global MAE does not automatically imply a better operational model when boundary crossings increase.
 
 View-level SmoothL1 loss is retained as a training diagnostic only.
 
