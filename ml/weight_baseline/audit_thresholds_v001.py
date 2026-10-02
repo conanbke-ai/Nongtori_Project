@@ -61,12 +61,12 @@ def audit_threshold_residuals(
     prediction_csv = Path(prediction_csv)
     output_json = Path(output_json)
     if not prediction_csv.exists():
-        raise FileNotFoundError(f"geometry prediction file missing: {prediction_csv}")
+        raise FileNotFoundError(f"weight prediction file missing: {prediction_csv}")
 
     with prediction_csv.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     if not rows:
-        raise ValueError("geometry prediction file is empty")
+        raise ValueError("weight prediction file is empty")
     if prediction_column not in rows[0]:
         raise ValueError(f"prediction column missing: {prediction_column}")
 
@@ -183,7 +183,7 @@ def audit_threshold_residuals(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Audit 12/16/22g boundary residuals from the geometry baseline"
+        description="Audit 12/16/22g boundary residuals from a weight prediction CSV"
     )
     parser.add_argument(
         "--predictions",

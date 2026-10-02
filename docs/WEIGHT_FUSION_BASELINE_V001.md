@@ -90,6 +90,40 @@ Outputs:
 - `fusion_baseline.json`
 - `fusion_predictions.csv`
 
+## Recorded result
+
+V001 completed with:
+
+```text
+alpha_rgb      = 0.5
+alpha_geometry = 0.5
+```
+
+Validation Fusion:
+
+- MAE 1.2242 g
+- RMSE 1.7285 g
+- R² 0.9116
+- grade accuracy 83.54%
+- grade errors 13
+- threshold crossings 13
+- max absolute error 5.8589 g
+
+Frozen test Fusion:
+
+- MAE 0.9792 g
+- RMSE 1.6143 g
+- R² 0.9456
+- bias -0.0140 g
+- grade accuracy 88.46%
+- grade errors 9
+- threshold crossings 10
+- max absolute error 9.3984 g
+
+The result is frozen in `WEIGHT_FUSION_V001_RESULT_20261002.md`.
+
+Fusion V001 is the current preferred vision weight-estimation benchmark. It is not field-production approval and does not override trusted measured weight.
+
 ## Acceptance interpretation
 
 V001 is not automatically accepted just because its validation score is best among candidate blends.
