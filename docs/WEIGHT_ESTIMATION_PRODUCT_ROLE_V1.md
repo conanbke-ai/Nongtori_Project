@@ -20,6 +20,14 @@ If a future device provides a trusted measured weight, Nongtori must use that me
 
 ## 2. Runtime weight source contract
 
+Implementation status: **RUNTIME_V1_IMPLEMENTED**
+
+- append-only `fruit_weight_observations` persistence implemented;
+- resolved source priority implemented;
+- public API allows manual measured weight only;
+- sensor and vision writes are internal service operations;
+- actual harvesting-device/load-cell adapter is **not yet connected**.
+
 Canonical runtime source order:
 
 ```text

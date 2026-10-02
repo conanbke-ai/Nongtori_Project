@@ -1,3 +1,14 @@
+## Weight runtime provenance V1 — 2026-10-02
+
+- Runtime append-only `fruit_weight_observations` implemented on `feat/runtime-weight-source-v1`.
+- Supported provenance: `SENSOR_MEASURED / MANUAL_MEASURED / VISION_ESTIMATED`.
+- Resolver priority: SENSOR > MANUAL > VISION; recency only breaks ties within the same source class.
+- Public `/api/fruit-weights` POST records manual measured values only; caller-supplied sensor/model provenance is rejected.
+- Internal service exposes explicit sensor/vision append operations for future adapters.
+- Fixed provisional weight-grade boundaries remain 12/16/22g.
+- History is retained; higher-trust weight does not delete lower-trust observations.
+- Actual harvester/load-cell device adapter remains NOT CONNECTED.
+
 ## Weight estimation product-role refreeze — 2026-10-02
 
 - Portfolio constraint: target harvesting hardware is not fixed, so load-cell availability cannot be assumed.
