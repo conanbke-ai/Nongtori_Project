@@ -1,3 +1,29 @@
+## WEIGHT fusion V001 result freeze — 2026-10-02
+
+- Fusion V001 real execution completed.
+- Validation-selected weights: RGB 0.5 + Geometry 0.5.
+- Validation:
+  - MAE 1.2242g
+  - RMSE 1.7285g
+  - R² 0.9116
+  - grade accuracy 0.8354
+  - grade errors 13
+  - threshold crossings 13
+  - MaxAE 5.8589g
+- Frozen test:
+  - MAE 0.9792g
+  - RMSE 1.6143g
+  - R² 0.9456
+  - bias -0.0140g
+  - grade accuracy 0.8846
+  - grade errors 9
+  - threshold crossings 10
+  - MaxAE 9.3984g
+- Decision: `CURRENT_PREFERRED_WEIGHT_ESTIMATOR_BENCHMARK`.
+- Test is now locked for successor tuning. Future multi-task/ordinal loss or uncertainty-band selection must use train/validation only.
+- Immediate next gate: run fixed-threshold residual audit on `fusion_predictions.csv` before deciding whether boundary-aware multi-task learning is justified.
+- Result freeze doc: `docs/WEIGHT_FUSION_V001_RESULT_20261002.md`.
+
 ## WEIGHT fusion V001 — 2026-10-02
 
 - Paired test audit supports a controlled fusion experiment:
