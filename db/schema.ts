@@ -871,6 +871,30 @@ export const fruitAssessments = sqliteTable(
   ],
 );
 
+export const fruitWeightObservations = sqliteTable(
+  'fruit_weight_observations',
+  {
+    id: text('id').primaryKey(),
+    fruitAssessmentId: text('fruit_assessment_id').notNull().references(() => fruitAssessments.id, { onDelete: 'cascade' }),
+    source: text('source').notNull(),
+    weightG: real('weight_g').notNull(),
+    confidence: real('confidence'),
+    modelName: text('model_name'),
+    modelVersion: text('model_version'),
+    sourceRef: text('source_ref'),
+    measuredAt: text('measured_at'),
+    createdByMemberId: text('created_by_member_id').references(() => farmMembers.id, { onDelete: 'set null' }),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [
+    index('idx_fruit_weight_observations_assessment_created').on(table.fruitAssessmentId, table.createdAt),
+    index('idx_fruit_weight_observations_assessment_source').on(table.fruitAssessmentId, table.source, table.createdAt),
+    check('ck_fruit_weight_observations_source', sql`${table.source} in ('SENSOR_MEASURED', 'MANUAL_MEASURED', 'VISION_ESTIMATED')`),
+    check('ck_fruit_weight_observations_weight_positive', sql`${table.weightG} > 0`),
+    check('ck_fruit_weight_observations_confidence', sql`${table.confidence} is null or (${table.confidence} >= 0 and ${table.confidence} <= 1)`),
+  ],
+);
+
 export const observations = sqliteTable(
   'observations',
   {
