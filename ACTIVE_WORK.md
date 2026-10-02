@@ -1,3 +1,18 @@
+## Weight estimation product-role refreeze — 2026-10-02
+
+- Portfolio constraint: target harvesting hardware is not fixed, so load-cell availability cannot be assumed.
+- Vision weight estimation remains an active capability experiment; it is **not** positioned as a universal replacement for physical weighing.
+- Future runtime source priority is frozen as:
+  - `SENSOR_MEASURED`
+  - `MANUAL_MEASURED`
+  - `VISION_ESTIMATED`
+- Trusted measured weight must override a vision estimate.
+- Current field `Weight_g` remains ground truth; runtime `weight_source` is a planned domain/API field and is **not yet implemented** in the current DB/API.
+- Fixed 12/16/22g boundaries remain product rules for weight-grade analysis; validation/test must not tune them.
+- Weight-model acceptance must include boundary crossings and grade confusion in addition to MAE/RMSE/R².
+- Canonical design doc: `docs/WEIGHT_ESTIMATION_PRODUCT_ROLE_V1.md`.
+- Current experiment roadmap remains Geometry V001 → RGB V001 → paired residual comparison → optional fusion/multi-task.
+
 ## WEIGHT RGB baseline V001 — 2026-09-28
 
 - WEIGHT-DRYAD-V001 is now frozen locally: 524 fruits / 11,528 RGB views.
