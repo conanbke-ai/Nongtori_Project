@@ -1,3 +1,22 @@
+## WEIGHT fusion V001 — 2026-10-02
+
+- Paired test audit supports a controlled fusion experiment:
+  - RGB lower absolute error on 44/78 test fruits; Geometry on 34/78.
+  - signed residual Pearson 0.0485; absolute-error Pearson 0.5882.
+  - diagnostic oracle lower-bound MAE 0.7574g.
+- Test evidence is diagnostic only and is not used to select fusion weights.
+- Current workstream: `feat/weight-fusion-v001`.
+- V001 fusion family is fixed to convex blend `alpha_rgb * RGB + (1-alpha_rgb) * Geometry`.
+- Candidate alpha values are fixed at 0.0~1.0 by 0.1.
+- Alpha selection uses validation only with lexicographic priority:
+  1. grade error count
+  2. threshold crossing count
+  3. MAE
+  4. RMSE
+- Test is report-once and excluded from weight selection.
+- Regression test guarantees that changing test predictions cannot change selected alpha.
+- Canonical design: `docs/WEIGHT_FUSION_BASELINE_V001.md`.
+
 ## WEIGHT RGB V001 real result + paired audit — 2026-10-02
 
 - RGB V001 completed on the frozen `WEIGHT-DRYAD-V001` split.
