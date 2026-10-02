@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 THRESHOLDS = (12.0, 16.0, 22.0)
+TARGET_ALIGNMENT_ATOL_G = 1e-5
 GEOMETRY_DEFAULT_COLUMN = "linear_width_height_area_pred_g"
 RGB_DEFAULT_COLUMN = "predicted_weight_g"
 SPLITS = ("train", "validation", "test")
@@ -354,12 +355,19 @@ def compare_weight_predictions(
             )
         actual_geometry = float(geometry_row["actual_weight_g"])
         actual_rgb = float(rgb_row["actual_weight_g"])
-        if not math.isclose(actual_geometry, actual_rgb, rel_tol=0, abs_tol=1e-7):
+        target_delta = abs(actual_geometry - actual_rgb)
+        if target_delta > TARGET_ALIGNMENT_ATOL_G:
             raise ValueError(
                 f"actual_weight_g mismatch for {fruit_id}: "
-                f"geometry={actual_geometry} rgb={actual_rgb}"
+                f"geometry={actual_geometry} rgb={actual_rgb} "
+                f"delta={target_delta:.12g}g "
+                f"tolerance={TARGET_ALIGNMENT_ATOL_G:.12g}g"
             )
 
+        # Geometry preserves the original snapshot decimal target. RGB target
+        # passed through a float32 torch tensor before CSV serialization, so
+        # tiny round-trip noise is expected. After identity validation above,
+        # use the geometry/snapshot value as the canonical paired ground truth.
         actual = actual_geometry
         geometry_pred = float(geometry_row["predicted_weight_g"])
         rgb_pred = float(rgb_row["predicted_weight_g"])
@@ -399,6 +407,8 @@ def compare_weight_predictions(
                 "fruit_id": fruit_id,
                 "split": geometry_row["split"],
                 "actual_weight_g": actual,
+                "rgb_actual_weight_g": actual_rgb,
+                "target_serialization_delta_g": target_delta,
                 "geometry_pred_g": geometry_pred,
                 "rgb_pred_g": rgb_pred,
                 "geometry_error_g": geometry_error,
@@ -436,6 +446,10 @@ def compare_weight_predictions(
         "geometry_prediction_column": geometry_prediction_column,
         "rgb_prediction_column": rgb_prediction_column,
         "thresholds_g": list(THRESHOLDS),
+        "target_alignment_atol_g": TARGET_ALIGNMENT_ATOL_G,
+        "target_alignment_policy": (
+            "GEOMETRY_SNAPSHOT_GT_CANONICAL_RGB_FLOAT32_ROUNDTRIP_TOLERATED"
+        ),
         "policy": "ANALYZE_ONLY_NO_TEST_TUNING_NO_FUSION_SELECTION",
         "interpretation": (
             "Paired diagnostics measure complementarity on the frozen split. "
@@ -462,6 +476,8 @@ def compare_weight_predictions(
         "fruit_id",
         "split",
         "actual_weight_g",
+        "rgb_actual_weight_g",
+        "target_serialization_delta_g",
         "geometry_pred_g",
         "rgb_pred_g",
         "geometry_error_g",
