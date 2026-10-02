@@ -1,3 +1,24 @@
+## WEIGHT RGB V001 real result + paired audit — 2026-10-02
+
+- RGB V001 completed on the frozen `WEIGHT-DRYAD-V001` split.
+- Best checkpoint: epoch 7, validation fruit MAE 1.5647g.
+- Final test:
+  - MAE 1.2401g
+  - RMSE 2.3446g
+  - R² 0.8852
+  - bias -0.4192g
+  - max absolute error 12.4082g
+  - weight-grade accuracy 0.8333
+- Geometry V001 comparison on the same test split:
+  - MAE 1.4125g
+  - RMSE 2.1850g
+  - R² 0.9003
+  - grade accuracy 0.8205
+- Interpretation: RGB improves average absolute error and grade accuracy, but worsens RMSE/R² and creates a larger max-error tail. Do not declare a global winner from MAE alone.
+- Current workstream: `feat/weight-paired-residual-audit-v1`.
+- Next gate: paired FRUIT_ID residual / threshold-crossing audit before any RGB+Geometry fusion experiment.
+- Test remains report-only; paired test diagnostics must not select fusion weights or thresholds.
+
 ## Weight runtime provenance V1 — 2026-10-02
 
 - Runtime append-only `fruit_weight_observations` implemented on `feat/runtime-weight-source-v1`.

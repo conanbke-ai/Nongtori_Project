@@ -98,6 +98,26 @@ RTX/CUDA is selected automatically when available.
 - `rgb_fruit_predictions.csv`
 - `rgb_baseline.json`
 
+## Recorded V001 result
+
+Real run on `WEIGHT-DRYAD-V001`:
+
+| Split | MAE | RMSE | R² | Grade accuracy |
+|---|---:|---:|---:|---:|
+| Train | 0.7315 g | 1.3387 g | 0.9607 | 89.37% |
+| Validation | 1.5647 g | 2.3501 g | 0.8366 | 79.75% |
+| Test | 1.2401 g | 2.3446 g | 0.8852 | 83.33% |
+
+Additional test facts:
+
+- bias: -0.4192 g
+- max absolute error: 12.4082 g
+- best epoch: 7
+- early stop after epoch 11
+- final recorded runtime device: CPU
+
+Compared with Geometry V001 test, RGB lowers MAE and slightly improves weight-grade accuracy, but has worse RMSE/R² and a larger maximum error. The next step is therefore a paired residual audit, not an unconditional model replacement.
+
 ## Next
 
 After the real RGB-only result is recorded:
