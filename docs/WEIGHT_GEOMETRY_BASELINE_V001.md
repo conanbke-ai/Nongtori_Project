@@ -20,6 +20,21 @@ Atomic evaluation unit:
 
 The 22 RGB views of one fruit are **not** treated as 22 independent geometry samples.
 
+## Product role
+
+Geometry V001 is a baseline for **weight estimation capability**, not a production replacement for a physical scale.
+
+Nongtori keeps weight acquisition hardware-agnostic because the final harvesting device is not fixed. If trusted measured weight becomes available in a future integration, it takes precedence over geometry/RGB estimates.
+
+This baseline is retained because it:
+
+- quantifies how much weight information is present in simple fruit geometry;
+- provides a non-image comparison for RGB V001;
+- helps determine whether RGB adds useful residual information;
+- exposes grade-boundary errors before any fusion model is attempted.
+
+See `WEIGHT_ESTIMATION_PRODUCT_ROLE_V1.md`.
+
 ## Fixed models
 
 The baseline reports three predeclared models:
