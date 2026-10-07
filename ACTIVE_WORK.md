@@ -1,3 +1,19 @@
+## WEIGHT RGB multi-view aggregation V2 — 2026-10-07
+
+- Geometry auxiliary work is frozen/rejected for Portfolio V1; next ML step is RGB multi-view information use.
+- RGB architecture remains EfficientNet-B0 V001; V2 isolates only fruit-level aggregation behavior.
+- Fixed aggregation candidates:
+  - MEAN_22_VIEW
+  - MEDIAN_22_VIEW
+  - TRIMMED_MEAN_10PCT_EACH_TAIL
+  - TRIMMED_MEAN_20PCT_EACH_TAIL
+- Development uses official train 367 fruit only with frozen FRUIT_ID 5-fold CV.
+- Each fold checkpoint still uses predeclared MEAN_22_VIEW MAE to avoid aggregation candidate leakage into checkpoint selection.
+- Aggregation selection uses OOF fruit metrics: grade errors → threshold crossings → MAE → RMSE.
+- Final model is retrained on official train only for the median selected fold epoch; official validation 79 is confirmation only.
+- Official test 78 remains locked and no test predictions are written.
+- Command: `python -m ml.weight_baseline.rgb_multiview_v002`.
+- This is compute-heavy: five fold trainings plus one final train-only fit.
 ## WEIGHT auxiliary compatibility result freeze — 2026-10-07
 
 - Source integrity verified for all 1,047 auxiliary rows; no weight/width/height/metadata value was modified.

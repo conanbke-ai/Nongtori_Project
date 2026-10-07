@@ -118,6 +118,50 @@ Additional test facts:
 
 Compared with Geometry V001 test, RGB lowers MAE and slightly improves weight-grade accuracy, but has worse RMSE/R² and a larger maximum error. The next step is therefore a paired residual audit, not an unconditional model replacement.
 
+## Successor: RGB Multi-view V002
+
+V001 aggregates all 22 view predictions with a simple arithmetic mean.
+
+V002 keeps the same EfficientNet-B0 model family and tests only the fruit-level aggregation rule.
+
+Fixed candidates:
+
+```text
+MEAN_22_VIEW
+MEDIAN_22_VIEW
+TRIMMED_MEAN_10PCT_EACH_TAIL
+TRIMMED_MEAN_20PCT_EACH_TAIL
+```
+
+Development protocol:
+
+```text
+official train 367
+→ FRUIT_ID 5-fold CV
+→ per-fold checkpoint selected by predeclared MEAN_22_VIEW MAE
+→ OOF view predictions
+→ aggregation candidate selection from OOF fruit metrics
+→ full official-train retrain at fixed epoch
+→ official validation 79 confirmation
+→ official test 78 remains locked
+```
+
+Selection priority:
+
+1. grade error count
+2. threshold crossing count
+3. MAE
+4. RMSE
+5. least aggressive aggregation tie-break
+
+Command:
+
+```bash
+python -m ml.weight_baseline.rgb_multiview_v002
+```
+
+This experiment is intentionally heavier than Geometry V2/V3 because it trains five fold models plus one final train-only model.
+
 ## Next
 
 After the real RGB-only result is recorded:
