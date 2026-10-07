@@ -5,6 +5,7 @@ import csv
 import json
 import math
 import statistics
+import sys
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -39,6 +40,136 @@ AGGREGATIONS = (
     "TRIMMED_MEAN_20PCT_EACH_TAIL",
 )
 CHECKPOINT_AGGREGATION = "MEAN_22_VIEW"
+
+LOG_WIDTH = 88
+
+
+def _bar(current: int, total: int, width: int = 16) -> str:
+    if total <= 0:
+        return "[" + "-" * width + "]"
+    fraction = min(1.0, max(0.0, current / total))
+    filled = int(round(width * fraction))
+    return "[" + "#" * filled + "-" * (width - filled) + "]"
+
+
+def _duration(seconds: float) -> str:
+    seconds = max(0, int(round(seconds)))
+    minutes, secs = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m"
+    if minutes:
+        return f"{minutes}m {secs:02d}s"
+    return f"{secs}s"
+
+
+def _print_header(title: str) -> None:
+    print("", flush=True)
+    print("=" * LOG_WIDTH, flush=True)
+    print(f" {title}", flush=True)
+    print("=" * LOG_WIDTH, flush=True)
+
+
+def _device_diagnostics(torch) -> dict[str, Any]:
+    cuda_available = bool(torch.cuda.is_available())
+    device_count = int(torch.cuda.device_count()) if cuda_available else 0
+    names = [
+        str(torch.cuda.get_device_name(index))
+        for index in range(device_count)
+    ] if cuda_available else []
+    return {
+        "python": sys.executable,
+        "torch_version": str(torch.__version__),
+        "torch_cuda_build": str(torch.version.cuda),
+        "cuda_available": cuda_available,
+        "cuda_device_count": device_count,
+        "cuda_device_names": names,
+    }
+
+
+def _resolve_device(
+    torch,
+    *,
+    device_name: str | None,
+    allow_cpu: bool,
+):
+    diagnostics = _device_diagnostics(torch)
+    if device_name:
+        requested = torch.device(device_name)
+        if requested.type == "cuda" and not diagnostics["cuda_available"]:
+            raise RuntimeError(
+                "CUDA was explicitly requested but is unavailable in the current Python/PyTorch "
+                f"environment. python={diagnostics['python']} · "
+                f"torch={diagnostics['torch_version']} · "
+                f"torch CUDA build={diagnostics['torch_cuda_build']} · "
+                "torch.cuda.is_available()=False"
+            )
+        device = requested
+    else:
+        device = torch.device(
+            "cuda" if diagnostics["cuda_available"] else "cpu"
+        )
+
+    if device.type == "cpu" and not allow_cpu:
+        raise RuntimeError(
+            "RGB V002 is compute-heavy (5 CV folds + 1 final fit), so CPU training is blocked "
+            "by default. The current Python/PyTorch environment cannot use CUDA. "
+            f"python={diagnostics['python']} · torch={diagnostics['torch_version']} · "
+            f"torch CUDA build={diagnostics['torch_cuda_build']} · "
+            f"torch.cuda.is_available()={diagnostics['cuda_available']}. "
+            "Activate the CUDA-enabled environment and rerun. Use --allow-cpu only when CPU "
+            "execution is intentional."
+        )
+    return device, diagnostics
+
+
+def _print_run_overview(
+    *,
+    device,
+    diagnostics: dict[str, Any],
+    train_count: int,
+    validation_count: int,
+    test_count: int,
+    fold_count: int,
+    output_dir: Path,
+    workers: int,
+) -> None:
+    _print_header("RGB WEIGHT V002 · 22-VIEW AGGREGATION")
+    if device.type == "cuda":
+        device_text = (
+            f"CUDA · {diagnostics['cuda_device_names'][0]}"
+            if diagnostics["cuda_device_names"]
+            else "CUDA"
+        )
+    else:
+        device_text = "CPU"
+    print(f" 목적       22장의 view 예측을 fruit-level 1개 값으로 합치는 방법 비교", flush=True)
+    print(f" 모델       EfficientNet-B0 · V001 구조 유지 · aggregation만 변경", flush=True)
+    print(
+        f" 데이터     train {train_count} · validation {validation_count}(확인용) · "
+        f"test {test_count}(LOCKED)",
+        flush=True,
+    )
+    print(
+        f" 개발       {fold_count}-fold CV + final train-only 1회 · 총 {fold_count + 1}개 학습 단계",
+        flush=True,
+    )
+    print(f" 실행장치   {device_text} · workers={workers}", flush=True)
+    print(
+        f" 환경       PyTorch {diagnostics['torch_version']} · "
+        f"CUDA build {diagnostics['torch_cuda_build']} · "
+        f"cuda_available={diagnostics['cuda_available']}",
+        flush=True,
+    )
+    print(f" Python     {diagnostics['python']}", flush=True)
+    print(f" 결과       {output_dir}", flush=True)
+    print("-" * LOG_WIDTH, flush=True)
+    print(
+        " 선택 기준  Grade error → Threshold crossing → MAE → RMSE",
+        flush=True,
+    )
+    print("=" * LOG_WIDTH, flush=True)
+
 
 
 def _read_cv_assignments(path: Path) -> dict[str, int]:
@@ -302,9 +433,13 @@ def _train_fold(
     stale = 0
     history: list[dict[str, Any]] = []
 
+    fold_number = fold + 1
+    total_folds = 5
+    print("", flush=True)
     print(
-        f"[RGB V002] fold {fold}: "
-        f"train {len(train_rows) // EXPECTED_VIEWS_PER_FRUIT} fruit / "
+        f"[1-5/6] FOLD {fold_number}/{total_folds} "
+        f"{_bar(fold_number - 1, total_folds)} · "
+        f"train {len(train_rows) // EXPECTED_VIEWS_PER_FRUIT} fruit · "
         f"holdout {len(holdout_rows) // EXPECTED_VIEWS_PER_FRUIT} fruit",
         flush=True,
     )
@@ -374,14 +509,29 @@ def _train_fold(
                 "elapsed_seconds": time.perf_counter() - started,
             }
         )
+        epoch_elapsed = float(history[-1]["elapsed_seconds"])
+        best_marker = " ★BEST" if improved else ""
         print(
-            f"  fold {fold} E{epoch:02d}: "
-            f"MAE {mae:.4f}g · best {best_mae:.4f}g@E{best_epoch:02d} · "
-            f"wait {stale}/{PATIENCE}",
+            f"  E{epoch:02d}/{EPOCHS:02d} {_bar(epoch, EPOCHS)} · "
+            f"MAE {mae:.3f}g · RMSE {float(holdout_metrics['rmse_g']):.3f} · "
+            f"R² {float(holdout_metrics['r2']):.3f} · "
+            f"Grade {float(holdout_metrics['grade_accuracy']) * 100:5.1f}% · "
+            f"best {best_mae:.3f}g@E{best_epoch:02d}{best_marker} · "
+            f"early-stop {stale}/{PATIENCE} · {_duration(epoch_elapsed)}",
             flush=True,
         )
         if stale >= PATIENCE:
+            print(
+                f"  ↳ early stop · best E{best_epoch:02d} · MAE {best_mae:.3f}g",
+                flush=True,
+            )
             break
+
+    print(
+        f"  ✓ FOLD {fold_number}/{total_folds} 완료 · "
+        f"best E{best_epoch:02d} · MAE {best_mae:.3f}g",
+        flush=True,
+    )
 
     checkpoint = torch.load(
         checkpoint_path,
@@ -487,8 +637,10 @@ def _train_final_model(
     )
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
 
+    print("", flush=True)
     print(
-        f"[RGB V002] final train-only fit: 367 fruit · {final_epoch} fixed epochs",
+        f"[6/6] FINAL TRAIN · official train 367 fruit · "
+        f"fixed {final_epoch} epochs · validation은 학습에 사용하지 않음",
         flush=True,
     )
     for epoch in range(1, final_epoch + 1):
@@ -508,7 +660,11 @@ def _train_final_model(
             torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP_NORM)
             scaler.step(optimizer)
             scaler.update()
-        print(f"  final E{epoch:02d}/{final_epoch:02d}", flush=True)
+        print(
+            f"  E{epoch:02d}/{final_epoch:02d} {_bar(epoch, final_epoch)} · "
+            "train-only fitting",
+            flush=True,
+        )
 
     torch.save(
         {
@@ -544,6 +700,7 @@ def run_rgb_multiview_v002(
     *,
     device_name: str | None = None,
     workers: int = 4,
+    allow_cpu: bool = False,
 ) -> dict[str, Any]:
     torch, nn, DataLoader, models, transforms = _runtime_imports()
     snapshot_dir = Path(snapshot_dir)
@@ -565,15 +722,20 @@ def run_rgb_multiview_v002(
     if not validation_rows or test_count == 0:
         raise ValueError("official validation/test must be non-empty")
 
-    device = (
-        torch.device(device_name)
-        if device_name
-        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device, diagnostics = _resolve_device(
+        torch,
+        device_name=device_name,
+        allow_cpu=allow_cpu,
     )
-    print(
-        f"[RGB V002] device={device} · folds={len(set(assignments.values()))} · "
-        "test remains locked",
-        flush=True,
+    _print_run_overview(
+        device=device,
+        diagnostics=diagnostics,
+        train_count=len(train_ids),
+        validation_count=len({row.fruit_id for row in validation_rows}),
+        test_count=test_count,
+        fold_count=len(set(assignments.values())),
+        output_dir=output_dir,
+        workers=workers,
     )
 
     all_oof_views: list[dict[str, Any]] = []
@@ -636,9 +798,28 @@ def run_rgb_multiview_v002(
         )
         oof_fruits_by_method[method] = fruits
 
+    print("", flush=True)
+    _print_header("OOF AGGREGATION 비교")
+    for item in candidate_results:
+        metrics = item["oof_metrics"]
+        print(
+            f" {item['aggregation']:<31} · "
+            f"Grade err {int(metrics['grade_error_count']):3d} · "
+            f"Cross {int(metrics['threshold_crossing_count']):3d} · "
+            f"MAE {float(metrics['mae_g']):.3f}g · "
+            f"RMSE {float(metrics['rmse_g']):.3f}g",
+            flush=True,
+        )
+
     selected = min(candidate_results, key=_candidate_key)
     selected_method = str(selected["aggregation"])
     final_epoch = int(statistics.median(best_epochs))
+    print("-" * LOG_WIDTH, flush=True)
+    print(
+        f" 선택       {selected_method} · final epoch={final_epoch}",
+        flush=True,
+    )
+    print("=" * LOG_WIDTH, flush=True)
 
     validation_views = _train_final_model(
         train_rows=train_rows,
@@ -769,6 +950,23 @@ def run_rgb_multiview_v002(
         json.dumps(report, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+    _print_header("RGB V002 결과")
+    print(f" 선택 aggregation  {selected_method}", flush=True)
+    print(
+        f" Validation         MAE {float(selected_validation_metrics['mae_g']):.3f}g · "
+        f"RMSE {float(selected_validation_metrics['rmse_g']):.3f}g · "
+        f"R² {float(selected_validation_metrics['r2']):.3f} · "
+        f"Grade {float(selected_validation_metrics['grade_accuracy']) * 100:.1f}%",
+        flush=True,
+    )
+    print(
+        f" Mean-22 reference  MAE {float(mean_validation_metrics['mae_g']):.3f}g · "
+        f"Grade {float(mean_validation_metrics['grade_accuracy']) * 100:.1f}%",
+        flush=True,
+    )
+    print(" Test               LOCKED · 평가/튜닝 안 함", flush=True)
+    print("=" * LOG_WIDTH, flush=True)
     return report
 
 
@@ -795,6 +993,11 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("artifacts/weight/rgb-multiview-v002"),
     )
     parser.add_argument("--device", default=None)
+    parser.add_argument(
+        "--allow-cpu",
+        action="store_true",
+        help="Allow the compute-heavy 5-fold RGB training to run on CPU intentionally.",
+    )
     parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args(argv)
 
@@ -805,6 +1008,7 @@ def main(argv: list[str] | None = None) -> int:
             args.output_dir,
             device_name=args.device,
             workers=int(args.workers),
+            allow_cpu=bool(args.allow_cpu),
         )
     except (
         FileNotFoundError,
