@@ -1,3 +1,12 @@
+## WEIGHT selective auto-grade evaluator V1 — 2026-10-07
+
+- Added validation-only evaluator for Fusion V001.
+- Candidate policy is based on predicted distance to nearest fixed 12/16/22g threshold.
+- Reports observed precision, coverage, fallback rate, error count, severe errors, and Wilson 95% lower bound.
+- Default target observed precision: 0.99.
+- If no candidate meets target with minimum sample count, status is `SELECTIVE_AUTO_GRADE_TARGET_NOT_MET`; no policy is forced.
+- Test split is explicitly locked and excluded from successor policy selection.
+- Next local step after merge: run Fusion boundary audit and selective auto-grade evaluator, then decide V1 freeze.
 ## WEIGHT portfolio ML completion scope — 2026-10-07
 
 - V1 completion target is not whole-dataset 99% grade accuracy.
