@@ -1,3 +1,13 @@
+## WEIGHT Geometry auxiliary distribution-shift audit — 2026-10-07
+
+- Geometry V2 `STRICT_PLUS_AUXILIARY` was rejected by train-only 5-fold OOF.
+- OOF comparison:
+  - STRICT_ONLY: MAE 1.3698g, RMSE 1.9282g, grade errors 59, threshold crossings 60, bias +0.0056g
+  - STRICT_PLUS_AUXILIARY: MAE 1.3932g, RMSE 1.9367g, grade errors 63, threshold crossings 64, bias +0.1430g
+- Therefore additional 1,047 fruit are not adopted by naive concatenation.
+- Next diagnostic: audit train-only distribution shift in weight/width/height/grade/variety/source-sheet before any reweighting/resampling experiment.
+- New command: `python -m ml.weight_baseline.geometry_auxiliary_shift_audit_v1`.
+- Official validation/test remain excluded from shift statistics and successor selection.
 ## WEIGHT Geometry V2 auxiliary comparison — 2026-10-07
 
 - Real auxiliary audit found 1,047 additional Dryad fruit with valid with-calyx weight + width + height outside the strict 524 RGB cohort.
