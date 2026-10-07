@@ -370,7 +370,31 @@ Auxiliary data remain preserved for future source-aware or variety-aware researc
 Canonical result document:
 `WEIGHT_GEOMETRY_AUXILIARY_COMPATIBILITY_RESULT_20261007.md`.
 
-## 16. Portfolio completion boundary
+## 16. External non-commercial reference datasets
+
+ICRA/Dyson Dataset #1 is registered as `DATA-WEIGHT-003` for reference research only.
+
+```text
+dataset_role = NON_COMMERCIAL_REFERENCE
+license = CC-BY-NC-SA
+commercial_training_ready = false
+```
+
+Nongtori may audit and benchmark its RGB/weight/depth/point-cloud structure, but it must not automatically merge Dyson samples into the commercial/canonical Weight training snapshot.
+
+Acquisition/audit:
+
+```bash
+python -m pip install gdown
+python -m ml.data_pipeline.cli dyson-acquire
+python -m ml.data_pipeline.cli dyson-audit
+```
+
+The actual NumPy weight-label structure must be audited before interpreting image count as independent fruit count.
+
+Canonical design: `DYSON_WEIGHT_REFERENCE_V1.md`.
+
+## 17. Portfolio completion boundary
 
 Weight Estimation V1의 목표는 학술적으로 가능한 모든 개선을 끝까지 구현하는 것이 아니다.
 
@@ -409,7 +433,7 @@ Geometry baseline
 
 이 구분은 연구 가능성을 부정하는 것이 아니라, 개인 기업용 포트폴리오 V1의 완료 시점을 통제하기 위한 scope 결정이다.
 
-## 17. Hardware integration rule
+## 18. Hardware integration rule
 
 Future adapter boundary:
 
