@@ -161,7 +161,29 @@ validation에서 정의한 안전영역만 AUTO_GRADE하고, 경계위험이 높
 
 Fusion boundary residual audit와 selective policy가 고정되면 Weight ML V1은 freeze한다.
 
-## 8. Successor experiment rule
+## 8. Selective auto-grade evaluation
+
+V1에서는 전체 과실을 무조건 자동 확정하지 않고 validation에서 다음 trade-off를 측정한다.
+
+```text
+AUTO_GRADE precision
+AUTO_GRADE coverage
+RE_MEASURE_REQUIRED rate
+```
+
+기본 evaluator:
+
+```bash
+python -m ml.weight_baseline.selective_grade_v001 \
+  --predictions artifacts/weight/fusion-v001/fusion_predictions.csv \
+  --output artifacts/weight/fusion-v001/selective_auto_grade_v001.json
+```
+
+기본 target은 observed precision 99%지만, validation 표본이 작으므로 이 숫자만으로 production 99% 신뢰도를 주장하지 않는다. 각 후보에 Wilson 95% lower bound를 함께 기록한다.
+
+정책 선택은 validation only이며 test split은 읽히더라도 successor policy 평가에 사용하지 않는다.
+
+## 9. Successor experiment rule
 
 A successor multi-task/ordinal experiment is justified only from **train/validation residual evidence**.
 
