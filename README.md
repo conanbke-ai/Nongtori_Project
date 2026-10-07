@@ -24,6 +24,8 @@
 
 포트폴리오 V1은 모든 과실을 비전만으로 99% 이상 맞히는 연구를 완료 조건으로 두지 않는다. 대신 validation에서 안전한 자동판정 영역을 정의하고 `AUTO_GRADE precision`, 자동처리율(coverage), 재측정 비율을 함께 평가한다. 경계위험이 큰 과실은 실측 중량으로 fallback하며, Fusion boundary audit와 이 정책이 고정되면 Weight ML V1을 freeze하고 제품 연결·UX·QA 완성을 우선한다.
 
+Selective auto-grade 평가기는 validation에서 12/16/22g 경계와의 안전거리를 후보로 비교하고, 99% observed precision 목표를 만족하는 구간이 없으면 정책을 억지로 확정하지 않는다. 소표본 과신을 막기 위해 Wilson 95% lower bound도 함께 기록한다.
+
 ## 개발 기준 저장소
 
 앞으로 농토리의 기능 개발, 리팩토링, 테스트, 문서화는 이 저장소 `Nongtori_Project`를 기준본으로 사용합니다.
