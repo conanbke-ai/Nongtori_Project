@@ -1,3 +1,15 @@
+## WEIGHT Geometry V3 grade-matched auxiliary weighting — 2026-10-07
+
+- Shift audit confirmed auxiliary fruit are systematically larger/heavier than strict train.
+- Auxiliary minus strict means:
+  - weight +2.3651g
+  - width +1.3844mm
+  - height +2.0768mm
+- Grade distribution TV distance: 0.1542.
+- V3 keeps all 1,047 auxiliary rows but down/up-weights them by grade so their effective grade mass matches each strict fold-train distribution.
+- Fixed auxiliary effective-mass candidates: 0.25× / 0.50× / 1.00× strict fold-train mass, plus STRICT_ONLY.
+- Selection remains official-train 5-fold OOF only; validation 79 is confirmation only; test 78 remains locked.
+- New command: `python -m ml.weight_baseline.geometry_v003`.
 ## WEIGHT Geometry auxiliary distribution-shift audit — 2026-10-07
 
 - Geometry V2 `STRICT_PLUS_AUXILIARY` was rejected by train-only 5-fold OOF.
