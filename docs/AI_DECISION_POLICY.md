@@ -101,6 +101,24 @@ SENSOR_MEASURED
 
 상세 계약은 `WEIGHT_ESTIMATION_PRODUCT_ROLE_V1.md`를 따른다.
 
+비전 중량 추정은 모든 과실을 무조건 자동 확정하지 않는다. validation에서 고정된 경계위험/불확실성 정책에 따라 다음 두 상태를 허용한다.
+
+```text
+AUTO_GRADE
+RE_MEASURE_REQUIRED
+```
+
+`RE_MEASURE_REQUIRED`는 사람이 AI 등급을 주관적으로 재판정하라는 의미가 아니다. 가능하면 load cell 등 실측 중량을 우선 취득하고, 센서가 없는 환경에서만 수기 실측 fallback을 사용한다.
+
+```text
+VISION_ESTIMATED
+→ 안전한 자동판정 영역이면 AUTO_GRADE
+→ 경계위험/불확실성이 높으면 RE_MEASURE_REQUIRED
+   → SENSOR_MEASURED 우선
+   → 없으면 MANUAL_MEASURED
+```
+
+제품 KPI는 전체 과실 Accuracy 하나가 아니라 `AUTO_GRADE precision + coverage + fallback rate`를 함께 본다.
 `FULL = JAM` 같은 단순 매핑을 금지한다. 가공/출하 판단은 다음을 종합한다.
 
 - 숙도

@@ -22,6 +22,8 @@
 
 중량 추정은 "AI로 저울을 대체한다"는 전제가 아니다. 포트폴리오 단계에서 실제 수확 장비의 중량 센서 구성이 확정되지 않았기 때문에 RGB만으로도 동작 가능한 독립 capability를 검증한다. 향후 신뢰 가능한 실측 중량이 제공되면 `SENSOR_MEASURED → MANUAL_MEASURED → VISION_ESTIMATED` 우선순위를 따른다.
 
+포트폴리오 V1은 모든 과실을 비전만으로 99% 이상 맞히는 연구를 완료 조건으로 두지 않는다. 대신 validation에서 안전한 자동판정 영역을 정의하고 `AUTO_GRADE precision`, 자동처리율(coverage), 재측정 비율을 함께 평가한다. 경계위험이 큰 과실은 실측 중량으로 fallback하며, Fusion boundary audit와 이 정책이 고정되면 Weight ML V1을 freeze하고 제품 연결·UX·QA 완성을 우선한다.
+
 ## 개발 기준 저장소
 
 앞으로 농토리의 기능 개발, 리팩토링, 테스트, 문서화는 이 저장소 `Nongtori_Project`를 기준본으로 사용합니다.

@@ -1,3 +1,14 @@
+## WEIGHT portfolio ML completion scope — 2026-10-07
+
+- V1 completion target is not whole-dataset 99% grade accuracy.
+- Product KPI is selective `AUTO_GRADE precision + coverage + fallback rate`.
+- Remaining ML V1 work:
+  1. Fusion boundary residual audit
+  2. validation-based AUTO_GRADE / RE_MEASURE_REQUIRED policy
+  3. measured fallback integration verification
+  4. Weight ML V1 freeze
+- After freeze, priority moves to API/UI/field UX/QA rather than open-ended model tuning.
+- Academic extensions (RGB-D/3D, multi-task/ordinal research, probabilistic/conformal uncertainty, large external field validation) are FUTURE/successor scope.
 ## WEIGHT fusion V001 result freeze — 2026-10-02
 
 - Fusion V001 real execution completed.
@@ -84,7 +95,7 @@
   - `MANUAL_MEASURED`
   - `VISION_ESTIMATED`
 - Trusted measured weight must override a vision estimate.
-- Current field `Weight_g` remains ground truth; runtime `weight_source` is a planned domain/API field and is **not yet implemented** in the current DB/API.
+- Current field `Weight_g` remains ground truth. Runtime weight provenance is implemented via append-only `fruit_weight_observations` and `SENSOR_MEASURED / MANUAL_MEASURED / VISION_ESTIMATED` source resolution.
 - Fixed 12/16/22g boundaries remain product rules for weight-grade analysis; validation/test must not tune them.
 - Weight-model acceptance must include boundary crossings and grade confusion in addition to MAE/RMSE/R².
 - Canonical design doc: `docs/WEIGHT_ESTIMATION_PRODUCT_ROLE_V1.md`.

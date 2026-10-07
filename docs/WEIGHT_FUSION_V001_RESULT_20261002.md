@@ -143,7 +143,25 @@ Required questions:
 4. Is the severe grade error an isolated outlier or part of a pattern?
 5. Is a boundary-aware / ordinal auxiliary objective justified by validation residuals?
 
-## 7. Successor experiment rule
+## 7. Portfolio interpretation
+
+Fusion V001의 test MAE 약 0.98 g과 grade accuracy 약 88.46%는 독립 baseline보다 개선된 결과이지만, 현재 12/16/22 g 경계에서 완전자동 상용 선별기로 충분하다고 주장하지 않는다.
+
+따라서 다음 제품 판단은 `전체 accuracy를 무조건 99%로 끌어올리는 것`이 아니라 다음 trade-off를 측정하는 것이다.
+
+```text
+AUTO_GRADE precision
+×
+AUTO_GRADE coverage
+×
+RE_MEASURE_REQUIRED rate
+```
+
+validation에서 정의한 안전영역만 AUTO_GRADE하고, 경계위험이 높은 과실은 실측 fallback으로 보낸다.
+
+Fusion boundary residual audit와 selective policy가 고정되면 Weight ML V1은 freeze한다.
+
+## 8. Successor experiment rule
 
 A successor multi-task/ordinal experiment is justified only from **train/validation residual evidence**.
 

@@ -202,7 +202,46 @@ Interpretation:
 - the result is a baseline, not a final grading model;
 - RGB V001 is being evaluated on the same immutable `FRUIT_ID` split.
 
-## 9. Hardware integration rule
+## 9. Portfolio completion boundary
+
+Weight Estimation V1의 목표는 학술적으로 가능한 모든 개선을 끝까지 구현하는 것이 아니다.
+
+V1 완료 범위:
+
+```text
+Geometry baseline
+→ RGB baseline
+→ paired residual
+→ Fusion V001
+→ Fusion boundary residual audit
+→ validation-based selective AUTO_GRADE / RE_MEASURE_REQUIRED policy
+→ ML V1 freeze
+```
+
+완료 후 우선순위는 모델 반복 연구가 아니라 다음 제품 연결이다.
+
+- runtime weight provenance
+- measured fallback
+- grade/quality decision flow
+- API/UI integration
+- mobile/field UX
+- QA / acceptance evidence
+
+전체 과실 99% grade accuracy는 V1 hard requirement가 아니다. 대신 자동확정된 subset에 대해 높은 precision을 확보하면서 coverage와 fallback burden을 함께 보고한다.
+
+다음은 successor research / FUTURE로 분리한다.
+
+- RGB-D / stereo / 3D volume reconstruction
+- 대규모 품종·농가·계절 데이터 확대
+- boundary-aware multi-task / ordinal learning 반복 연구
+- deep ensemble / probabilistic regression / conformal prediction
+- 품종·장비별 calibration
+- 실제 load-cell과 vision의 sensor-fusion 비교
+- 독립 field holdout을 이용한 production-grade validation
+
+이 구분은 연구 가능성을 부정하는 것이 아니라, 개인 기업용 포트폴리오 V1의 완료 시점을 통제하기 위한 scope 결정이다.
+
+## 10. Hardware integration rule
 
 Future adapter boundary:
 
