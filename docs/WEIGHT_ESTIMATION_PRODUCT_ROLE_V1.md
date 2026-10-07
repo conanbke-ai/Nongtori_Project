@@ -210,7 +210,27 @@ Validation 79는 전체 확보 데이터가 79개라는 뜻이 아니다. 독립
 
 후속 개발에서 official validation을 반복적으로 소비하지 않기 위해 train 367 fruit 내부 deterministic 5-fold CV를 개발 단계의 첫 선택 표면으로 사용한다. Official validation은 방법 고정 후 확인용, official test는 locked holdout으로 유지한다.
 
-## 10. Portfolio completion boundary
+## 10. Existing-data reuse gate
+
+Before introducing a new model family, Nongtori audits whether already-acquired Dryad records can expand train-only supervision.
+
+Current source facts:
+
+- 1,571 valid with-calyx weight targets exist in Dryad metadata.
+- the strict RGB-weight cohort contains 524 FRUIT_ID with approved exact-22-view RGB assets.
+- fruit outside the strict RGB cohort must not be called RGB training data merely because weight metadata exists.
+
+`geometry_auxiliary_audit_v1` identifies fruit with valid `weight_with_calyx_g + width_mm + height_mm` outside the strict 524 cohort. These are candidates for Geometry V2 train-only augmentation while official validation 79 and test 78 remain unchanged.
+
+This does not enlarge the official validation/test sample, and it does not convert missing RGB assets into synthetic image evidence.
+
+Command:
+
+```bash
+python -m ml.weight_baseline.geometry_auxiliary_audit_v1
+```
+
+## 11. Portfolio completion boundary
 
 Weight Estimation V1의 목표는 학술적으로 가능한 모든 개선을 끝까지 구현하는 것이 아니다.
 
@@ -249,7 +269,7 @@ Geometry baseline
 
 이 구분은 연구 가능성을 부정하는 것이 아니라, 개인 기업용 포트폴리오 V1의 완료 시점을 통제하기 위한 scope 결정이다.
 
-## 11. Hardware integration rule
+## 12. Hardware integration rule
 
 Future adapter boundary:
 
