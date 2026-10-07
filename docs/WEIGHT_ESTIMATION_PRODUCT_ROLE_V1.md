@@ -342,7 +342,35 @@ python -m ml.weight_baseline.geometry_v003 --allow-after-compatibility-review
 
 This flag is an acknowledgement of review, not proof that reweighting is valid.
 
-## 15. Portfolio completion boundary
+## 15. Auxiliary geometry final V1 decision
+
+Compatibility review is complete.
+
+The 1,047 auxiliary rows are source-valid but are not considered exchangeable with the strict RGB-backed cohort for Portfolio V1 training.
+
+Key evidence:
+
+- grade TV distance 0.1542;
+- variety TV distance 0.7469;
+- source-sheet TV distance 0.9456;
+- photo TV distance 0.9924;
+- cross-cohort geometry-model transfer is weaker than strict-train OOF;
+- shared varieties still show large mean weight/size differences.
+
+Therefore:
+
+```text
+Geometry V2 naive concatenation = REJECTED
+Geometry V3 grade-matched reweighting = NOT RUN / REJECTED FOR V1
+Geometry V001 strict cohort = retained benchmark
+```
+
+Auxiliary data remain preserved for future source-aware or variety-aware research only.
+
+Canonical result document:
+`WEIGHT_GEOMETRY_AUXILIARY_COMPATIBILITY_RESULT_20261007.md`.
+
+## 16. Portfolio completion boundary
 
 Weight Estimation V1의 목표는 학술적으로 가능한 모든 개선을 끝까지 구현하는 것이 아니다.
 
@@ -381,7 +409,7 @@ Geometry baseline
 
 이 구분은 연구 가능성을 부정하는 것이 아니라, 개인 기업용 포트폴리오 V1의 완료 시점을 통제하기 위한 scope 결정이다.
 
-## 16. Hardware integration rule
+## 17. Hardware integration rule
 
 Future adapter boundary:
 
