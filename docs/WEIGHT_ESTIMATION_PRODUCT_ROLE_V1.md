@@ -230,7 +230,32 @@ Command:
 python -m ml.weight_baseline.geometry_auxiliary_audit_v1
 ```
 
-## 11. Portfolio completion boundary
+## 11. Geometry V2 auxiliary experiment
+
+The auxiliary audit identified 1,047 fruit outside the strict RGB cohort with valid weight, width and height. This makes a Geometry V2 train-only augmentation experiment materially worthwhile.
+
+Compared regimes:
+
+```text
+STRICT_ONLY
+= official train 367
+
+STRICT_PLUS_AUXILIARY
+= official train 367 + auxiliary 1,047
+= 1,414 geometry training fruit
+```
+
+Regime selection is performed only on 5-fold OOF predictions from the official train cohort. Auxiliary fruit may enter fitting but never become official validation/test observations.
+
+Official validation 79 is used only after regime selection for confirmation. Official test 78 remains locked for this development step.
+
+Command:
+
+```bash
+python -m ml.weight_baseline.geometry_v002
+```
+
+## 12. Portfolio completion boundary
 
 Weight Estimation V1의 목표는 학술적으로 가능한 모든 개선을 끝까지 구현하는 것이 아니다.
 
@@ -269,7 +294,7 @@ Geometry baseline
 
 이 구분은 연구 가능성을 부정하는 것이 아니라, 개인 기업용 포트폴리오 V1의 완료 시점을 통제하기 위한 scope 결정이다.
 
-## 12. Hardware integration rule
+## 13. Hardware integration rule
 
 Future adapter boundary:
 
