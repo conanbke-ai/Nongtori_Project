@@ -255,7 +255,33 @@ Command:
 python -m ml.weight_baseline.geometry_v002
 ```
 
-## 12. Portfolio completion boundary
+## 12. Geometry auxiliary result interpretation
+
+Naively adding all 1,047 auxiliary geometry-weight fruit was tested and rejected on official-train 5-fold OOF.
+
+```text
+STRICT_ONLY
+MAE 1.3698g
+grade errors 59
+threshold crossings 60
+
+STRICT_PLUS_AUXILIARY
+MAE 1.3932g
+grade errors 63
+threshold crossings 64
+```
+
+More rows therefore did not automatically improve the target-domain model. Before considering any reweighting or resampling, Nongtori audits train-only distribution shift across weight, width, height, grade, variety and source sheet.
+
+Command:
+
+```bash
+python -m ml.weight_baseline.geometry_auxiliary_shift_audit_v1
+```
+
+Validation/test are not used to diagnose or select the shift-handling strategy.
+
+## 13. Portfolio completion boundary
 
 Weight Estimation V1의 목표는 학술적으로 가능한 모든 개선을 끝까지 구현하는 것이 아니다.
 
@@ -294,7 +320,7 @@ Geometry baseline
 
 이 구분은 연구 가능성을 부정하는 것이 아니라, 개인 기업용 포트폴리오 V1의 완료 시점을 통제하기 위한 scope 결정이다.
 
-## 13. Hardware integration rule
+## 14. Hardware integration rule
 
 Future adapter boundary:
 
