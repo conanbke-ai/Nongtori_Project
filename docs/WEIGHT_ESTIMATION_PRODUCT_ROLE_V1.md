@@ -202,7 +202,15 @@ Interpretation:
 - the result is a baseline, not a final grading model;
 - RGB V001 is being evaluated on the same immutable `FRUIT_ID` split.
 
-## 9. Portfolio completion boundary
+## 9. Dataset role clarification
+
+`WEIGHT-DRYAD-V001` strict RGB-weight cohort는 524 FRUIT_ID이며, official split은 train 367 / validation 79 / test 78이다.
+
+Validation 79는 전체 확보 데이터가 79개라는 뜻이 아니다. 독립 평가 단위가 FRUIT_ID이므로 같은 fruit의 22 RGB views는 하나의 독립 fruit sample로 취급한다.
+
+후속 개발에서 official validation을 반복적으로 소비하지 않기 위해 train 367 fruit 내부 deterministic 5-fold CV를 개발 단계의 첫 선택 표면으로 사용한다. Official validation은 방법 고정 후 확인용, official test는 locked holdout으로 유지한다.
+
+## 10. Portfolio completion boundary
 
 Weight Estimation V1의 목표는 학술적으로 가능한 모든 개선을 끝까지 구현하는 것이 아니다.
 
@@ -241,7 +249,7 @@ Geometry baseline
 
 이 구분은 연구 가능성을 부정하는 것이 아니라, 개인 기업용 포트폴리오 V1의 완료 시점을 통제하기 위한 scope 결정이다.
 
-## 10. Hardware integration rule
+## 11. Hardware integration rule
 
 Future adapter boundary:
 
