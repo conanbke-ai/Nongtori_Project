@@ -57,6 +57,8 @@
 
 비전 Weight Estimation은 특정 수확기 하드웨어의 센서 구성을 전제로 하지 않는 포트폴리오 capability다. 실제 장비가 신뢰 가능한 중량 실측값을 제공하면 해당 값을 우선 사용하고, 비전 추정은 수확 전 판단 또는 sensor fallback으로 사용할 수 있게 설계한다.
 
+포트폴리오 V1의 목표는 모든 과실을 비전만으로 99% 이상 정확하게 강제 분류하는 것이 아니다. 고신뢰 자동판정 가능 영역과 재측정이 필요한 영역을 분리하고, 자동판정된 subset의 정확도와 자동처리율(coverage)을 함께 평가한다. 경계 위험이 높은 과실은 센서/수기 실측으로 fail-closed 한다.
+
 `FULL = JAM` 같은 단순 규칙은 금지한다. 숙도 외에도 크기, 형태, 외관, 병징, 상품성을 함께 본다.
 
 ### 병해충
@@ -97,7 +99,9 @@
 ### MUST — 기한 내 실제 구현/검증 대상
 - 현재 데이터 ingestion / provenance / snapshot 계약
 - 과실 baseline + 숙도/품질/수확 판단의 설명 가능한 파이프라인
-- Weight Estimation geometry/RGB baseline과 12/16/22g boundary error 분석
+- Weight Estimation geometry/RGB/Fusion baseline과 12/16/22g boundary error 분석
+- Fusion boundary residual audit + selective auto-grade / re-measure 정책
+- auto-grade precision과 coverage를 함께 측정하고, 불확실 구간을 실측 fallback으로 연결
 - 병해충 catalog와 응애 첫 예찰 Strategy
 - 병해충 의심구역 목록/상세 화면
 - CASE/history와 반복 알림 억제
@@ -114,6 +118,11 @@
 - 실제 farm별/공간별 holdout 검증
 
 ### FUTURE — 설계만 열어두고 V1 구현 의무 없음
+- Weight Estimation 학술 확장: RGB-D/stereo/3D volume reconstruction
+- 대규모 품종·농가·계절별 weight dataset 확대 및 외부 field holdout
+- boundary-aware multi-task/ordinal auxiliary head의 반복 연구
+- probabilistic regression / conformal interval / deep ensemble 기반 uncertainty 연구
+- 품종별·장비별 calibration과 실제 load-cell sensor fusion 비교
 - 병해충 다종 AI 모델 전부 구현
 - 작업자 자동배정/스케줄 최적화
 - 로봇 경로 최적화/추가 촬영 waypoint 자동삽입
@@ -151,3 +160,5 @@
 5. 새 입력/작물/모델이 기존 UI·DB 전체 재작성으로 이어지지 않는다.
 6. 실제 농업 현장에서 이해 가능한 상태 → 이유 → 행동 흐름을 제공한다.
 7. Future 확장성을 위해 현재 V1의 완료 시점을 무기한 미루지 않는다.
+8. Weight Estimation은 전체 과실 99% accuracy를 임의 완료 조건으로 두지 않고, validation 기반 selective auto-grade precision/coverage와 measured fallback으로 제품 안전성을 설명한다.
+9. Fusion boundary audit와 re-measure 정책이 고정되면 Weight ML 연구를 V1에서 freeze하고 API/UI/QA/field integration 완성도를 우선한다.
