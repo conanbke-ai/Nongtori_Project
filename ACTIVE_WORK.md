@@ -1,3 +1,19 @@
+## WEIGHT auxiliary compatibility result freeze — 2026-10-07
+
+- Source integrity verified for all 1,047 auxiliary rows; no weight/width/height/metadata value was modified.
+- Compatibility audit shows material cohort shift:
+  - grade TV 0.1542
+  - variety TV 0.7469
+  - source-sheet TV 0.9456
+  - photo TV 0.9924
+- Shared-variety means also differ materially (1975 / 269 / Monterey / San Andreas examples).
+- Decision for Portfolio V1:
+  - Geometry V2 naive auxiliary concatenation: REJECTED
+  - Geometry V3 grade-matched reweighting: NOT RUN / REJECTED FOR V1
+  - canonical Geometry benchmark remains strict-cohort Geometry V001
+- Auxiliary 1,047 remain research/reference only.
+- Result: `docs/WEIGHT_GEOMETRY_AUXILIARY_COMPATIBILITY_RESULT_20261007.md`.
+- Next Weight V1 direction: RGB multi-view information use, then leakage-safe disagreement analysis if justified.
 ## WEIGHT cohort compatibility audit gate — 2026-10-07
 
 - Geometry V3 reweighting is now `HOLD_PENDING_MANUAL_COMPATIBILITY_REVIEW`.
