@@ -6,7 +6,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - optional local dependency boundary
+    np = None
 
 from ml.data_pipeline.dyson_weight_reference import (
     DATASET_ROLE,
@@ -19,6 +22,14 @@ from ml.data_pipeline.dyson_weight_reference import (
 
 
 class DysonWeightReferenceTests(unittest.TestCase):
+    def setUp(self):
+        if np is None and self._testMethodName not in {
+            "test_suffix_to_sample_stem",
+            "test_acquisition_blocks_when_gdown_missing",
+            "test_acquisition_manifest_keeps_noncommercial_guard",
+        }:
+            self.skipTest("NumPy unavailable in this test environment")
+
     def test_suffix_to_sample_stem(self):
         cases = {
             "strawberry_001_rgb.png": ("strawberry_001", "rgb"),
