@@ -162,6 +162,61 @@ python -m ml.weight_baseline.rgb_multiview_v002
 
 This experiment is intentionally heavier than Geometry V2/V3 because it trains five fold models plus one final train-only model.
 
+### Training terms: Fold / Epoch / Batch
+
+RGB V002 uses three nested training units.
+
+```text
+5-fold cross-validation
+└─ one Fold
+   └─ multiple Epochs
+      └─ multiple Batches
+```
+
+Definitions:
+
+- **Fold**: one cross-validation round. The official train 367 FRUIT_ID are split into five groups. For a given fold, four groups are used for model fitting and the remaining group is a development holdout. Fold is not a batch.
+- **Epoch**: one complete pass over every training view assigned to that fold. `EPOCH 01/15` means the model has completed the first full pass over that fold's training views, out of at most 15 passes.
+- **Batch**: the small tensor group processed by the GPU in one optimizer step. V002 uses batch size 32.
+
+Example for a 293-fruit fold:
+
+```text
+293 fruit × 22 views = 6,446 training views
+6,446 / batch 32 ≈ 202 optimizer batches per epoch
+```
+
+So one fold can contain up to 15 epochs, and each epoch contains roughly 202 training batches. Early stopping may end the fold before epoch 15.
+
+### DataLoader worker policy
+
+Default: `workers=4`.
+
+Workers are CPU-side DataLoader processes, not GPU workers. They prepare image batches by reading JPEG files, decoding images, resizing/cropping, applying augmentation, converting to tensors, and normalizing before the batch is transferred to the GPU.
+
+Why 4 is the current default:
+
+- each fold repeatedly loads thousands of JPEG views;
+- EfficientNet-B0 batch size 32 benefits from overlapping CPU preprocessing with GPU computation;
+- CUDA runs use `pin_memory=True` to improve host-to-device transfer;
+- `persistent_workers=True` avoids respawning workers every epoch;
+- on Windows, excessively high worker counts can increase process-spawn, RAM, context-switching, and storage-I/O overhead;
+- therefore 4 is used as a conservative baseline that provides parallel preprocessing without aggressive multiprocessing.
+
+`workers=4` is **not** claimed to be the hardware-optimal value.
+
+Adjustment policy:
+
+```text
+default = 4
+if GPU starvation / low throughput is observed:
+    benchmark 2 / 4 / 6 / 8 workers
+select using:
+    epoch time + images/sec + GPU utilization + runtime stability
+```
+
+Do not change worker count solely because a higher number appears faster in theory.
+
 ### Runtime log / GPU policy
 
 Because V002 performs five fold trainings plus one final fit, accidental CPU execution is blocked by default.
