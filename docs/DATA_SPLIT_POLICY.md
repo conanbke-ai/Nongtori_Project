@@ -48,7 +48,39 @@ FIELD_TEST
 
 eligibility reason을 manifest에 기록한다.
 
-## 6. 가격
+## 6. Weight Estimation development CV
+
+`WEIGHT-DRYAD-V001`의 official split은 immutable이다.
+
+```text
+524 FRUIT_ID
+├─ train      367
+├─ validation  79
+└─ test        78
+```
+
+`79 validation`은 전체 weight 데이터 수가 아니라 official validation 역할에 배정된 fruit 수를 의미한다. 22 views는 동일 실제 fruit의 반복 관측이므로 독립 validation sample은 79 FRUIT_ID다.
+
+V002 이후 aggregation, uncertainty gate, loss/hyperparameter 같은 개발 선택은 official train 367 fruit 내부의 deterministic FRUIT_ID-level 5-fold CV를 우선 사용한다.
+
+```text
+official train 367
+→ inner 5-fold development CV
+→ method/hyperparameter freeze
+→ official validation 79로 후보 확인
+→ official test 78은 locked holdout
+```
+
+금지:
+
+- validation 79를 inner CV에 섞기
+- test 78을 inner CV 또는 successor policy selection에 사용
+- 동일 FRUIT_ID의 22 views를 서로 다른 fold에 배치
+- 이미지 11,528장을 독립 fruit sample처럼 카운트
+
+개발 CV manifest는 `ml.weight_baseline.development_cv_v1`로 생성한다.
+
+## 7. 가격
 
 가격은 chronological split을 사용한다.
 
@@ -60,7 +92,7 @@ eligibility reason을 manifest에 기록한다.
 
 rolling validation을 사용할 수 있지만 random split은 금지한다.
 
-## 7. Split manifest
+## 8. Split manifest
 
 ```yaml
 split_id: RIPENESS_v001
@@ -78,7 +110,7 @@ audit:
 
 영상/가격은 각 domain의 atomic key/cutoff를 함께 기록한다.
 
-## 8. 금지
+## 9. 금지
 
 - 동일 Group_ID cross-split
 - 동일 video/session cross-split
