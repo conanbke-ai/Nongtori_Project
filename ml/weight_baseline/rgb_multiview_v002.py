@@ -435,12 +435,24 @@ def _train_fold(
 
     fold_number = fold + 1
     total_folds = 5
+    train_fruits = len(train_rows) // EXPECTED_VIEWS_PER_FRUIT
+    holdout_fruits = len(holdout_rows) // EXPECTED_VIEWS_PER_FRUIT
+    train_batches_per_epoch = math.ceil(len(train_rows) / BATCH_SIZE)
+    holdout_batches = math.ceil(len(holdout_rows) / BATCH_SIZE)
     print("", flush=True)
     print(
-        f"[1-5/6] FOLD {fold_number}/{total_folds} "
-        f"{_bar(fold_number - 1, total_folds)} · "
-        f"train {len(train_rows) // EXPECTED_VIEWS_PER_FRUIT} fruit · "
-        f"holdout {len(holdout_rows) // EXPECTED_VIEWS_PER_FRUIT} fruit",
+        f"[{fold_number}/6] CV FOLD {fold_number}/{total_folds} "
+        f"{_bar(fold_number - 1, total_folds)}",
+        flush=True,
+    )
+    print(
+        f"  학습       {train_fruits} fruit · {len(train_rows):,} views · "
+        f"batch={BATCH_SIZE} · 약 {train_batches_per_epoch} batches/epoch",
+        flush=True,
+    )
+    print(
+        f"  holdout    {holdout_fruits} fruit · {len(holdout_rows):,} views · "
+        f"약 {holdout_batches} eval batches · 학습에는 사용하지 않음",
         flush=True,
     )
 
@@ -512,7 +524,7 @@ def _train_fold(
         epoch_elapsed = float(history[-1]["elapsed_seconds"])
         best_marker = " ★BEST" if improved else ""
         print(
-            f"  E{epoch:02d}/{EPOCHS:02d} {_bar(epoch, EPOCHS)} · "
+            f"  EPOCH {epoch:02d}/{EPOCHS:02d} {_bar(epoch, EPOCHS)} · "
             f"MAE {mae:.3f}g · RMSE {float(holdout_metrics['rmse_g']):.3f} · "
             f"R² {float(holdout_metrics['r2']):.3f} · "
             f"Grade {float(holdout_metrics['grade_accuracy']) * 100:5.1f}% · "
@@ -522,14 +534,14 @@ def _train_fold(
         )
         if stale >= PATIENCE:
             print(
-                f"  ↳ early stop · best E{best_epoch:02d} · MAE {best_mae:.3f}g",
+                f"  ↳ early stop · best EPOCH {best_epoch:02d} · MAE {best_mae:.3f}g",
                 flush=True,
             )
             break
 
     print(
         f"  ✓ FOLD {fold_number}/{total_folds} 완료 · "
-        f"best E{best_epoch:02d} · MAE {best_mae:.3f}g",
+        f"best EPOCH {best_epoch:02d} · MAE {best_mae:.3f}g",
         flush=True,
     )
 
@@ -661,7 +673,7 @@ def _train_final_model(
             scaler.step(optimizer)
             scaler.update()
         print(
-            f"  E{epoch:02d}/{final_epoch:02d} {_bar(epoch, final_epoch)} · "
+            f"  EPOCH {epoch:02d}/{final_epoch:02d} {_bar(epoch, final_epoch)} · "
             "train-only fitting",
             flush=True,
         )
