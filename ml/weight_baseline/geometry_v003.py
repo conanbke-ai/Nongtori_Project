@@ -501,11 +501,37 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("artifacts/weight/development-cv-v1/train_folds.csv"),
     )
     parser.add_argument(
+        "--allow-after-compatibility-review",
+        action="store_true",
+        help=(
+            "Explicitly acknowledge that cohort compatibility was reviewed. "
+            "Geometry V3 is HOLD by default and must not run before that review."
+        ),
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("artifacts/weight/geometry-v003"),
     )
     args = parser.parse_args(argv)
+
+    if not args.allow_after_compatibility_review:
+        print(
+            json.dumps(
+                {
+                    "status": "WEIGHT_GEOMETRY_V003_HOLD",
+                    "reason": (
+                        "Cohort compatibility review is required before any "
+                        "auxiliary reweighting experiment. Run "
+                        "geometry_cohort_compatibility_audit_v1 first and only "
+                        "proceed after explicit review."
+                    ),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 4
 
     try:
         report = run_geometry_v003(

@@ -1,3 +1,18 @@
+## WEIGHT cohort compatibility audit gate — 2026-10-07
+
+- Geometry V3 reweighting is now `HOLD_PENDING_MANUAL_COMPATIBILITY_REVIEW`.
+- Reason: auxiliary grade imbalance alone does not prove that reweighting is statistically justified.
+- Before V3, compare strict train vs auxiliary using source-preserving diagnostics:
+  - variety distribution
+  - source-sheet distribution
+  - photo YES/NO selection
+  - weight / width / height / width×height distributions
+  - geometry→weight relation transfer
+  - shared-variety cross-cohort residual behavior
+- New command: `python -m ml.weight_baseline.geometry_cohort_compatibility_audit_v1`.
+- Audit re-reads the canonical Dryad datasheet and verifies auxiliary weight/width/height/metadata are unchanged.
+- Official validation 79 and test 78 are excluded from compatibility statistics.
+- `geometry_v003` now blocks by default; it requires explicit `--allow-after-compatibility-review` after the audit is reviewed.
 ## WEIGHT Geometry V3 grade-matched auxiliary weighting — 2026-10-07
 
 - Shift audit confirmed auxiliary fruit are systematically larger/heavier than strict train.

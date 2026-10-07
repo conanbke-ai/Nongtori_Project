@@ -309,7 +309,40 @@ Command:
 python -m ml.weight_baseline.geometry_v003
 ```
 
-## 14. Portfolio completion boundary
+## 14. Cohort compatibility gate before reweighting
+
+Geometry V3 is not automatically approved merely because the auxiliary cohort has a different grade distribution.
+
+Reweighting is `HOLD_PENDING_MANUAL_COMPATIBILITY_REVIEW` until the strict-train and auxiliary cohorts are compared without changing any source values.
+
+Required diagnostics:
+
+- variety composition
+- source-sheet composition
+- photo availability selection (`YES` / `NO`)
+- weight / width / height / width×height distributions
+- area↔weight correlation
+- strict-model → auxiliary transfer metrics
+- auxiliary-model → strict-train transfer metrics
+- shared-variety cross-cohort residual behavior
+
+The audit verifies every auxiliary weight/width/height and metadata field against the canonical Dryad datasheet. Any mismatch fails closed.
+
+Command:
+
+```bash
+python -m ml.weight_baseline.geometry_cohort_compatibility_audit_v1
+```
+
+`geometry_v003` is blocked by default and may run only after explicit compatibility review:
+
+```bash
+python -m ml.weight_baseline.geometry_v003 --allow-after-compatibility-review
+```
+
+This flag is an acknowledgement of review, not proof that reweighting is valid.
+
+## 15. Portfolio completion boundary
 
 Weight Estimation V1의 목표는 학술적으로 가능한 모든 개선을 끝까지 구현하는 것이 아니다.
 
@@ -348,7 +381,7 @@ Geometry baseline
 
 이 구분은 연구 가능성을 부정하는 것이 아니라, 개인 기업용 포트폴리오 V1의 완료 시점을 통제하기 위한 scope 결정이다.
 
-## 15. Hardware integration rule
+## 16. Hardware integration rule
 
 Future adapter boundary:
 
