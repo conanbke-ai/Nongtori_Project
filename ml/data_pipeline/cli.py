@@ -31,6 +31,7 @@ from .dryad_materialization import materialize_strict_candidates
 from .dryad_weight_snapshot import freeze_dryad_weight_snapshot
 from .dryad_weight_audit import audit_datasheet, write_audit_report as write_dryad_weight_audit_report
 from .downloader import DatasetDownloader
+from .dyson_weight_reference import acquire_dyson_dataset, audit_dyson_dataset, DysonPipelineError
 from .field_audit import audit_field_csv
 from .incremental import incremental_scan_csv
 from .normalize import normalize_external_csv, normalize_field_csv
@@ -60,6 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("dryad-image-join-audit"); p.add_argument("--datasheet", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/datasheet.xlsx")); p.add_argument("--output", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/image-join-audit.json")); p.add_argument("--timeout", type=int, default=120); p.add_argument("--range-chunk-mb", type=int, default=1)
     p = sub.add_parser("dryad-materialize-candidates"); p.add_argument("--candidate-manifest", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/strict-candidate-manifest.json")); p.add_argument("--output-root", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/strict-rgb")); p.add_argument("--output-manifest", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/strict-materialized-assets.json")); p.add_argument("--archive-cache-dir", type=Path, default=Path("data/cache/dryad/DATA-QUAL-002/picture-archives")); p.add_argument("--keep-archives", action="store_true"); p.add_argument("--timeout", type=int, default=300); p.add_argument("--checkpoint-every", type=int, default=25)
     p = sub.add_parser("dryad-freeze-weight-snapshot"); p.add_argument("--candidate-manifest", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/strict-candidate-manifest.json")); p.add_argument("--materialized-manifest", type=Path, default=Path("data/audit/dryad/DATA-QUAL-002/strict-materialized-assets.json")); p.add_argument("--datasheet", type=Path, default=Path("data/raw/dryad/DATA-QUAL-002/datasheet.xlsx")); p.add_argument("--snapshot-root", type=Path, default=Path("data/snapshots")); p.add_argument("--snapshot-id", default="WEIGHT-DRYAD-V001"); p.add_argument("--seed", default="dryad-weight-v1"); p.add_argument("--train-ratio", type=float, default=0.70); p.add_argument("--val-ratio", type=float, default=0.15); p.add_argument("--test-ratio", type=float, default=0.15)
+    p = sub.add_parser("dyson-acquire"); p.add_argument("--raw-root", type=Path, default=Path("data/external/icra-dyson")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson")); p.add_argument("--dataset-url", default="https://drive.google.com/drive/folders/1meEKYLgdQpUgkpeqM6VgzHmJg0gNTCx0?usp=sharing")
+    p = sub.add_parser("dyson-audit"); p.add_argument("--raw-root", type=Path, default=Path("data/external/icra-dyson")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson"))
     p = sub.add_parser("snapshot"); p.add_argument("source_id"); p.add_argument("--audit-dir", type=Path, required=True); p.add_argument("--snapshot-root", type=Path, required=True); p.add_argument("--snapshot-id", required=True)
     p = sub.add_parser("incremental-scan"); p.add_argument("--input", type=Path, required=True); p.add_argument("--ledger", type=Path, required=True); p.add_argument("--output-ledger", type=Path, required=True); p.add_argument("--key-field", action="append", default=[]); p.add_argument("--ignore-field", action="append", default=[])
     p = sub.add_parser("field-audit"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path)
@@ -293,6 +296,26 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         except (DryadAccessError, ValueError) as exc:
             print(json.dumps({"status": "WEIGHT_SNAPSHOT_FREEZE_FAILED", "error": str(exc)}, ensure_ascii=False, indent=2))
+            return 3
+    if args.command == "dyson-acquire":
+        try:
+            report = acquire_dyson_dataset(
+                args.raw_root,
+                args.audit_root,
+                dataset_url=args.dataset_url,
+            )
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+            return 0
+        except DysonPipelineError as exc:
+            print(json.dumps({"status": "DYSON_ACQUISITION_BLOCKED", "error": str(exc)}, ensure_ascii=False, indent=2))
+            return 3
+    if args.command == "dyson-audit":
+        try:
+            report = audit_dyson_dataset(args.raw_root, args.audit_root)
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+            return 0 if report["status"] == "DYSON_NON_COMMERCIAL_REFERENCE_READY" else 2
+        except DysonPipelineError as exc:
+            print(json.dumps({"status": "DYSON_AUDIT_BLOCKED", "error": str(exc)}, ensure_ascii=False, indent=2))
             return 3
     if args.command == "snapshot":
         source = registry.get(args.source_id); print(create_snapshot(args.snapshot_id, source.source_id, source.version_or_revision or "unversioned", args.audit_dir, args.snapshot_root)); return 0

@@ -41,6 +41,7 @@ next-env.d.ts
 
 # Nongtori raw/audit/snapshot data products
 /data/raw/
+/data/external/
 /data/audit/
 /data/snapshots/
 /ml/data_pipeline/data/

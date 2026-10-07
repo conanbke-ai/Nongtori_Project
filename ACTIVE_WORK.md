@@ -1,3 +1,20 @@
+## ICRA/Dyson weight reference pipeline V1 — 2026-10-07
+
+- Registered source `DATA-WEIGHT-003` from the official ICRA 2022 Intelligent Manipulation Lab repository.
+- License is `CC-BY-NC-SA`; dataset role is permanently `NON_COMMERCIAL_REFERENCE` unless separate permission is obtained.
+- Added public Google Drive acquisition command:
+  - `python -m ml.data_pipeline.cli dyson-acquire`
+- Added audit command:
+  - `python -m ml.data_pipeline.cli dyson-audit`
+- Raw destination: `data/external/icra-dyson/` (Git ignored).
+- Audit destination: `data/audit/icra-dyson/`.
+- Acquisition uses optional `gdown`; missing dependency fails with an explicit install command.
+- Audit derives canonical sample stems from official suffix roles and verifies RGB/weight/depth/point-cloud availability.
+- `*_label.npy` is inspected without assuming scalar structure; dtype/shape/ndim/item count/finite/positive ranges are reported.
+- Every recognized file gets byte size + SHA-256 in `file-manifest.csv`.
+- The pipeline refuses automatic merge into Dryad or canonical commercial Weight training.
+- Next local gate: run real `dyson-acquire` then `dyson-audit`, share `join-audit.json` summary, and decide reference utility from actual label structure.
+- Canonical design: `docs/DYSON_WEIGHT_REFERENCE_V1.md`.
 ## WEIGHT RGB V2 training terminology + worker rationale — 2026-10-07
 
 - Clarified log/training hierarchy: Fold > Epoch > Batch.

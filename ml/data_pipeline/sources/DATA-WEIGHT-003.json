@@ -1,0 +1,41 @@
+{
+  "source_id": "DATA-WEIGHT-003",
+  "source_type": "dataset",
+  "provider": "google-drive",
+  "title": "ICRA 2022 Dyson Strawberry Picking Point, Ripeness and Weight Dataset",
+  "original_url": "https://github.com/imanlab/strawberry-pp-w-r-dataset",
+  "version_or_revision": "2022-ICRA",
+  "license": "CC-BY-NC-SA",
+  "license_checked_at": "2026-10-07",
+  "redistribution_allowed": "license_restricted",
+  "commercial_use": "not_allowed_without_separate_permission",
+  "status": "NON_COMMERCIAL_ONLY",
+  "retrieval": {
+    "dataset_number": 1,
+    "dataset_url": "https://drive.google.com/drive/folders/1meEKYLgdQpUgkpeqM6VgzHmJg0gNTCx0?usp=sharing",
+    "repository": "https://github.com/imanlab/strawberry-pp-w-r-dataset",
+    "acquire_command": "python -m ml.data_pipeline.cli dyson-acquire",
+    "audit_command": "python -m ml.data_pipeline.cli dyson-audit",
+    "raw_root": "data/external/icra-dyson",
+    "audit_root": "data/audit/icra-dyson",
+    "optional_dependency": "gdown"
+  },
+  "original_labels": [
+    "rgb",
+    "background_removed_rgb",
+    "weight",
+    "raw_depth",
+    "point_cloud",
+    "colorized_depth"
+  ],
+  "nongtori_mapping": {
+    "role": "NON_COMMERCIAL_REFERENCE",
+    "commercial_training_ready": false,
+    "auto_merge_to_dryad_snapshot": false,
+    "auto_merge_to_canonical_weight_training": false,
+    "minimum_reference_pair": "RGB_PLUS_WEIGHT_LABEL",
+    "identity_key": "CANONICAL_SAMPLE_STEM",
+    "label_structure": "AUDIT_REQUIRED_NO_SCALAR_ASSUMPTION"
+  },
+  "notes": "Official repository states CC-BY-NC-SA and free non-commercial use. Keep all Dyson raw data and derived training artifacts isolated from commercial/canonical Nongtori training unless separate permission is obtained."
+}
