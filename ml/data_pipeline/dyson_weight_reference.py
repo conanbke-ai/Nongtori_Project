@@ -261,6 +261,7 @@ def audit_dyson_dataset(
                 )
 
     inventory_rows: list[dict[str, Any]] = []
+    file_manifest_rows: list[dict[str, Any]] = []
     label_shape_counts: Counter[str] = Counter()
     label_dtype_counts: Counter[str] = Counter()
     total_weight_annotations = 0
@@ -340,6 +341,18 @@ def audit_dyson_dataset(
             for role, paths in roles.items()
             if len(paths) == 1
         }
+        for role, paths in roles.items():
+            for role_index, path in enumerate(paths):
+                file_manifest_rows.append(
+                    {
+                        "sample_stem": stem,
+                        "role": role,
+                        "role_index": role_index,
+                        "relative_path": path.relative_to(raw_root).as_posix(),
+                        "size_bytes": path.stat().st_size,
+                        "sha256": sha256_file(path),
+                    }
+                )
 
         inventory_rows.append(
             {
@@ -386,6 +399,20 @@ def audit_dyson_dataset(
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(inventory_rows)
+
+    file_manifest_path = audit_root / "file-manifest.csv"
+    with file_manifest_path.open("w", encoding="utf-8", newline="") as handle:
+        fieldnames = [
+            "sample_stem",
+            "role",
+            "role_index",
+            "relative_path",
+            "size_bytes",
+            "sha256",
+        ]
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(file_manifest_rows)
 
     label_report = {
         "status": "DYSON_WEIGHT_LABEL_AUDIT_COMPLETE",
@@ -469,6 +496,7 @@ def audit_dyson_dataset(
         },
         "artifacts": {
             "sample_inventory": str(inventory_path),
+            "file_manifest": str(file_manifest_path),
             "weight_label_audit": str(audit_root / "weight-label-audit.json"),
             "join_audit": str(audit_root / "join-audit.json"),
         },
