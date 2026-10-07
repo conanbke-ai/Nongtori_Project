@@ -110,6 +110,8 @@ Geometry
 → Weight ML V1 freeze
 ```
 
+V002 이후 추가 실험은 official validation 79개를 반복 튜닝 표면으로 사용하지 않는다. 먼저 official train 367 FRUIT_ID 내부 5-fold CV에서 aggregation/loss/uncertainty 후보를 개발하고, 방법을 고정한 뒤 validation 79개를 확인한다. test 78개는 successor tuning에서 계속 잠근다.
+
 multi-task/ordinal, RGB-D/3D, probabilistic/conformal uncertainty, 대규모 외부 field validation은 V1 완료를 무기한 미루지 않도록 별도 successor research scope로 관리한다.
 
 ## 8. Tracking
