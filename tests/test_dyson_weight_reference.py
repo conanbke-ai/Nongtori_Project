@@ -134,6 +134,10 @@ class DysonWeightReferenceTests(unittest.TestCase):
                     Path(tmp) / "audit",
                 )
 
+    def test_external_raw_root_is_git_ignored(self):
+        gitignore = Path(".gitignore").read_text(encoding="utf-8")
+        self.assertIn("/data/external/", gitignore)
+
     def test_acquisition_manifest_keeps_noncommercial_guard(self):
         class Completed:
             returncode = 0
