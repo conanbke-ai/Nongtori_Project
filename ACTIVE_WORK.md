@@ -1,3 +1,12 @@
+## WEIGHT existing-data reuse audit — 2026-10-07
+
+- Before new model research, audit unused Dryad geometry+weight supervision outside the strict 524 RGB cohort.
+- Source metadata has 1,571 valid with-calyx targets, but only 524 strict exact-22-view RGB-weight fruit.
+- New tool: `python -m ml.weight_baseline.geometry_auxiliary_audit_v1`.
+- Candidate role is `AUXILIARY_GEOMETRY_TRAIN_ONLY_CANDIDATE` only.
+- Official train/validation/test membership is not changed.
+- Auxiliary fruit must not be treated as RGB training samples when approved RGB assets are absent.
+- Next: run the local audit and use the real candidate count to decide whether Geometry V2 augmentation is worthwhile before disagreement/aggregation/model changes.
 ## WEIGHT development CV protocol V1 — 2026-10-07
 
 - Official `WEIGHT-DRYAD-V001` split remains immutable: train 367 / validation 79 / test 78 FRUIT_ID.
