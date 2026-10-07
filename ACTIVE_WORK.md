@@ -1,3 +1,19 @@
+## WEIGHT RGB V2 log UX + GPU guard — 2026-10-07
+
+- User requirement: long-running ML logs must be readable at a glance.
+- RGB V2 startup now prints:
+  - purpose / model / dataset roles
+  - train/validation/test counts
+  - fold count and total training stages
+  - Python executable
+  - PyTorch version / CUDA build
+  - cuda_available and selected device
+  - output path and selection criteria
+- Fold logs now show stage, epoch progress bar, MAE, RMSE, R², grade accuracy, best epoch, early-stop counter, elapsed time.
+- OOF aggregation candidates are shown as a compact comparison table before final training.
+- Final summary shows selected aggregation, validation metrics, Mean-22 reference, and locked test status.
+- Compute-heavy RGB V2 now blocks CPU by default when CUDA is unavailable.
+- Intentional CPU execution requires `--allow-cpu`.
 ## WEIGHT RGB multi-view aggregation V2 — 2026-10-07
 
 - Geometry auxiliary work is frozen/rejected for Portfolio V1; next ML step is RGB multi-view information use.
