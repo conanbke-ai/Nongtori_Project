@@ -1,3 +1,12 @@
+## WEIGHT development CV protocol V1 — 2026-10-07
+
+- Official `WEIGHT-DRYAD-V001` split remains immutable: train 367 / validation 79 / test 78 FRUIT_ID.
+- Validation 79 is a role-specific holdout, not the total weight dataset size.
+- The 22 views per fruit remain one FRUIT_ID atomic unit and never count as 22 independent validation samples.
+- V002+ method development should use deterministic train-only 5-fold CV before consuming official validation.
+- New tool: `python -m ml.weight_baseline.development_cv_v1`.
+- Expected five-fold validation sizes for 367 train fruit: 74 / 74 / 73 / 73 / 73.
+- Official validation is excluded from inner CV; official test remains locked from successor tuning.
 ## WEIGHT selective auto-grade evaluator V1 — 2026-10-07
 
 - Added validation-only evaluator for Fusion V001.
