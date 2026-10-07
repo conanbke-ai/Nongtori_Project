@@ -281,7 +281,35 @@ python -m ml.weight_baseline.geometry_auxiliary_shift_audit_v1
 
 Validation/test are not used to diagnose or select the shift-handling strategy.
 
-## 13. Portfolio completion boundary
+## 13. Geometry V3 reweighted auxiliary experiment
+
+The auxiliary shift audit found a material train-domain difference:
+
+- auxiliary mean weight is +2.3651g higher than strict train;
+- auxiliary mean width is +1.3844mm higher;
+- auxiliary mean height is +2.0768mm higher;
+- grade-distribution total-variation distance is 0.1542.
+
+Therefore Geometry V3 does not concatenate all auxiliary rows at equal weight. It keeps the rows but matches their effective grade mass to the strict fold-train grade distribution.
+
+Fixed candidates:
+
+```text
+STRICT_ONLY
+GRADE_MATCHED_AUX_025
+GRADE_MATCHED_AUX_050
+GRADE_MATCHED_AUX_100
+```
+
+Candidate selection is official-train 5-fold OOF only. Official validation 79 is confirmation only and official test 78 remains locked.
+
+Command:
+
+```bash
+python -m ml.weight_baseline.geometry_v003
+```
+
+## 14. Portfolio completion boundary
 
 Weight Estimation V1의 목표는 학술적으로 가능한 모든 개선을 끝까지 구현하는 것이 아니다.
 
@@ -320,7 +348,7 @@ Geometry baseline
 
 이 구분은 연구 가능성을 부정하는 것이 아니라, 개인 기업용 포트폴리오 V1의 완료 시점을 통제하기 위한 scope 결정이다.
 
-## 14. Hardware integration rule
+## 15. Hardware integration rule
 
 Future adapter boundary:
 
