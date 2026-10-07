@@ -162,6 +162,27 @@ python -m ml.weight_baseline.rgb_multiview_v002
 
 This experiment is intentionally heavier than Geometry V2/V3 because it trains five fold models plus one final train-only model.
 
+### Runtime log / GPU policy
+
+Because V002 performs five fold trainings plus one final fit, accidental CPU execution is blocked by default.
+
+Startup logs must make the runtime environment visible:
+
+- Python executable
+- PyTorch version
+- PyTorch CUDA build
+- `torch.cuda.is_available()`
+- selected GPU name
+- fold/epoch progress and current metrics
+
+If CUDA is unavailable, V002 exits with a diagnostic instead of silently starting CPU training.
+
+Intentional CPU execution is possible only with:
+
+```bash
+python -m ml.weight_baseline.rgb_multiview_v002 --allow-cpu
+```
+
 ## Next
 
 After the real RGB-only result is recorded:
