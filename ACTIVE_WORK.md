@@ -1,3 +1,13 @@
+## WEIGHT RGB V2 training terminology + worker rationale — 2026-10-07
+
+- Clarified log/training hierarchy: Fold > Epoch > Batch.
+- Fold = one FRUIT_ID-level CV round, not a mini-batch.
+- Epoch = one full pass over all training views in the current fold.
+- Batch = 32-view optimizer step.
+- Example fold: 293 fruit × 22 views = 6,446 views ≈ 202 batches/epoch.
+- Log now prints `[1/6] CV FOLD 1/5`, explicit `EPOCH 01/15`, train/holdout view counts, and batches/epoch.
+- DataLoader default `workers=4` documented as a conservative Windows/CUDA baseline, not a proven optimum.
+- Worker tuning, if needed, must be benchmarked using epoch time, images/sec, GPU utilization, and stability.
 ## WEIGHT RGB V2 log UX + GPU guard — 2026-10-07
 
 - User requirement: long-running ML logs must be readable at a glance.
