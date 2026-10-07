@@ -1,3 +1,14 @@
+## WEIGHT Geometry V2 auxiliary comparison — 2026-10-07
+
+- Real auxiliary audit found 1,047 additional Dryad fruit with valid with-calyx weight + width + height outside the strict 524 RGB cohort.
+- Geometry V2 compares:
+  - `STRICT_ONLY`: official train 367
+  - `STRICT_PLUS_AUXILIARY`: official train 367 + auxiliary 1,047 = 1,414 training fruit
+- Regime selection uses official-train 5-fold OOF only.
+- Selection priority: grade errors → threshold crossings → MAE → RMSE → simpler regime tie-break.
+- Official validation 79 is confirmation only and does not select the regime.
+- Official test 78 remains locked and no V2 test prediction file is written.
+- New command: `python -m ml.weight_baseline.geometry_v002`.
 ## WEIGHT existing-data reuse audit — 2026-10-07
 
 - Before new model research, audit unused Dryad geometry+weight supervision outside the strict 524 RGB cohort.
