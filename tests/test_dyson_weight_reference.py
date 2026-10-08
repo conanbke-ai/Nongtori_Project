@@ -227,6 +227,68 @@ class DysonWeightReferenceTests(unittest.TestCase):
             self.assertEqual(delta["scene_delta"], 1 - 532)
             self.assertEqual(delta["rgb_delta"], 3 - 1588)
 
+    def test_physical_berry_manifest_uses_only_strict_seven_column_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            folder = raw / "extracted" / "1" / "1" / "010"
+            folder.mkdir(parents=True)
+
+            scene = "strawberry_dyson_lincoln_tbd__010"
+            for view in (1, 2, 3):
+                (folder / f"{scene}_{view}_rgb.png").write_bytes(f"rgb-{view}".encode())
+
+            np.save(
+                folder / f"{scene}_1_label.npy",
+                np.array(
+                    [
+                        [1.0, 19.5, 45.98, 34.48, 30.71, 331.0, 157.0],
+                        [2.0, 2.0, 23.41, 15.13, 13.75, 196.0, 250.0],
+                    ],
+                    dtype=np.float32,
+                ),
+            )
+            np.save(
+                folder / f"{scene}_2_label.npy",
+                np.array([[1.0, 300.0, 180.0]], dtype=np.float32),
+            )
+            np.save(
+                folder / f"{scene}_3_label.npy",
+                np.array([[1.0, 320.0, 190.0], [2.0, 210.0, 260.0]], dtype=np.float32),
+            )
+
+            report = audit_dyson_dataset(raw, audit)
+            summary = report["scene_schema_summary"]["physical_berry_summary"]
+            rows = list(csv.DictReader((audit / "physical-berry-manifest.csv").open(encoding="utf-8")))
+
+            self.assertEqual(summary["strict_berry_count"], 2)
+            self.assertEqual(summary["strict_scene_count"], 1)
+            self.assertEqual(summary["matched_view_count_distribution"], {"2": 1, "3": 1})
+            self.assertEqual(summary["all_view_1_2_3_berry_count"], 1)
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0]["source_schema"], "STRICT_7_COLUMN")
+            self.assertEqual(rows[0]["dataset_role"], DATASET_ROLE)
+            self.assertEqual(rows[0]["commercial_training_ready"], "False")
+
+    def test_annotation_only_partition_is_classified_separately(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            folder = raw / "extracted" / "2" / "2" / "011"
+            folder.mkdir(parents=True)
+
+            stem = "strawberry_dyson_lincoln_tbd__011_1"
+            (folder / f"{stem}_rgb.png").write_bytes(b"rgb")
+            (folder / f"{stem}.json").write_text("{}", encoding="utf-8")
+
+            report = audit_dyson_dataset(raw, audit)
+            roles = report["scene_schema_summary"]["partition_roles"]
+
+            self.assertEqual(roles["2"], "ANNOTATION_ONLY_RGB_JSON")
+            self.assertEqual(report["scene_schema_summary"]["physical_berry_summary"]["strict_berry_count"], 0)
+
     def test_multicolumn_label_requires_schema_review(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -1,3 +1,13 @@
+## Dyson strict physical-berry manifest — 2026-10-08
+
+- Exception review supports keeping the 637 normal 7-column full-label rows as the strict physical-berry cohort.
+- 6-column rows remain excluded automatically; two look recoverable but source semantics are not strong enough to mutate/normalize them into strict labels.
+- ID-list mismatches are visibility/annotation mismatches, not sufficient reason to discard a berry whose full 7-column row is valid.
+- Incomplete 3-view scenes may still contribute a strict berry if a valid full 7-column row exists; manifest records actual matched-view coverage.
+- Partition 2 is explicitly classified as `ANNOTATION_ONLY_RGB_JSON` and is excluded from the weight cohort.
+- New outputs: `physical-berry-manifest.csv` and `physical-berry-manifest.json`.
+- Next local gate: rerun `dyson-audit`, verify strict count/view-coverage distribution, then freeze Dyson as a non-commercial reference cohort only.
+
 ## Dyson scene exception audit — 2026-10-08
 
 - Real scene summary: 542 scenes / 535 complete 3-view / 502 full-label scenes.

@@ -310,3 +310,38 @@ It records:
 - local-vs-paper count deltas
 
 Do not freeze the 637-row candidate cohort until these exceptions are reviewed.
+
+
+## 12. Strict physical-berry manifest — 2026-10-08
+
+Exception review supports a conservative physical-berry cohort.
+
+Policy:
+
+- include only full-label rows with exactly 7 columns;
+- interpret them as `[instance_id, weight_g, dimension_1, dimension_2, dimension_3, center_x, center_y]`;
+- do not auto-recover 6-column rows;
+- do not require all three RGB views for berry inclusion;
+- record whichever views contain the same berry instance ID;
+- keep annotation-only partition 2 out of the weight cohort;
+- keep all outputs `NON_COMMERCIAL_REFERENCE`.
+
+Artifacts:
+
+```text
+data/audit/icra-dyson/
+├─ physical-berry-manifest.csv
+└─ physical-berry-manifest.json
+```
+
+The CSV stores one row per strict physical berry with:
+
+- scene ID / berry instance ID
+- measured weight candidate in grams
+- three dimensions
+- full-label center coordinate
+- view 1/2/3 RGB path and center coordinate when that berry is visible
+- matched-view count
+- schema/provenance/license guard
+
+Current expected strict count from the observed local package is 637 berries. The four 6-column rows remain excluded pending separate semantic proof.
