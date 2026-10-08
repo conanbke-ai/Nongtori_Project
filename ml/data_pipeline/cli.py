@@ -33,6 +33,7 @@ from .dryad_weight_audit import audit_datasheet, write_audit_report as write_dry
 from .downloader import DatasetDownloader
 from .dyson_weight_reference import acquire_dyson_dataset, audit_dyson_dataset, DysonPipelineError
 from .dyson_reference_snapshot import freeze_dyson_reference_snapshot
+from .dyson_annotations import acquire_dyson_annotations, audit_dyson_annotations
 from .field_audit import audit_field_csv
 from .incremental import incremental_scan_csv
 from .normalize import normalize_external_csv, normalize_field_csv
@@ -65,6 +66,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("dyson-acquire"); p.add_argument("--raw-root", type=Path, default=Path("data/external/icra-dyson")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson")); p.add_argument("--dataset-url", default="https://drive.google.com/drive/folders/1meEKYLgdQpUgkpeqM6VgzHmJg0gNTCx0?usp=sharing")
     p = sub.add_parser("dyson-audit"); p.add_argument("--raw-root", type=Path, default=Path("data/external/icra-dyson")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson"))
     p = sub.add_parser("dyson-freeze-reference"); p.add_argument("--raw-root", type=Path, default=Path("data/external/icra-dyson")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson")); p.add_argument("--snapshot-root", type=Path, default=Path("data/snapshots")); p.add_argument("--snapshot-id", default="DYSON-REFERENCE-V001"); p.add_argument("--expected-strict-berry-count", type=int, default=637)
+    p = sub.add_parser("dyson-annotations-acquire"); p.add_argument("--annotation-root", type=Path, default=Path("data/external/icra-dyson-annotations")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson-annotations")); p.add_argument("--timeout", type=int, default=120)
+    p = sub.add_parser("dyson-annotations-audit"); p.add_argument("--annotation-root", type=Path, default=Path("data/external/icra-dyson-annotations")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson-annotations"))
     p = sub.add_parser("snapshot"); p.add_argument("source_id"); p.add_argument("--audit-dir", type=Path, required=True); p.add_argument("--snapshot-root", type=Path, required=True); p.add_argument("--snapshot-id", required=True)
     p = sub.add_parser("incremental-scan"); p.add_argument("--input", type=Path, required=True); p.add_argument("--ledger", type=Path, required=True); p.add_argument("--output-ledger", type=Path, required=True); p.add_argument("--key-field", action="append", default=[]); p.add_argument("--ignore-field", action="append", default=[])
     p = sub.add_parser("field-audit"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path)
@@ -332,6 +335,29 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         except DysonPipelineError as exc:
             print(json.dumps({"status": "DYSON_REFERENCE_FREEZE_BLOCKED", "error": str(exc)}, ensure_ascii=False, indent=2))
+            return 3
+    if args.command == "dyson-annotations-acquire":
+        try:
+            report = acquire_dyson_annotations(
+                annotation_root=args.annotation_root,
+                audit_root=args.audit_root,
+                timeout=args.timeout,
+            )
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+            return 0
+        except DysonPipelineError as exc:
+            print(json.dumps({"status": "DYSON_ANNOTATION_ACQUISITION_BLOCKED", "error": str(exc)}, ensure_ascii=False, indent=2))
+            return 3
+    if args.command == "dyson-annotations-audit":
+        try:
+            report = audit_dyson_annotations(
+                annotation_root=args.annotation_root,
+                audit_root=args.audit_root,
+            )
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+            return 0 if report["parse_error_count"] == 0 else 2
+        except DysonPipelineError as exc:
+            print(json.dumps({"status": "DYSON_ANNOTATION_AUDIT_BLOCKED", "error": str(exc)}, ensure_ascii=False, indent=2))
             return 3
     if args.command == "snapshot":
         source = registry.get(args.source_id); print(create_snapshot(args.snapshot_id, source.source_id, source.version_or_revision or "unversioned", args.audit_dir, args.snapshot_root)); return 0
