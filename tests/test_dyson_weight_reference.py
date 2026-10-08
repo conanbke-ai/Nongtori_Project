@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import csv
+import io
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -18,6 +20,7 @@ from ml.data_pipeline.dyson_weight_reference import (
     acquire_dyson_dataset,
     audit_dyson_dataset,
     classify_sample_file,
+    extract_dyson_archives,
 )
 
 
@@ -133,6 +136,75 @@ class DysonWeightReferenceTests(unittest.TestCase):
                     Path(tmp) / "raw",
                     Path(tmp) / "audit",
                 )
+
+    def _write_four_archives(self, root: Path) -> None:
+        for index in range(1, 5):
+            with zipfile.ZipFile(root / f"{index}.zip", "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                stem = f"sample_{index}"
+                zf.writestr(f"{stem}_rgb.png", b"rgb")
+                buffer = io.BytesIO()
+                np.save(buffer, np.array([10.0 + index], dtype=np.float32))
+                zf.writestr(f"{stem}_label.npy", buffer.getvalue())
+
+    def test_extract_materializes_four_archives_and_rerun_reuses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            raw.mkdir()
+            self._write_four_archives(raw)
+
+            first = extract_dyson_archives(raw, audit)
+            second = extract_dyson_archives(raw, audit)
+
+            self.assertEqual(first["archive_count"], 4)
+            self.assertEqual(first["member_file_count"], 8)
+            self.assertEqual(first["extracted_member_count"], 8)
+            self.assertEqual(second["reused_member_count"], 8)
+            self.assertEqual(second["extracted_member_count"], 0)
+            self.assertTrue((raw / "extracted" / "1" / "sample_1_rgb.png").exists())
+
+    def test_extract_rejects_incomplete_archive_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            raw.mkdir()
+            with zipfile.ZipFile(raw / "1.zip", "w") as zf:
+                zf.writestr("sample_rgb.png", b"rgb")
+
+            with self.assertRaisesRegex(DysonPipelineError, "archive set"):
+                extract_dyson_archives(raw, audit)
+
+    def test_extract_rejects_path_traversal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            raw.mkdir()
+            for index in range(1, 5):
+                with zipfile.ZipFile(raw / f"{index}.zip", "w") as zf:
+                    name = "../escape.txt" if index == 1 else f"sample_{index}_rgb.png"
+                    zf.writestr(name, b"x")
+
+            with self.assertRaisesRegex(DysonPipelineError, "unsafe path"):
+                extract_dyson_archives(raw, audit)
+
+    def test_audit_ignores_source_zip_files_after_extraction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            raw.mkdir()
+            self._write_four_archives(raw)
+            extract_dyson_archives(raw, audit)
+
+            report = audit_dyson_dataset(raw, audit)
+
+            self.assertEqual(report["source_archive_count"], 4)
+            self.assertEqual(report["total_sample_stems"], 4)
+            self.assertEqual(report["exact_rgb_weight_matched_count"], 4)
+            self.assertEqual(report["unclassified_file_count"], 0)
 
     def test_external_raw_root_is_git_ignored(self):
         gitignore = Path(".gitignore").read_text(encoding="utf-8")
