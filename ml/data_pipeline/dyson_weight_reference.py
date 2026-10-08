@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import re
 import shutil
 import stat
 import subprocess
@@ -95,6 +96,22 @@ def sample_partition(path: Path, raw_root: Path) -> str:
     if len(parts) >= 2 and parts[0] == "extracted":
         return parts[1]
     return "root"
+
+
+VIEW_SUFFIX_RE = re.compile(r"^(?P<scene>.+)_(?P<view>\d+)$")
+
+
+def split_scene_view(stem: str) -> tuple[str, int | None]:
+    match = VIEW_SUFFIX_RE.match(stem)
+    if match is None:
+        return stem, None
+    return match.group("scene"), int(match.group("view"))
+
+
+def canonical_scene_id(path: Path, raw_root: Path, stem: str) -> str:
+    scene_stem, _ = split_scene_view(stem)
+    relative_parent = path.parent.relative_to(raw_root).as_posix()
+    return scene_stem if relative_parent in {"", "."} else f"{relative_parent}/{scene_stem}"
 
 
 def _gdown_available() -> bool:
@@ -399,6 +416,7 @@ def _load_numpy_label(path: Path) -> tuple[dict[str, Any], list[float]]:
     column_count: int | None = None
     column_stats: list[dict[str, Any]] = []
     sample_rows: list[list[float]] = []
+    all_rows: list[list[float]] = []
 
     if array.ndim == 2:
         row_count = int(array.shape[0])
@@ -418,19 +436,22 @@ def _load_numpy_label(path: Path) -> tuple[dict[str, Any], list[float]]:
                     "mean": (sum(values) / len(values)) if values else None,
                 }
             )
-        sample_rows = [
+        all_rows = [
             [float(item) for item in row]
-            for row in array[: min(3, row_count)].tolist()
+            for row in array.tolist()
         ]
+        sample_rows = all_rows[: min(3, row_count)]
     elif array.ndim == 1:
         row_count = 0 if array.size == 0 else 1
         column_count = int(array.size) if array.size else 0
         if array.size:
-            sample_rows = [[float(item) for item in array.tolist()]]
+            all_rows = [[float(item) for item in array.tolist()]]
+            sample_rows = list(all_rows)
     elif array.ndim == 0:
         row_count = 1
         column_count = 1
-        sample_rows = [[float(array.item())]]
+        all_rows = [[float(array.item())]]
+        sample_rows = list(all_rows)
 
     return (
         {
@@ -452,6 +473,7 @@ def _load_numpy_label(path: Path) -> tuple[dict[str, Any], list[float]]:
             "non_positive_numeric_count": invalid_non_positive,
             "column_stats": column_stats,
             "sample_rows": sample_rows,
+            "all_rows": all_rows,
         },
         numeric_values,
     )
@@ -527,6 +549,8 @@ def audit_dyson_dataset(
     exact_rgb_label = 0
     missing_rgb: list[str] = []
     missing_label: list[str] = []
+    scene_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    rgb_hash_to_paths: dict[str, list[str]] = defaultdict(list)
 
     print("=" * 88)
     print(" ICRA/DYSON WEIGHT DATA AUDIT")
@@ -621,6 +645,29 @@ def audit_dyson_dataset(
                 }
             )
 
+        sample_path_for_identity = next(iter(next(iter(roles.values()))))
+        sample_stem = sample_path_for_identity.name
+        classified_identity = classify_sample_file(sample_path_for_identity)
+        identity_stem = classified_identity[0] if classified_identity else sample_stem
+        scene_id = canonical_scene_id(sample_path_for_identity, raw_root, identity_stem)
+        _, view_index = split_scene_view(identity_stem)
+        scene_groups[scene_id].append(
+            {
+                "sample_id": sample_id,
+                "view_index": view_index,
+                "has_rgb": has_rgb,
+                "has_label": has_label,
+                "label_shape": label_info["shape"] if label_info else None,
+                "label_rows": label_info["all_rows"] if label_info else [],
+            }
+        )
+        if has_rgb:
+            rgb_path = singleton["rgb"]
+            rgb_sha = sha256_file(rgb_path)
+            rgb_hash_to_paths[rgb_sha].append(
+                rgb_path.relative_to(raw_root).as_posix()
+            )
+
         paths_by_role = {
             role: paths[0].relative_to(raw_root).as_posix()
             for role, paths in roles.items()
@@ -708,6 +755,139 @@ def audit_dyson_dataset(
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(file_manifest_rows)
+
+    scene_count = len(scene_groups)
+    three_view_scene_count = 0
+    full_label_scene_count = 0
+    full_label_row_count = 0
+    three_column_row_count = 0
+    scene_instance_id_match_count = 0
+    scene_instance_id_mismatch_count = 0
+    candidate_weight_values: list[float] = []
+    scene_examples: list[dict[str, Any]] = []
+
+    for scene_id, samples in sorted(scene_groups.items()):
+        by_view = {
+            item["view_index"]: item
+            for item in samples
+            if item["view_index"] is not None
+        }
+        if {1, 2, 3}.issubset(by_view):
+            three_view_scene_count += 1
+
+        full_candidates = [
+            item for item in samples
+            if item["label_shape"]
+            and len(item["label_shape"]) == 2
+            and item["label_shape"][1] in {6, 7}
+        ]
+        coord_candidates = [
+            item for item in samples
+            if item["label_shape"]
+            and len(item["label_shape"]) == 2
+            and item["label_shape"][1] == 3
+        ]
+
+        if full_candidates:
+            full_label_scene_count += 1
+            full_item = full_candidates[0]
+            full_rows = full_item["label_rows"]
+            full_label_row_count += len(full_rows)
+            for row in full_rows:
+                if len(row) == 7:
+                    candidate_weight_values.append(float(row[1]))
+
+            full_ids = [int(round(row[0])) for row in full_rows if row]
+            coord_id_sets = []
+            for item in coord_candidates:
+                rows = item["label_rows"]
+                three_column_row_count += len(rows)
+                coord_id_sets.append([int(round(row[0])) for row in rows if row])
+
+            comparable = bool(coord_id_sets)
+            if comparable and all(ids == full_ids for ids in coord_id_sets):
+                scene_instance_id_match_count += 1
+            elif comparable:
+                scene_instance_id_mismatch_count += 1
+
+            if len(scene_examples) < 12:
+                scene_examples.append(
+                    {
+                        "scene_id": scene_id,
+                        "views": sorted(
+                            item["view_index"]
+                            for item in samples
+                            if item["view_index"] is not None
+                        ),
+                        "full_label_shapes": [
+                            item["label_shape"] for item in full_candidates
+                        ],
+                        "coord_label_shapes": [
+                            item["label_shape"] for item in coord_candidates
+                        ],
+                        "full_instance_ids": full_ids[:10],
+                        "coord_instance_ids": [
+                            ids[:10] for ids in coord_id_sets
+                        ],
+                        "full_rows_sample": full_rows[:3],
+                    }
+                )
+
+    duplicate_rgb_hashes = {
+        digest: paths
+        for digest, paths in rgb_hash_to_paths.items()
+        if len(paths) > 1
+    }
+    rgb_duplicate_file_count = sum(
+        len(paths) - 1 for paths in duplicate_rgb_hashes.values()
+    )
+    unique_rgb_hash_count = len(rgb_hash_to_paths)
+
+    scene_schema_report = {
+        "status": (
+            "DYSON_SCENE_SCHEMA_CANDIDATE_VERIFIED"
+            if full_label_scene_count > 0
+            and scene_instance_id_mismatch_count == 0
+            else "DYSON_SCENE_SCHEMA_REVIEW_REQUIRED"
+        ),
+        "scene_count": scene_count,
+        "three_view_scene_count": three_view_scene_count,
+        "full_label_scene_count": full_label_scene_count,
+        "full_label_row_count": full_label_row_count,
+        "three_column_row_count": three_column_row_count,
+        "scene_instance_id_match_count": scene_instance_id_match_count,
+        "scene_instance_id_mismatch_count": scene_instance_id_mismatch_count,
+        "candidate_weight_column": {
+            "column_index": 1,
+            "basis": (
+                "7-column rows resemble [instance_id, weight_g, dimensions..., x, y]; "
+                "this remains a dataset-specific schema candidate pending final acceptance."
+            ),
+            "count": len(candidate_weight_values),
+            "min": min(candidate_weight_values) if candidate_weight_values else None,
+            "max": max(candidate_weight_values) if candidate_weight_values else None,
+            "mean": (
+                sum(candidate_weight_values) / len(candidate_weight_values)
+                if candidate_weight_values else None
+            ),
+        },
+        "rgb_identity": {
+            "rgb_file_count": int(role_counts.get("rgb", 0)),
+            "unique_rgb_sha256_count": unique_rgb_hash_count,
+            "duplicate_rgb_file_count": rgb_duplicate_file_count,
+            "duplicate_rgb_hash_group_count": len(duplicate_rgb_hashes),
+            "duplicate_examples": [
+                {"sha256": digest, "paths": paths[:10]}
+                for digest, paths in list(duplicate_rgb_hashes.items())[:20]
+            ],
+        },
+        "examples": scene_examples,
+        "published_reference": PUBLISHED_REFERENCE,
+    }
+    (audit_root / "scene-schema-audit.json").write_text(
+        json.dumps(scene_schema_report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     aggregate_column_stats: dict[str, list[dict[str, Any]]] = {}
     for width, columns in sorted(aggregate_columns.items()):
@@ -817,6 +997,7 @@ def audit_dyson_dataset(
             path.relative_to(raw_root).as_posix()
             for path in unclassified[:50]
         ],
+        "scene_schema_summary": scene_schema_report,
         "weight_label_summary": {
             "label_file_count": int(role_counts.get("weight_label", 0)),
             "shape_counts": dict(sorted(label_shape_counts.items())),
@@ -846,6 +1027,7 @@ def audit_dyson_dataset(
             "sample_inventory": str(inventory_path),
             "file_manifest": str(file_manifest_path),
             "weight_label_audit": str(audit_root / "weight-label-audit.json"),
+            "scene_schema_audit": str(audit_root / "scene-schema-audit.json"),
             "join_audit": str(audit_root / "join-audit.json"),
         },
     }
@@ -866,6 +1048,24 @@ def audit_dyson_dataset(
     print(f" Label shapes    {dict(sorted(label_shape_counts.items()))}")
     print(f" Column widths   {dict(sorted(label_column_count_counts.items()))}")
     print(f" Schema          {label_schema_status}")
+    print(
+        f" Scenes          {scene_count:,} · 3-view {three_view_scene_count:,} · "
+        f"full-label scenes {full_label_scene_count:,}"
+    )
+    print(
+        f" Full-label rows {full_label_row_count:,} · 3-col rows {three_column_row_count:,} · "
+        f"ID match {scene_instance_id_match_count:,} · mismatch {scene_instance_id_mismatch_count:,}"
+    )
+    print(
+        f" RGB unique SHA  {unique_rgb_hash_count:,}/{role_counts.get('rgb', 0):,} · "
+        f"duplicate files {rgb_duplicate_file_count:,}"
+    )
+    if candidate_weight_values:
+        print(
+            f" Weight cand.    column 1 · n={len(candidate_weight_values):,} · "
+            f"{min(candidate_weight_values):.2f}~{max(candidate_weight_values):.2f}g · "
+            f"mean {sum(candidate_weight_values)/len(candidate_weight_values):.2f}g"
+        )
     print(
         f" Paper reference images={PUBLISHED_REFERENCE['images']:,} · "
         f"berries={PUBLISHED_REFERENCE['berries']:,} · "

@@ -245,3 +245,29 @@ Therefore V2 audit policy is:
 7. status remains `DYSON_REFERENCE_SCHEMA_REVIEW_REQUIRED` while multi-column label semantics are unresolved.
 
 This preserves the source data exactly and prevents an arbitrary column from being declared the weight target.
+
+
+## 10. Scene/view schema hypothesis gate — 2026-10-08
+
+The corrected V2 audit found:
+
+- 1,619 partition-aware RGB sample IDs
+- 1,504 RGB+label pairs
+- 1,918 total label rows
+- label widths: 3 / 6 / 7
+- 7-column examples such as:
+  `[1, 17.5, 37.76, 34.45, 32.06, 293, 179]`
+- matching scene views where `_1` contains `(N,7)` and `_2`, `_3` contain `(N,3)`
+
+This strongly suggests a scene-level design in which one view contains full berry attributes while companion views carry instance ID + 2D coordinates.
+
+The next audit therefore verifies, without mutating source data:
+
+1. scene identity by removing the terminal `_<view>` suffix;
+2. presence of views 1/2/3 per scene;
+3. instance-ID consistency between the full-label view and coordinate-only views;
+4. independent full-label row count;
+5. candidate weight column statistics for 7-column rows;
+6. SHA-256 uniqueness of RGB files to explain the local 1,619 vs paper 1,588 image count.
+
+The 7-column second field is only a **weight-column candidate** until the scene audit passes. It is not silently promoted into a training target.

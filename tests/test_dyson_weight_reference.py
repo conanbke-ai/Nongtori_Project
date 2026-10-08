@@ -117,6 +117,66 @@ class DysonWeightReferenceTests(unittest.TestCase):
             self.assertEqual(report["duplicate_role_count"], 0)
             self.assertEqual(report["exact_rgb_weight_matched_count"], 2)
 
+    def test_scene_schema_links_full_and_coordinate_views(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            folder = raw / "extracted" / "1" / "1" / "003"
+            folder.mkdir(parents=True)
+
+            scene = "strawberry_dyson_lincoln_tbd__003"
+            for view in (1, 2, 3):
+                (folder / f"{scene}_{view}_rgb.png").write_bytes(f"rgb-{view}".encode())
+
+            full = np.array(
+                [
+                    [1.0, 22.8, 46.05, 36.11, 32.36, 363.0, 244.0],
+                    [2.0, 4.7, 28.63, 20.30, 19.62, 285.0, 342.0],
+                ],
+                dtype=np.float32,
+            )
+            coords2 = np.array([[1.0, 319.0, 253.0], [2.0, 261.0, 331.0]], dtype=np.float32)
+            coords3 = np.array([[1.0, 347.0, 201.0], [2.0, 275.0, 298.0]], dtype=np.float32)
+            np.save(folder / f"{scene}_1_label.npy", full)
+            np.save(folder / f"{scene}_2_label.npy", coords2)
+            np.save(folder / f"{scene}_3_label.npy", coords3)
+
+            report = audit_dyson_dataset(raw, audit)
+            scene_report = report["scene_schema_summary"]
+
+            self.assertEqual(scene_report["scene_count"], 1)
+            self.assertEqual(scene_report["three_view_scene_count"], 1)
+            self.assertEqual(scene_report["full_label_scene_count"], 1)
+            self.assertEqual(scene_report["full_label_row_count"], 2)
+            self.assertEqual(scene_report["three_column_row_count"], 4)
+            self.assertEqual(scene_report["scene_instance_id_match_count"], 1)
+            self.assertEqual(scene_report["scene_instance_id_mismatch_count"], 0)
+            self.assertEqual(scene_report["candidate_weight_column"]["count"], 2)
+            self.assertAlmostEqual(scene_report["candidate_weight_column"]["min"], 4.7, places=4)
+            self.assertAlmostEqual(scene_report["candidate_weight_column"]["max"], 22.8, places=4)
+
+    def test_rgb_hash_duplicates_are_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            for partition in ("1", "2"):
+                folder = raw / "extracted" / partition
+                folder.mkdir(parents=True, exist_ok=True)
+                (folder / "sample_1_rgb.png").write_bytes(b"same-rgb")
+                np.save(
+                    folder / "sample_1_label.npy",
+                    np.array([[1.0, 12.0, 30.0, 25.0, 20.0, 100.0, 100.0]], dtype=np.float32),
+                )
+
+            report = audit_dyson_dataset(raw, audit)
+            rgb = report["scene_schema_summary"]["rgb_identity"]
+
+            self.assertEqual(rgb["rgb_file_count"], 2)
+            self.assertEqual(rgb["unique_rgb_sha256_count"], 1)
+            self.assertEqual(rgb["duplicate_rgb_file_count"], 1)
+
     def test_multicolumn_label_requires_schema_review(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

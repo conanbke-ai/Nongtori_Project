@@ -1,3 +1,14 @@
+## Dyson scene/view schema validation — 2026-10-08
+
+- Partition-aware audit completed locally: 1,619 RGB sample IDs, 1,504 label files, 0 duplicate roles, 1,918 label rows.
+- Observed repeated structure strongly indicates scene-level multi-view labels:
+  - full rows: `(N,7)`, example `[instance_id, 17.5, 37.76, 34.45, 32.06, 293, 179]`
+  - companion rows: `(N,3)`, example `[instance_id, x, y]`
+  - same scene examples show `_1=(N,7)`, `_2=(N,3)`, `_3=(N,3)`.
+- New audit gate computes scene 1/2/3 completeness, instance-ID agreement, full-label row count, 7-column second-field weight candidate statistics, and RGB SHA-256 uniqueness.
+- Do not interpret 1,910 paper weight annotations as 1,910 independent physical berries until scene-level identity is verified.
+- Dyson remains NON_COMMERCIAL_REFERENCE and is not merged into canonical Weight training.
+
 ## Dyson partition/schema audit correction — 2026-10-08
 
 - Real audit after macOS filtering: 1,018 basename stems, 1,619 RGB files, 1,504 label files, 413 singleton RGB+label joins, and 3,571 apparent duplicate roles.
