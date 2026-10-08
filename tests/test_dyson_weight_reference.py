@@ -138,6 +138,36 @@ class DysonWeightReferenceTests(unittest.TestCase):
         gitignore = Path(".gitignore").read_text(encoding="utf-8")
         self.assertIn("/data/external/", gitignore)
 
+    def test_acquisition_uses_supported_gdown_641_options(self):
+        captured = {}
+
+        class Completed:
+            returncode = 0
+
+        def fake_runner(command, check=False):
+            captured["command"] = list(command)
+            output = Path(command[command.index("-O") + 1])
+            output.mkdir(parents=True, exist_ok=True)
+            return Completed()
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch(
+            "ml.data_pipeline.dyson_weight_reference._gdown_available",
+            return_value=True,
+        ):
+            acquire_dyson_dataset(
+                Path(tmp) / "raw",
+                Path(tmp) / "audit",
+                runner=fake_runner,
+            )
+
+        command = captured["command"]
+        self.assertIn("--continue", command)
+        self.assertIn("--retries", command)
+        self.assertIn("--timeout", command)
+        self.assertNotIn("--remaining-ok", command)
+        self.assertNotIn("--fuzzy", command)
+        self.assertNotIn("--folder", command)
+
     def test_acquisition_manifest_keeps_noncommercial_guard(self):
         class Completed:
             returncode = 0
