@@ -23,6 +23,12 @@ SOURCE_REPO = "https://github.com/imanlab/strawberry-pp-w-r-dataset"
 DATASET_URL = "https://drive.google.com/drive/folders/1meEKYLgdQpUgkpeqM6VgzHmJg0gNTCx0?usp=sharing"
 LICENSE = "CC-BY-NC-SA"
 DATASET_ROLE = "NON_COMMERCIAL_REFERENCE"
+PUBLISHED_REFERENCE = {
+    "images": 1588,
+    "berries": 2413,
+    "weight_annotations": 1910,
+    "source": "Tafuro et al., ICRA 2022, Tables I-II",
+}
 
 DEFAULT_RAW_ROOT = Path("data/external/icra-dyson")
 DEFAULT_AUDIT_ROOT = Path("data/audit/icra-dyson")
@@ -74,7 +80,21 @@ def classify_sample_file(path: Path) -> tuple[str, str] | None:
             if not stem:
                 raise DysonPipelineError(f"empty sample stem for file: {path}")
             return stem, role
+    if lowered.endswith(".json") and lowered.startswith("strawberry_dyson_"):
+        return name[:-5], "instance_annotation_json"
     return None
+
+
+def canonical_sample_id(path: Path, raw_root: Path, stem: str) -> str:
+    relative_parent = path.parent.relative_to(raw_root).as_posix()
+    return stem if relative_parent in {"", "."} else f"{relative_parent}/{stem}"
+
+
+def sample_partition(path: Path, raw_root: Path) -> str:
+    parts = path.relative_to(raw_root).parts
+    if len(parts) >= 2 and parts[0] == "extracted":
+        return parts[1]
+    return "root"
 
 
 def _gdown_available() -> bool:
@@ -366,7 +386,7 @@ def _load_numpy_label(path: Path) -> tuple[dict[str, Any], list[float]]:
             number = float(item)
         except (TypeError, ValueError) as exc:
             raise DysonPipelineError(
-                f"weight label contains non-numeric value in {path}: {item!r}"
+                f"label contains non-numeric value in {path}: {item!r}"
             ) from exc
         if not math.isfinite(number):
             invalid_non_finite += 1
@@ -375,20 +395,63 @@ def _load_numpy_label(path: Path) -> tuple[dict[str, Any], list[float]]:
             invalid_non_positive += 1
         numeric_values.append(number)
 
+    row_count = 0
+    column_count: int | None = None
+    column_stats: list[dict[str, Any]] = []
+    sample_rows: list[list[float]] = []
+
+    if array.ndim == 2:
+        row_count = int(array.shape[0])
+        column_count = int(array.shape[1])
+        for column_index in range(column_count):
+            values = []
+            for item in array[:, column_index].reshape(-1):
+                number = float(item)
+                if math.isfinite(number):
+                    values.append(number)
+            column_stats.append(
+                {
+                    "column": column_index,
+                    "count": len(values),
+                    "min": min(values) if values else None,
+                    "max": max(values) if values else None,
+                    "mean": (sum(values) / len(values)) if values else None,
+                }
+            )
+        sample_rows = [
+            [float(item) for item in row]
+            for row in array[: min(3, row_count)].tolist()
+        ]
+    elif array.ndim == 1:
+        row_count = 0 if array.size == 0 else 1
+        column_count = int(array.size) if array.size else 0
+        if array.size:
+            sample_rows = [[float(item) for item in array.tolist()]]
+    elif array.ndim == 0:
+        row_count = 1
+        column_count = 1
+        sample_rows = [[float(array.item())]]
+
     return (
         {
             "dtype": str(array.dtype),
             "shape": list(array.shape),
             "ndim": int(array.ndim),
-            "size": int(array.size),
+            "numeric_value_count": int(array.size),
+            "row_count": row_count,
+            "column_count": column_count,
             "kind": (
                 "SCALAR"
                 if array.ndim == 0 or array.size == 1
-                else "VECTOR_OR_ARRAY"
+                else "MATRIX"
+                if array.ndim == 2
+                else "VECTOR"
             ),
             "finite_count": len(numeric_values),
             "non_finite_count": invalid_non_finite,
-            "non_positive_count": invalid_non_positive,
+            "non_positive_numeric_count": invalid_non_positive,
+            "column_stats": column_stats,
+            "sample_rows": sample_rows,
         },
         numeric_values,
     )
@@ -427,16 +490,17 @@ def audit_dyson_dataset(
             unclassified.append(path)
             continue
         stem, role = classified
-        grouped[stem][role].append(path)
+        sample_id = canonical_sample_id(path, raw_root, stem)
+        grouped[sample_id][role].append(path)
         role_counts[role] += 1
 
     duplicate_role_rows: list[dict[str, Any]] = []
-    for stem, roles in grouped.items():
+    for sample_id, roles in grouped.items():
         for role, paths in roles.items():
             if len(paths) > 1:
                 duplicate_role_rows.append(
                     {
-                        "sample_stem": stem,
+                        "sample_id": sample_id,
                         "role": role,
                         "paths": [
                             path.relative_to(raw_root).as_posix()
@@ -449,7 +513,11 @@ def audit_dyson_dataset(
     file_manifest_rows: list[dict[str, Any]] = []
     label_shape_counts: Counter[str] = Counter()
     label_dtype_counts: Counter[str] = Counter()
-    total_weight_annotations = 0
+    label_column_count_counts: Counter[str] = Counter()
+    total_label_rows = 0
+    total_label_numeric_values = 0
+    aggregate_columns: dict[int, dict[int, dict[str, float | int | None]]] = defaultdict(dict)
+    sample_label_arrays: list[dict[str, Any]] = []
     invalid_non_finite_values = 0
     invalid_non_positive_values = 0
     label_value_min: float | None = None
@@ -472,8 +540,8 @@ def audit_dyson_dataset(
     print(f" stems       {len(grouped):,}")
     print("-" * 88)
 
-    for index, stem in enumerate(sorted(grouped), start=1):
-        roles = grouped[stem]
+    for index, sample_id in enumerate(sorted(grouped), start=1):
+        roles = grouped[sample_id]
         singleton = {
             role: paths[0]
             for role, paths in roles.items()
@@ -485,9 +553,9 @@ def audit_dyson_dataset(
         if has_rgb and has_label:
             exact_rgb_label += 1
         elif not has_rgb:
-            missing_rgb.append(stem)
+            missing_rgb.append(sample_id)
         elif not has_label:
-            missing_label.append(stem)
+            missing_label.append(sample_id)
 
         label_info: dict[str, Any] | None = None
         label_values: list[float] = []
@@ -496,9 +564,44 @@ def audit_dyson_dataset(
             shape_key = str(tuple(label_info["shape"]))
             label_shape_counts[shape_key] += 1
             label_dtype_counts[str(label_info["dtype"])] += 1
-            total_weight_annotations += int(label_info["size"])
+            label_column_count_counts[str(label_info["column_count"])] += 1
+            total_label_rows += int(label_info["row_count"])
+            total_label_numeric_values += int(label_info["numeric_value_count"])
             invalid_non_finite_values += int(label_info["non_finite_count"])
-            invalid_non_positive_values += int(label_info["non_positive_count"])
+            invalid_non_positive_values += int(label_info["non_positive_numeric_count"])
+            column_count = label_info["column_count"]
+            if isinstance(column_count, int) and column_count > 0:
+                for stat in label_info["column_stats"]:
+                    column_index = int(stat["column"])
+                    aggregate = aggregate_columns[column_count].setdefault(
+                        column_index,
+                        {"count": 0, "sum": 0.0, "min": None, "max": None},
+                    )
+                    count = int(stat["count"])
+                    if count:
+                        aggregate["count"] = int(aggregate["count"]) + count
+                        aggregate["sum"] = float(aggregate["sum"]) + float(stat["mean"]) * count
+                        local_min = float(stat["min"])
+                        local_max = float(stat["max"])
+                        aggregate["min"] = (
+                            local_min
+                            if aggregate["min"] is None
+                            else min(float(aggregate["min"]), local_min)
+                        )
+                        aggregate["max"] = (
+                            local_max
+                            if aggregate["max"] is None
+                            else max(float(aggregate["max"]), local_max)
+                        )
+            if len(sample_label_arrays) < 12:
+                sample_label_arrays.append(
+                    {
+                        "sample_id": sample_id,
+                        "path": str(singleton["weight_label"].relative_to(raw_root)),
+                        "shape": label_info["shape"],
+                        "rows": label_info["sample_rows"],
+                    }
+                )
             finite = [value for value in label_values if math.isfinite(value)]
             if finite:
                 local_min = min(finite)
@@ -511,7 +614,7 @@ def audit_dyson_dataset(
                 )
             label_rows.append(
                 {
-                    "sample_stem": stem,
+                    "sample_id": sample_id,
                     **label_info,
                     "value_min": min(finite) if finite else None,
                     "value_max": max(finite) if finite else None,
@@ -532,7 +635,7 @@ def audit_dyson_dataset(
             for role_index, path in enumerate(paths):
                 file_manifest_rows.append(
                     {
-                        "sample_stem": stem,
+                        "sample_id": sample_id,
                         "role": role,
                         "role_index": role_index,
                         "relative_path": path.relative_to(raw_root).as_posix(),
@@ -541,9 +644,11 @@ def audit_dyson_dataset(
                     }
                 )
 
+        representative_path = next(iter(next(iter(roles.values()))))
         inventory_rows.append(
             {
-                "sample_stem": stem,
+                "sample_id": sample_id,
+                "partition": sample_partition(representative_path, raw_root),
                 "has_rgb": has_rgb,
                 "has_weight_label": has_label,
                 "has_bgremoved_rgb": "bgremoved_rgb" in singleton,
@@ -560,14 +665,17 @@ def audit_dyson_dataset(
                 "weight_label_shape": (
                     str(tuple(label_info["shape"])) if label_info else ""
                 ),
-                "weight_annotation_count": (
-                    int(label_info["size"]) if label_info else 0
+                "label_row_count": (
+                    int(label_info["row_count"]) if label_info else 0
                 ),
-                "weight_non_finite_count": (
+                "label_numeric_value_count": (
+                    int(label_info["numeric_value_count"]) if label_info else 0
+                ),
+                "label_non_finite_count": (
                     int(label_info["non_finite_count"]) if label_info else 0
                 ),
-                "weight_non_positive_count": (
-                    int(label_info["non_positive_count"]) if label_info else 0
+                "label_non_positive_numeric_count": (
+                    int(label_info["non_positive_numeric_count"]) if label_info else 0
                 ),
             }
         )
@@ -582,7 +690,7 @@ def audit_dyson_dataset(
 
     inventory_path = audit_root / "sample-inventory.csv"
     with inventory_path.open("w", encoding="utf-8", newline="") as handle:
-        fieldnames = list(inventory_rows[0].keys()) if inventory_rows else ["sample_stem"]
+        fieldnames = list(inventory_rows[0].keys()) if inventory_rows else ["sample_id"]
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(inventory_rows)
@@ -590,7 +698,7 @@ def audit_dyson_dataset(
     file_manifest_path = audit_root / "file-manifest.csv"
     with file_manifest_path.open("w", encoding="utf-8", newline="") as handle:
         fieldnames = [
-            "sample_stem",
+            "sample_id",
             "role",
             "role_index",
             "relative_path",
@@ -601,6 +709,37 @@ def audit_dyson_dataset(
         writer.writeheader()
         writer.writerows(file_manifest_rows)
 
+    aggregate_column_stats: dict[str, list[dict[str, Any]]] = {}
+    for width, columns in sorted(aggregate_columns.items()):
+        rows = []
+        for column_index, aggregate in sorted(columns.items()):
+            count = int(aggregate["count"])
+            rows.append(
+                {
+                    "column": column_index,
+                    "count": count,
+                    "min": aggregate["min"],
+                    "max": aggregate["max"],
+                    "mean": (
+                        float(aggregate["sum"]) / count
+                        if count
+                        else None
+                    ),
+                }
+            )
+        aggregate_column_stats[str(width)] = rows
+
+    multi_column_present = any(
+        int(width) > 1 and count > 0
+        for width, count in label_column_count_counts.items()
+        if width not in {"None", "0"}
+    )
+    label_schema_status = (
+        "UNRESOLVED_MULTI_COLUMN_LABEL"
+        if multi_column_present
+        else "SCALAR_OR_SINGLE_COLUMN_LABEL"
+    )
+
     label_report = {
         "status": "DYSON_WEIGHT_LABEL_AUDIT_COMPLETE",
         "source_id": SOURCE_ID,
@@ -610,11 +749,17 @@ def audit_dyson_dataset(
         "label_file_count": int(role_counts.get("weight_label", 0)),
         "shape_counts": dict(sorted(label_shape_counts.items())),
         "dtype_counts": dict(sorted(label_dtype_counts.items())),
-        "total_weight_annotations": total_weight_annotations,
+        "label_schema_status": label_schema_status,
+        "total_label_rows": total_label_rows,
+        "total_label_numeric_values": total_label_numeric_values,
+        "column_count_counts": dict(sorted(label_column_count_counts.items())),
+        "column_stats_by_width": aggregate_column_stats,
+        "sample_label_arrays": sample_label_arrays,
+        "published_reference": PUBLISHED_REFERENCE,
         "invalid_non_finite_values": invalid_non_finite_values,
-        "invalid_non_positive_values": invalid_non_positive_values,
-        "finite_weight_min": label_value_min,
-        "finite_weight_max": label_value_max,
+        "non_positive_numeric_values": invalid_non_positive_values,
+        "finite_numeric_min": label_value_min,
+        "finite_numeric_max": label_value_max,
         "labels": label_rows,
     }
     (audit_root / "weight-label-audit.json").write_text(
@@ -629,16 +774,18 @@ def audit_dyson_dataset(
         and not missing_label
         and duplicate_count == 0
         and invalid_non_finite_values == 0
-        and invalid_non_positive_values == 0
+        and label_schema_status == "SCALAR_OR_SINGLE_COLUMN_LABEL"
     )
 
     join_report = {
         "status": (
             "DYSON_NON_COMMERCIAL_REFERENCE_READY"
             if ready
+            else "DYSON_REFERENCE_SCHEMA_REVIEW_REQUIRED"
+            if exact_rgb_label > 0
             else "DYSON_REFERENCE_AUDIT_WITH_EXCEPTIONS"
         ),
-        "contract": "nongtori-dyson-reference-audit.v1",
+        "contract": "nongtori-dyson-reference-audit.v2",
         "source_id": SOURCE_ID,
         "source_repo": SOURCE_REPO,
         "dataset_url": DATASET_URL,
@@ -655,7 +802,8 @@ def audit_dyson_dataset(
             path.relative_to(raw_root).as_posix()
             for path in ignored_macos_metadata[:50]
         ],
-        "total_sample_stems": len(grouped),
+        "total_sample_ids": len(grouped),
+        "published_reference": PUBLISHED_REFERENCE,
         "role_counts": dict(sorted(role_counts.items())),
         "exact_rgb_weight_matched_count": exact_rgb_label,
         "missing_rgb_count": len(missing_rgb),
@@ -673,11 +821,17 @@ def audit_dyson_dataset(
             "label_file_count": int(role_counts.get("weight_label", 0)),
             "shape_counts": dict(sorted(label_shape_counts.items())),
             "dtype_counts": dict(sorted(label_dtype_counts.items())),
-            "total_weight_annotations": total_weight_annotations,
+            "label_schema_status": label_schema_status,
+            "total_label_rows": total_label_rows,
+            "total_label_numeric_values": total_label_numeric_values,
+            "column_count_counts": dict(sorted(label_column_count_counts.items())),
+            "column_stats_by_width": aggregate_column_stats,
+            "sample_label_arrays": sample_label_arrays,
+            "published_reference": PUBLISHED_REFERENCE,
             "invalid_non_finite_values": invalid_non_finite_values,
-            "invalid_non_positive_values": invalid_non_positive_values,
-            "finite_weight_min": label_value_min,
-            "finite_weight_max": label_value_max,
+            "non_positive_numeric_values": invalid_non_positive_values,
+            "finite_numeric_min": label_value_min,
+            "finite_numeric_max": label_value_max,
         },
         "license_guard": {
             "canonical_commercial_training_merge_allowed": False,
@@ -707,10 +861,19 @@ def audit_dyson_dataset(
     print(f" Missing RGB     {len(missing_rgb):,}")
     print(f" Missing weight  {len(missing_label):,}")
     print(f" Duplicate roles {duplicate_count:,}")
-    print(f" Weight items    {total_weight_annotations:,}")
+    print(f" Label rows      {total_label_rows:,} · schema not yet assumed to be weight count")
+    print(f" Numeric values  {total_label_numeric_values:,}")
     print(f" Label shapes    {dict(sorted(label_shape_counts.items()))}")
+    print(f" Column widths   {dict(sorted(label_column_count_counts.items()))}")
+    print(f" Schema          {label_schema_status}")
+    print(
+        f" Paper reference images={PUBLISHED_REFERENCE['images']:,} · "
+        f"berries={PUBLISHED_REFERENCE['berries']:,} · "
+        f"weights={PUBLISHED_REFERENCE['weight_annotations']:,}"
+    )
     print("-" * 88)
     print(f" Decision        {join_report['status']}")
+    print(" Note            label columns are schema-neutral until weight column semantics are verified")
     print(f" Commercial      BLOCKED · {DATASET_ROLE}")
     print("=" * 88)
 

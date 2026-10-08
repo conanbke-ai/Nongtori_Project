@@ -217,3 +217,31 @@ V1 does not:
 ### Existing extracted metadata
 
 If an earlier run already materialized `__MACOSX` or AppleDouble files, they do not need to be deleted before rerunning `dyson-audit`; the audit ignores them explicitly. A later `dyson-acquire` rerun will skip those metadata members when materializing archives.
+
+
+## 9. Real schema audit findings — 2026-10-08
+
+The first full local audit found that the dataset cannot be interpreted as one scalar weight per RGB file.
+
+Observed before parser correction:
+
+- 22,122 files including four source ZIPs
+- 11,336 macOS metadata files ignored
+- 1,018 basename-only stems
+- 1,619 RGB files
+- 1,504 `*_label.npy` files
+- label shapes include `(N,3)` and `(N,7)`
+- 3,406 numeric values were previously misreported as "weight items"
+- identical basenames occur across different archive/subfolder partitions
+
+Therefore V2 audit policy is:
+
+1. canonical sample identity = relative parent path + filename stem, not basename alone;
+2. identical basenames in different Dataset #1 partitions are not duplicate samples;
+3. `label.npy` is treated as an unresolved numeric matrix until column semantics are verified;
+4. report row count, column count, per-column statistics, and representative rows;
+5. do not call `array.size` a weight-annotation count;
+6. compare observed counts against the paper's published Dataset-1 reference counts, but do not force the raw files to match those numbers without verified mapping;
+7. status remains `DYSON_REFERENCE_SCHEMA_REVIEW_REQUIRED` while multi-column label semantics are unresolved.
+
+This preserves the source data exactly and prevents an arbitrary column from being declared the weight target.
