@@ -1,3 +1,12 @@
+## Dyson partition/schema audit correction — 2026-10-08
+
+- Real audit after macOS filtering: 1,018 basename stems, 1,619 RGB files, 1,504 label files, 413 singleton RGB+label joins, and 3,571 apparent duplicate roles.
+- The apparent duplicates are largely caused by identical basenames occurring in different Dataset #1 archive/subfolder partitions; basename alone is not a valid sample key.
+- Label arrays are multi-column matrices with observed shapes such as `(1,3)`, `(1,7)`, `(2,3)`, `(2,7)`; previous `array.size=3,406` must not be interpreted as weight count.
+- Audit V2 uses partition-aware sample IDs and schema-neutral label inspection: row/column counts, per-column stats, and representative rows.
+- Multi-column labels remain `DYSON_REFERENCE_SCHEMA_REVIEW_REQUIRED` until actual weight-column semantics are verified.
+- No Dyson data is merged into canonical/commercial Weight training.
+
 ## Dyson macOS metadata audit fix — 2026-10-08
 
 - Real audit reached 2,036 apparent stems but was blocked on `__MACOSX/.../._*_label.npy`.
