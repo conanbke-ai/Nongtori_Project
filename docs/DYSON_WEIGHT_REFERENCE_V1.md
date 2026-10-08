@@ -69,9 +69,14 @@ Acquisition uses the public Google Drive folder through `gdown`.
 
 Behavior:
 
-- existing local files are detected before download;
+- existing local ZIP archives are detected before download;
 - `gdown --continue` is used for interrupted runs;
-- reruns are safe and may reuse completed local files;
+- reruns are safe and may reuse completed local archives;
+- the official Dataset #1 payload is expected as exactly `1.zip`~`4.zip`;
+- each ZIP is CRC-checked, path-traversal/symlink members are rejected, and members are materialized under `data/external/icra-dyson/extracted/<archive>/`;
+- interrupted reruns reuse extracted members only when both size and CRC match the ZIP metadata;
+- extraction uses atomic `.part` replacement;
+- `extraction-manifest.json` records archive SHA-256, member counts, reuse counts, and uncompressed bytes;
 - Google Drive quota/access failures are reported as BLOCKED;
 - acquisition completion does not imply weight/RGB join validity;
 - raw files remain Git-ignored.
@@ -130,6 +135,7 @@ Audit outputs:
 ```text
 data/audit/icra-dyson/
 ├─ acquisition-manifest.json
+├─ extraction-manifest.json
 ├─ file-manifest.csv
 ├─ sample-inventory.csv
 ├─ weight-label-audit.json
