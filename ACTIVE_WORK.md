@@ -1,3 +1,15 @@
+## Dyson annotation schema gate — 2026-10-08
+
+- `DYSON-REFERENCE-V001` is frozen: 637 strict berries / 498 scenes.
+- Next benchmark-preparation gate is official bbox/keypoint/category annotation integration.
+- Official GitHub annotation artifact identified: `annotations/dyson_annotations.zip`, Git blob SHA-1 `6f9263b45f9dc7c2456cbab3fbc52930136df105`, 5,222,590 bytes.
+- New commands:
+  - `python -m ml.data_pipeline.cli dyson-annotations-acquire`
+  - `python -m ml.data_pipeline.cli dyson-annotations-audit`
+- Acquisition verifies archive identity and extracts JSON safely.
+- Schema audit is descriptive only; it does not assume bbox/keypoint/category field names before observing the real JSON.
+- Next local gate after merge: run acquire + audit and share the compact schema summary; then implement the exact 637-berry bbox join/crop manifest.
+
 ## Dyson immutable reference freeze — 2026-10-08
 
 - Real strict physical-berry manifest verified locally: 637 berries / 498 scenes.
