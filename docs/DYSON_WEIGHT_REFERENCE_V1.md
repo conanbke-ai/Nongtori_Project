@@ -547,3 +547,47 @@ The crop manifest preserves:
 - NON_COMMERCIAL_REFERENCE provenance guard.
 
 These crops are external reference inputs only. They do not alter `DYSON-REFERENCE-V001`, do not create a commercial split, and must not be merged into Dryad/canonical training.
+
+
+## 17. External RGB V001 generalization benchmark
+
+After berry crops are materialized, evaluate the already-trained Dryad RGB V001 checkpoint without any retraining:
+
+```bash
+python -m ml.weight_baseline.dyson_external_rgb_v001
+```
+
+Default model input:
+
+```text
+artifacts/weight/rgb-v001/best.pt
+artifacts/weight/rgb-v001/rgb_baseline.json
+```
+
+Default Dyson input:
+
+```text
+data/audit/icra-dyson-berry-crops/berry-crop-manifest.csv
+data/external/icra-dyson-berry-crops/
+```
+
+Policy:
+
+- only successful materialized/reused crops are evaluated;
+- crop SHA-256 is verified before inference;
+- the Dryad V001 checkpoint is not retrained or tuned;
+- no Dyson threshold/model/aggregation selection is performed;
+- RGB V001 eval transform is preserved exactly;
+- physical-berry prediction = arithmetic mean of available successful crop-view predictions;
+- Dyson remains an external non-commercial reference dataset.
+
+Outputs:
+
+```text
+artifacts/weight/dyson-external-rgb-v001/
+├─ dyson_rgb_view_predictions.csv
+├─ dyson_rgb_berry_predictions.csv
+└─ dyson_external_rgb_benchmark.json
+```
+
+Reported metrics include MAE, RMSE, R², bias, max absolute error, fixed 12/16/22g grade accuracy/error count, and confusion. These metrics describe cross-dataset generalization only; they must not be used to retune the frozen Dryad V001 model.

@@ -1,3 +1,14 @@
+## Dyson external RGB benchmark — 2026-10-08
+
+- Workstream: `feat/dyson-external-rgb-benchmark`.
+- Input gate merged: PR #89 crop materialization, with 1,868 successful UNIQUE berry-view crops.
+- Benchmark reuses the frozen Dryad RGB V001 EfficientNet-B0 checkpoint only; no Dyson retraining, tuning, threshold selection, or model selection is allowed.
+- Eval transform is frozen to RGB V001: Resize 256 → CenterCrop 224 → ImageNet normalization.
+- Evaluation unit is physical berry. Available successful crop-view predictions are averaged per berry.
+- Every crop hash is reverified before inference.
+- Output role is `EXTERNAL_NON_COMMERCIAL_REFERENCE`; Dyson remains `commercial_training_ready=false`.
+- Next local gate: run the external RGB benchmark on the existing `artifacts/weight/rgb-v001/best.pt` and review generalization metrics.
+
 ## Dyson berry crop materialization — 2026-10-08
 
 - Workstream: `feat/dyson-berry-crop-materialization`.
