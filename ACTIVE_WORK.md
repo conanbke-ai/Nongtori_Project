@@ -1,3 +1,15 @@
+## Dyson berry crop materialization — 2026-10-08
+
+- Workstream: `feat/dyson-berry-crop-materialization`.
+- Input gate is PR #88 merged: 637 strict berries / 1,900 berry-view observations / 1,868 `UNIQUE_GEOMETRIC_MATCH` rows.
+- New command: `python -m ml.data_pipeline.cli dyson-materialize-berry-crops`.
+- Only `UNIQUE_GEOMETRIC_MATCH` rows are eligible; ambiguous/no-object/missing-annotation rows are excluded by construction.
+- Float absolute-XYXY bbox is converted deterministically with floor(left/top) and ceil(right/bottom).
+- Source RGB remains read-only. Out-of-bounds bbox is never clamped and is reported as an exception.
+- Crop outputs remain NON_COMMERCIAL_REFERENCE with `commercial_training_ready=false`.
+- Crop manifest carries frozen weight/dimension targets, source RGB hash, exact bbox/pixel box, category_id, crop path/hash, and provenance guards.
+- Local real-data materialization is still required before claiming the external benchmark input is ready.
+
 ## Dyson annotation join audit — 2026-10-08
 
 - Workstream: `feat/dyson-annotation-join-audit`.
