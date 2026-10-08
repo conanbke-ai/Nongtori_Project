@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import re
 import shutil
 import stat
 import subprocess
@@ -95,6 +96,22 @@ def sample_partition(path: Path, raw_root: Path) -> str:
     if len(parts) >= 2 and parts[0] == "extracted":
         return parts[1]
     return "root"
+
+
+VIEW_SUFFIX_RE = re.compile(r"^(?P<scene>.+)_(?P<view>\d+)$")
+
+
+def split_scene_view(stem: str) -> tuple[str, int | None]:
+    match = VIEW_SUFFIX_RE.match(stem)
+    if match is None:
+        return stem, None
+    return match.group("scene"), int(match.group("view"))
+
+
+def canonical_scene_id(path: Path, raw_root: Path, stem: str) -> str:
+    scene_stem, _ = split_scene_view(stem)
+    relative_parent = path.parent.relative_to(raw_root).as_posix()
+    return scene_stem if relative_parent in {"", "."} else f"{relative_parent}/{scene_stem}"
 
 
 def _gdown_available() -> bool:
@@ -399,6 +416,7 @@ def _load_numpy_label(path: Path) -> tuple[dict[str, Any], list[float]]:
     column_count: int | None = None
     column_stats: list[dict[str, Any]] = []
     sample_rows: list[list[float]] = []
+    all_rows: list[list[float]] = []
 
     if array.ndim == 2:
         row_count = int(array.shape[0])
@@ -418,19 +436,22 @@ def _load_numpy_label(path: Path) -> tuple[dict[str, Any], list[float]]:
                     "mean": (sum(values) / len(values)) if values else None,
                 }
             )
-        sample_rows = [
+        all_rows = [
             [float(item) for item in row]
-            for row in array[: min(3, row_count)].tolist()
+            for row in array.tolist()
         ]
+        sample_rows = all_rows[: min(3, row_count)]
     elif array.ndim == 1:
         row_count = 0 if array.size == 0 else 1
         column_count = int(array.size) if array.size else 0
         if array.size:
-            sample_rows = [[float(item) for item in array.tolist()]]
+            all_rows = [[float(item) for item in array.tolist()]]
+            sample_rows = list(all_rows)
     elif array.ndim == 0:
         row_count = 1
         column_count = 1
-        sample_rows = [[float(array.item())]]
+        all_rows = [[float(array.item())]]
+        sample_rows = list(all_rows)
 
     return (
         {
@@ -452,6 +473,7 @@ def _load_numpy_label(path: Path) -> tuple[dict[str, Any], list[float]]:
             "non_positive_numeric_count": invalid_non_positive,
             "column_stats": column_stats,
             "sample_rows": sample_rows,
+            "all_rows": all_rows,
         },
         numeric_values,
     )
