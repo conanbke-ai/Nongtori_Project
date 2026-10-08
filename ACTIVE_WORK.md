@@ -1,3 +1,15 @@
+## Dyson RGB domain-shift audit — 2026-10-08
+
+- External RGB benchmark result: 631 berries / 1,868 crop views, MAE 7.6294g, RMSE 10.2286g, R² -1.0840, bias -5.9412g, grade accuracy 27.10%.
+- This is treated as a cross-dataset generalization failure, not as a tuning target.
+- New audit compares immutable Dryad test target distribution against Dyson actual weights:
+  - min/q05/q25/median/q75/q95/max/mean/std
+  - fixed 12/16/22g grade counts/proportions
+  - grade total-variation distance
+  - Dyson error metrics by actual-weight band
+- The audit is interpretation-only: no retraining, threshold tuning, aggregation selection, or model selection is allowed.
+- Next decision after local audit: quantify whether target-distribution shift materially explains the failure, then decide whether geometry external comparison is informative.
+
 ## Dyson external RGB benchmark — 2026-10-08
 
 - Workstream: `feat/dyson-external-rgb-benchmark`.
