@@ -56,6 +56,15 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def is_macos_metadata_path(path: Path) -> bool:
+    parts = path.parts
+    return (
+        "__MACOSX" in parts
+        or path.name.startswith("._")
+        or path.name == ".DS_Store"
+    )
+
+
 def classify_sample_file(path: Path) -> tuple[str, str] | None:
     name = path.name
     lowered = name.lower()
@@ -121,6 +130,7 @@ def extract_dyson_archives(
     total_members = 0
     total_reused = 0
     total_extracted = 0
+    total_skipped_metadata = 0
     total_uncompressed_bytes = 0
     archives: list[dict[str, Any]] = []
 
@@ -133,6 +143,7 @@ def extract_dyson_archives(
         target_root.mkdir(parents=True, exist_ok=True)
         reused = 0
         extracted = 0
+        skipped_metadata = 0
         member_count = 0
         uncompressed_bytes = 0
 
@@ -148,6 +159,10 @@ def extract_dyson_archives(
                     if info.is_dir():
                         continue
                     parts = _safe_member_parts(info)
+                    member_path = Path(*parts)
+                    if is_macos_metadata_path(member_path):
+                        skipped_metadata += 1
+                        continue
                     destination = target_root.joinpath(*parts)
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     member_count += 1
@@ -187,6 +202,7 @@ def extract_dyson_archives(
         total_members += member_count
         total_reused += reused
         total_extracted += extracted
+        total_skipped_metadata += skipped_metadata
         total_uncompressed_bytes += uncompressed_bytes
         archives.append(
             {
@@ -197,12 +213,13 @@ def extract_dyson_archives(
                 "member_file_count": member_count,
                 "reused_member_count": reused,
                 "extracted_member_count": extracted,
+                "skipped_macos_metadata_count": skipped_metadata,
                 "uncompressed_bytes": uncompressed_bytes,
             }
         )
         print(
-            f" [{archive_index}/4] {archive_path.name} · members {member_count:,} · "
-            f"reused {reused:,} · extracted {extracted:,}",
+            f" [{archive_index}/4] {archive_path.name} · data-members {member_count:,} · "
+            f"reused {reused:,} · extracted {extracted:,} · macOS-metadata skipped {skipped_metadata:,}",
             flush=True,
         )
 
@@ -216,6 +233,7 @@ def extract_dyson_archives(
         "member_file_count": total_members,
         "reused_member_count": total_reused,
         "extracted_member_count": total_extracted,
+        "skipped_macos_metadata_count": total_skipped_metadata,
         "uncompressed_bytes": total_uncompressed_bytes,
         "archives": archives,
     }
@@ -394,11 +412,15 @@ def audit_dyson_dataset(
 
     grouped: dict[str, dict[str, list[Path]]] = defaultdict(lambda: defaultdict(list))
     unclassified: list[Path] = []
+    ignored_macos_metadata: list[Path] = []
     role_counts: Counter[str] = Counter()
 
     source_archives = [path for path in all_files if path.suffix.lower() == ".zip"]
     for path in all_files:
         if path.suffix.lower() == ".zip":
+            continue
+        if is_macos_metadata_path(path):
+            ignored_macos_metadata.append(path)
             continue
         classified = classify_sample_file(path)
         if classified is None:
@@ -446,6 +468,7 @@ def audit_dyson_dataset(
     print(f" raw root    {raw_root}")
     print(f" files       {len(all_files):,}")
     print(f" archives    {len(source_archives):,}")
+    print(f" macOS meta  {len(ignored_macos_metadata):,} ignored")
     print(f" stems       {len(grouped):,}")
     print("-" * 88)
 
@@ -627,6 +650,11 @@ def audit_dyson_dataset(
         "total_files": len(all_files),
         "source_archive_count": len(source_archives),
         "source_archive_names": [path.name for path in source_archives],
+        "ignored_macos_metadata_count": len(ignored_macos_metadata),
+        "ignored_macos_metadata_sample": [
+            path.relative_to(raw_root).as_posix()
+            for path in ignored_macos_metadata[:50]
+        ],
         "total_sample_stems": len(grouped),
         "role_counts": dict(sorted(role_counts.items())),
         "exact_rgb_weight_matched_count": exact_rgb_label,

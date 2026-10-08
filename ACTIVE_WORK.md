@@ -1,3 +1,11 @@
+## Dyson macOS metadata audit fix — 2026-10-08
+
+- Real audit reached 2,036 apparent stems but was blocked on `__MACOSX/.../._*_label.npy`.
+- Root cause: AppleDouble/macOS metadata files were being classified by suffix as real NumPy labels.
+- Fix: ignore `__MACOSX`, `._*`, and `.DS_Store` in both archive materialization and audit.
+- Existing extracted metadata files do not need manual deletion; audit ignores them.
+- Next local gate: `git pull` → rerun `dyson-audit` and inspect real RGB/weight counts and label shapes.
+
 ## ICRA/Dyson weight reference pipeline V1 — 2026-10-07
 
 - Registered source `DATA-WEIGHT-003` from the official ICRA 2022 Intelligent Manipulation Lab repository.

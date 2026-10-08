@@ -21,6 +21,7 @@ from ml.data_pipeline.dyson_weight_reference import (
     audit_dyson_dataset,
     classify_sample_file,
     extract_dyson_archives,
+    is_macos_metadata_path,
 )
 
 
@@ -32,6 +33,12 @@ class DysonWeightReferenceTests(unittest.TestCase):
             "test_acquisition_manifest_keeps_noncommercial_guard",
         }:
             self.skipTest("NumPy unavailable in this test environment")
+
+    def test_macos_metadata_detection(self):
+        self.assertTrue(is_macos_metadata_path(Path("__MACOSX/1/001/._sample_label.npy")))
+        self.assertTrue(is_macos_metadata_path(Path("001/._sample_rgb.png")))
+        self.assertTrue(is_macos_metadata_path(Path("001/.DS_Store")))
+        self.assertFalse(is_macos_metadata_path(Path("001/sample_label.npy")))
 
     def test_suffix_to_sample_stem(self):
         cases = {
@@ -189,6 +196,26 @@ class DysonWeightReferenceTests(unittest.TestCase):
 
             with self.assertRaisesRegex(DysonPipelineError, "unsafe path"):
                 extract_dyson_archives(raw, audit)
+
+    def test_audit_ignores_existing_macos_metadata_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            raw.mkdir()
+            (raw / "sample_rgb.png").write_bytes(b"rgb")
+            np.save(raw / "sample_label.npy", np.array([12.0], dtype=np.float32))
+            mac = raw / "__MACOSX" / "x"
+            mac.mkdir(parents=True)
+            (mac / "._sample_rgb.png").write_bytes(b"appledouble")
+            (mac / "._sample_label.npy").write_bytes(b"not-numpy")
+            (mac / ".DS_Store").write_bytes(b"meta")
+
+            report = audit_dyson_dataset(raw, audit)
+
+            self.assertEqual(report["exact_rgb_weight_matched_count"], 1)
+            self.assertEqual(report["ignored_macos_metadata_count"], 3)
+            self.assertEqual(report["unclassified_file_count"], 0)
 
     def test_audit_ignores_source_zip_files_after_extraction(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -74,6 +74,7 @@ Behavior:
 - reruns are safe and may reuse completed local archives;
 - the official Dataset #1 payload is expected as exactly `1.zip`~`4.zip`;
 - each ZIP is CRC-checked, path-traversal/symlink members are rejected, and members are materialized under `data/external/icra-dyson/extracted/<archive>/`;
+- macOS archive metadata (`__MACOSX`, `._*`, `.DS_Store`) is excluded from materialization/audit and never treated as a dataset sample;
 - interrupted reruns reuse extracted members only when both size and CRC match the ZIP metadata;
 - extraction uses atomic `.part` replacement;
 - `extraction-manifest.json` records archive SHA-256, member counts, reuse counts, and uncompressed bytes;
@@ -212,3 +213,7 @@ V1 does not:
 - claim commercial-use permission;
 - alter existing Dryad artifacts.
 
+
+### Existing extracted metadata
+
+If an earlier run already materialized `__MACOSX` or AppleDouble files, they do not need to be deleted before rerunning `dyson-audit`; the audit ignores them explicitly. A later `dyson-acquire` rerun will skip those metadata members when materializing archives.
