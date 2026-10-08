@@ -1,3 +1,16 @@
+## Dyson annotation join audit — 2026-10-08
+
+- Workstream: `feat/dyson-annotation-join-audit`.
+- Frozen source remains `DYSON-REFERENCE-V001`: 637 strict berries / 498 scenes / NON_COMMERCIAL_REFERENCE.
+- New command: `python -m ml.data_pipeline.cli dyson-annotation-join-audit`.
+- Identity rule is provenance-safe and deterministic: exact partition-aware RGB→JSON path mapping plus frozen per-view source center contained in exactly one valid absolute-XYXY bbox.
+- Annotation list order is never interpreted as `berry_instance_id`.
+- Zero-hit, ambiguous, missing JSON, invalid center, and invalid bbox cases remain explicit; no nearest-neighbor or forced assignment fallback is allowed.
+- Exploratory real-data baseline before implementation: 1,900 berry-view observations; 1,868 unique matches; 19 no-object; 5 ambiguous; 8 missing annotation JSON; 631 berries with at least one bbox; 621 berries with all available views joined.
+- Final real counts must be regenerated locally with the new command; exploratory counts are not frozen acceptance evidence.
+- Schema statistics in the implementation are counted once per unique annotation JSON/object, fixing exploratory repeat-count inflation.
+- Crop materialization is intentionally deferred; the next gate may consume only `UNIQUE_GEOMETRIC_MATCH` rows after local audit review.
+
 ## Dyson annotation schema gate — 2026-10-08
 
 - `DYSON-REFERENCE-V001` is frozen: 637 strict berries / 498 scenes.

@@ -410,3 +410,76 @@ data/audit/icra-dyson-annotations/
 ```
 
 Only after reviewing the real schema should a berry-instance → bbox join and crop materialization be implemented.
+
+
+## 15. Berry-instance to official bbox join audit
+
+After schema discovery, the next read-only gate joins the immutable physical-berry reference rows to official per-image annotation objects.
+
+Command:
+
+```bash
+python -m ml.data_pipeline.cli dyson-annotation-join-audit
+```
+
+Default inputs:
+
+```text
+snapshot:
+data/snapshots/DYSON-REFERENCE-V001/
+
+official annotations:
+data/external/icra-dyson-annotations/extracted/
+
+audit output:
+data/audit/icra-dyson-annotations/
+```
+
+Canonical image mapping is path-aware:
+
+```text
+extracted/<archive>/<partition>/<scene>/<stem>_<view>_rgb.png
+→
+dyson_annotations/<partition>/<scene>/<stem>_<view>_keypoint.json
+```
+
+The join never uses annotation-list order as berry identity. For each frozen berry/view:
+
+1. read the source `view_N_x/view_N_y` center from the immutable physical-berry manifest;
+2. load the exact official annotation JSON resolved from the partition-aware RGB path;
+3. validate each bbox as finite absolute XYXY with `x2 > x1` and `y2 > y1`;
+4. count annotation bboxes containing the frozen source center;
+5. assign only when exactly one valid bbox contains that center.
+
+Statuses:
+
+```text
+UNIQUE_GEOMETRIC_MATCH
+NO_OBJECT_MATCH
+AMBIGUOUS_MATCH
+NO_ANNOTATION_IMAGE
+INVALID_SOURCE_CENTER
+INVALID_BBOX
+```
+
+Safety rules:
+
+- no nearest-bbox fallback;
+- no selection by category;
+- no automatic choice among overlapping boxes;
+- no bbox expansion/clamping;
+- no fabricated annotation;
+- category IDs remain numeric until source semantics are independently verified;
+- Dyson remains `NON_COMMERCIAL_REFERENCE` and `commercial_training_ready=false`.
+
+Artifacts:
+
+```text
+data/audit/icra-dyson-annotations/
+├─ berry-annotation-join.csv
+└─ berry-annotation-join-audit.json
+```
+
+Schema counts are computed once per unique annotation JSON/object rather than once per physical berry, preventing repeat-count inflation.
+
+The next crop-materialization gate may use only rows whose status is `UNIQUE_GEOMETRIC_MATCH`. Source exceptions remain explicit and are not repaired automatically.
