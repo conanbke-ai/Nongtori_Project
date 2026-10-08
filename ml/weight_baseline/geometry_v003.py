@@ -144,6 +144,13 @@ def _build_sample_weights(
         )
 
     strict_weights = [1.0] * len(strict_train_rows)
+    eligible_auxiliary_rows = [
+        row
+        for row in auxiliary_rows
+        if _grade(float(row["weight_with_calyx_g"])) in strict_counts
+    ]
+    excluded_auxiliary_rows = len(auxiliary_rows) - len(eligible_auxiliary_rows)
+
     per_grade_aux_weight: dict[str, float] = {}
     effective_grade_mass: dict[str, float] = {}
     for grade, strict_count in strict_counts.items():
@@ -159,15 +166,17 @@ def _build_sample_weights(
         per_grade_aux_weight[
             _grade(float(row["weight_with_calyx_g"]))
         ]
-        for row in auxiliary_rows
+        for row in eligible_auxiliary_rows
     ]
-    rows = [*strict_train_rows, *auxiliary_rows]
+    rows = [*strict_train_rows, *eligible_auxiliary_rows]
     weights = [*strict_weights, *auxiliary_weights]
 
     return rows, weights, {
         "weighting_policy": WEIGHTING_POLICY,
         "strict_training_count": strict_total,
-        "auxiliary_row_count": len(auxiliary_rows),
+        "auxiliary_pool_count": len(auxiliary_rows),
+        "auxiliary_row_count": len(eligible_auxiliary_rows),
+        "auxiliary_excluded_absent_strict_grade_count": excluded_auxiliary_rows,
         "auxiliary_effective_mass_ratio": auxiliary_effective_mass_ratio,
         "auxiliary_effective_total_weight": sum(auxiliary_weights),
         "strict_total_weight": sum(strict_weights),
