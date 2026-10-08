@@ -1,3 +1,13 @@
+## Dyson immutable reference freeze — 2026-10-08
+
+- Real strict physical-berry manifest verified locally: 637 berries / 498 scenes.
+- View coverage: 626 berries visible in all 3 views; 11 berries visible in 2 matched views.
+- Four 6-column exception rows remain excluded.
+- Next immutable gate implemented: `python -m ml.data_pipeline.cli dyson-freeze-reference`.
+- Freeze target: `data/snapshots/DYSON-REFERENCE-V001`.
+- Snapshot is NON_COMMERCIAL_REFERENCE only: no train/validation/test split, no commercial/canonical merge.
+- Freeze re-hashes every referenced RGB asset and upstream audit artifact and refuses overwrite of an existing snapshot ID.
+
 ## Dyson strict physical-berry manifest — 2026-10-08
 
 - Exception review supports keeping the 637 normal 7-column full-label rows as the strict physical-berry cohort.
