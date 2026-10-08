@@ -271,3 +271,42 @@ The next audit therefore verifies, without mutating source data:
 6. SHA-256 uniqueness of RGB files to explain the local 1,619 vs paper 1,588 image count.
 
 The 7-column second field is only a **weight-column candidate** until the scene audit passes. It is not silently promoted into a training target.
+
+
+## 11. Exception audit gate — 2026-10-08
+
+Observed local scene-schema summary:
+
+- scene_count = 542
+- three_view_scene_count = 535
+- full_label_scene_count = 502
+- full_label_row_count = 641
+- candidate 7-column weight rows = 637
+- 3-column companion rows = 1,275
+- instance-ID matched scenes = 496
+- instance-ID mismatched scenes = 6
+- RGB files = 1,619
+- unique RGB SHA-256 = 1,619
+- RGB duplicate files = 0
+
+Important arithmetic:
+
+- 641 full-label rows - 637 7-column rows = 4 exceptional 6-column rows
+- local scenes 542 - paper sets 532 = +10 scenes
+- local RGB 1,619 - paper images 1,588 = +31 RGB files
+- because all 1,619 RGB hashes are unique, the +31 are not byte-for-byte duplicates
+
+New artifact:
+
+`data/audit/icra-dyson/scene-schema-exceptions.json`
+
+It records:
+
+- all instance-ID mismatch scenes
+- incomplete 3-view scenes
+- scenes missing a full-label view
+- all 6-column exceptional rows
+- partition-level sample/RGB/label/JSON counts
+- local-vs-paper count deltas
+
+Do not freeze the 637-row candidate cohort until these exceptions are reviewed.
