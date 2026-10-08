@@ -13,6 +13,7 @@ try:
 except ImportError:  # pragma: no cover - optional local dependency boundary
     np = None
 
+from ml.data_pipeline.dyson_reference_snapshot import freeze_dyson_reference_snapshot
 from ml.data_pipeline.dyson_weight_reference import (
     DATASET_ROLE,
     DysonPipelineError,
@@ -288,6 +289,45 @@ class DysonWeightReferenceTests(unittest.TestCase):
 
             self.assertEqual(roles["2"], "ANNOTATION_ONLY_RGB_JSON")
             self.assertEqual(report["scene_schema_summary"]["physical_berry_summary"]["strict_berry_count"], 0)
+
+    def test_freeze_dyson_reference_snapshot_is_immutable_and_hashes_assets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            snapshots = root / "snapshots"
+            folder = raw / "extracted" / "1" / "1" / "010"
+            folder.mkdir(parents=True)
+            scene = "strawberry_dyson_lincoln_tbd__010"
+            for view in (1, 2, 3):
+                (folder / f"{scene}_{view}_rgb.png").write_bytes(f"rgb-{view}".encode())
+            np.save(folder / f"{scene}_1_label.npy", np.array([[1.0, 19.5, 45.98, 34.48, 30.71, 331.0, 157.0]], dtype=np.float32))
+            np.save(folder / f"{scene}_2_label.npy", np.array([[1.0, 300.0, 180.0]], dtype=np.float32))
+            np.save(folder / f"{scene}_3_label.npy", np.array([[1.0, 320.0, 190.0]], dtype=np.float32))
+            audit_dyson_dataset(raw, audit)
+            for name in ("acquisition-manifest.json","extraction-manifest.json"):
+                (audit / name).write_text("{}", encoding="utf-8")
+
+            report = freeze_dyson_reference_snapshot(
+                raw_root=raw,
+                audit_root=audit,
+                snapshot_root=snapshots,
+                expected_strict_berry_count=1,
+            )
+
+            self.assertEqual(report["status"], "DYSON_REFERENCE_SNAPSHOT_FROZEN")
+            self.assertEqual(report["strict_berry_count"], 1)
+            self.assertEqual(report["referenced_unique_rgb_asset_count"], 3)
+            self.assertFalse(report["commercial_training_ready"])
+            self.assertTrue((snapshots / "DYSON-REFERENCE-V001" / "REFERENCE_SNAPSHOT.json").is_file())
+            self.assertTrue((snapshots / "DYSON-REFERENCE-V001" / "rgb-asset-manifest.csv").is_file())
+            with self.assertRaises(DysonPipelineError):
+                freeze_dyson_reference_snapshot(
+                    raw_root=raw,
+                    audit_root=audit,
+                    snapshot_root=snapshots,
+                    expected_strict_berry_count=1,
+                )
 
     def test_multicolumn_label_requires_schema_review(self):
         with tempfile.TemporaryDirectory() as tmp:
