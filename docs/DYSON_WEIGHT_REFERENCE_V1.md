@@ -368,3 +368,45 @@ Artifacts:
 The freeze revalidates the strict berry count (637 by default), re-hashes every referenced RGB asset, records upstream audit hashes, and refuses to overwrite an existing snapshot ID.
 
 This is a **NON_COMMERCIAL_REFERENCE** snapshot, not a training snapshot. It creates no train/validation/test split and preserves `commercial_training_ready=false`.
+
+
+## 14. Official berry annotation acquisition/schema audit
+
+The official repository separately publishes `annotations/dyson_annotations.zip` and states that every image has a JSON annotation containing bounding boxes, keypoints, and ripe/unripe category information.
+
+Before joining those annotations to the frozen 637-berry reference cohort, Nongtori uses a schema-discovery gate rather than assuming field names.
+
+Commands:
+
+```bash
+python -m ml.data_pipeline.cli dyson-annotations-acquire
+python -m ml.data_pipeline.cli dyson-annotations-audit
+```
+
+The acquisition gate verifies the official GitHub archive identity:
+
+- expected Git blob SHA-1: `6f9263b45f9dc7c2456cbab3fbc52930136df105`
+- expected archive size: `5,222,590` bytes
+- safe ZIP paths only; symlinks/path traversal rejected
+- macOS metadata and non-JSON members excluded from the schema corpus
+
+The audit reports actual JSON structure without promoting guessed fields:
+
+- JSON count and parse errors
+- top-level types/keysets
+- frequently observed keys
+- candidate bbox/keypoint/category/image/id keys
+- list-of-object keysets
+- image-reference strings
+- representative documents
+
+Artifacts:
+
+```text
+data/audit/icra-dyson-annotations/
+├─ annotation-acquisition-manifest.json
+├─ annotation-inventory.csv
+└─ annotation-schema-audit.json
+```
+
+Only after reviewing the real schema should a berry-instance → bbox join and crop materialization be implemented.
