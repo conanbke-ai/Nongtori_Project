@@ -18,7 +18,14 @@
     "audit_command": "python -m ml.data_pipeline.cli dyson-audit",
     "raw_root": "data/external/icra-dyson",
     "audit_root": "data/audit/icra-dyson",
-    "optional_dependency": "gdown"
+    "optional_dependency": "gdown",
+    "annotation_archive_url": "https://raw.githubusercontent.com/imanlab/strawberry-pp-w-r-dataset/master/annotations/dyson_annotations.zip",
+    "annotation_git_blob_sha1": "6f9263b45f9dc7c2456cbab3fbc52930136df105",
+    "annotation_archive_size_bytes": 5222590,
+    "annotation_acquire_command": "python -m ml.data_pipeline.cli dyson-annotations-acquire",
+    "annotation_audit_command": "python -m ml.data_pipeline.cli dyson-annotations-audit",
+    "annotation_root": "data/external/icra-dyson-annotations",
+    "annotation_audit_root": "data/audit/icra-dyson-annotations"
   },
   "original_labels": [
     "rgb",
@@ -35,7 +42,8 @@
     "auto_merge_to_canonical_weight_training": false,
     "minimum_reference_pair": "RGB_PLUS_WEIGHT_LABEL",
     "identity_key": "CANONICAL_SAMPLE_STEM",
-    "label_structure": "AUDIT_REQUIRED_NO_SCALAR_ASSUMPTION"
+    "label_structure": "AUDIT_REQUIRED_NO_SCALAR_ASSUMPTION",
+    "annotation_join_status": "SCHEMA_AUDIT_REQUIRED_BEFORE_BBOX_JOIN"
   },
   "notes": "Official repository states CC-BY-NC-SA and free non-commercial use. Keep all Dyson raw data and derived training artifacts isolated from commercial/canonical Nongtori training unless separate permission is obtained."
 }
