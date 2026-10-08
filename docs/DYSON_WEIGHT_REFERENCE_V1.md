@@ -591,3 +591,39 @@ artifacts/weight/dyson-external-rgb-v001/
 ```
 
 Reported metrics include MAE, RMSE, R², bias, max absolute error, fixed 12/16/22g grade accuracy/error count, and confusion. These metrics describe cross-dataset generalization only; they must not be used to retune the frozen Dryad V001 model.
+
+
+## 18. RGB V001 domain-shift audit
+
+When the frozen Dryad RGB V001 model performs poorly on Dyson, quantify the target-distribution shift before proposing any successor model.
+
+Command:
+
+```bash
+python -m ml.weight_baseline.dyson_rgb_domain_shift_audit_v1
+```
+
+Inputs:
+
+```text
+data/snapshots/WEIGHT-DRYAD-V001/fruit-splits.csv
+artifacts/weight/dyson-external-rgb-v001/dyson_rgb_berry_predictions.csv
+```
+
+The audit compares Dryad test actual weights against Dyson actual weights using:
+
+- min / q05 / q25 / median / q75 / q95 / max;
+- mean and population standard deviation;
+- fixed Nongtori 12/16/22g grade counts and proportions;
+- total-variation distance between grade distributions.
+
+It also reports Dyson RGB V001 error metrics by actual-weight band:
+
+```text
+<12g
+12–<16g
+16–<22g
+>=22g
+```
+
+This audit is descriptive only. It does not establish causality and must not be used to retune the frozen V001 model or product thresholds.
