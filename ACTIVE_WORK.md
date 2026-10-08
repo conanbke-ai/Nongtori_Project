@@ -1,3 +1,13 @@
+## Dyson scene exception audit — 2026-10-08
+
+- Real scene summary: 542 scenes / 535 complete 3-view / 502 full-label scenes.
+- Full-label rows 641; candidate 7-column weight rows 637; exactly 4 rows remain in the 6-column exception format.
+- Instance-ID comparison: 496 matched scenes / 6 mismatched scenes.
+- RGB identity: 1,619 files, 1,619 unique SHA-256, 0 duplicate files.
+- Local package exceeds paper reference by +10 scenes and +31 RGB files; the RGB excess is not hash duplication.
+- New artifact `scene-schema-exceptions.json` enumerates mismatch scenes, incomplete scenes, missing-full-label scenes, 6-column rows, partition summary, and paper deltas.
+- Next gate: run local audit after merge and inspect only this compact exception artifact before freezing any 637-row non-commercial berry cohort.
+
 ## Dyson scene/view schema validation — 2026-10-08
 
 - Partition-aware audit completed locally: 1,619 RGB sample IDs, 1,504 label files, 0 duplicate roles, 1,918 label rows.
