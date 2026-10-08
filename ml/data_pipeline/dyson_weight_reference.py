@@ -96,13 +96,14 @@ def acquire_dyson_dataset(
         sys.executable,
         "-m",
         "gdown",
-        "--folder",
         dataset_url,
         "-O",
         str(raw_root),
         "--continue",
-        "--remaining-ok",
-        "--fuzzy",
+        "--retries",
+        "3",
+        "--timeout",
+        "60",
     ]
 
     print("=" * 88)
@@ -120,7 +121,8 @@ def acquire_dyson_dataset(
         raise DysonPipelineError(
             "gdown folder acquisition failed. Common causes are Google Drive quota, "
             "public-folder access changes, or an interrupted connection. Rerun the same "
-            "command after the issue clears; --continue preserves resumable behavior."
+            "command after the issue clears; --continue reuses completed/partial files and "
+            "--retries 3 handles transient transfer failures."
         )
 
     after_paths = sorted(path for path in raw_root.rglob("*") if path.is_file())
