@@ -285,6 +285,9 @@ class DysonWeightReferenceTests(unittest.TestCase):
             captured["command"] = list(command)
             output = Path(command[command.index("-O") + 1])
             output.mkdir(parents=True, exist_ok=True)
+            for index in range(1, 5):
+                with zipfile.ZipFile(output / f"{index}.zip", "w"):
+                    pass
             return Completed()
 
         with tempfile.TemporaryDirectory() as tmp, mock.patch(
@@ -313,7 +316,9 @@ class DysonWeightReferenceTests(unittest.TestCase):
             output_index = command.index("-O") + 1
             output = Path(command[output_index])
             output.mkdir(parents=True, exist_ok=True)
-            (output / "sample_rgb.png").write_bytes(b"rgb")
+            for index in range(1, 5):
+                with zipfile.ZipFile(output / f"{index}.zip", "w"):
+                    pass
             return Completed()
 
         with tempfile.TemporaryDirectory() as tmp, mock.patch(
