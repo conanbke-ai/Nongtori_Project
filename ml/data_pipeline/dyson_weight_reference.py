@@ -449,7 +449,7 @@ def _load_numpy_label(path: Path) -> tuple[dict[str, Any], list[float]]:
             ),
             "finite_count": len(numeric_values),
             "non_finite_count": invalid_non_finite,
-            "non_positive_count": invalid_non_positive,
+            "non_positive_numeric_count": invalid_non_positive,
             "column_stats": column_stats,
             "sample_rows": sample_rows,
         },
@@ -495,7 +495,7 @@ def audit_dyson_dataset(
         role_counts[role] += 1
 
     duplicate_role_rows: list[dict[str, Any]] = []
-    for stem, roles in grouped.items():
+    for sample_id, roles in grouped.items():
         for role, paths in roles.items():
             if len(paths) > 1:
                 duplicate_role_rows.append(
@@ -568,7 +568,7 @@ def audit_dyson_dataset(
             total_label_rows += int(label_info["row_count"])
             total_label_numeric_values += int(label_info["numeric_value_count"])
             invalid_non_finite_values += int(label_info["non_finite_count"])
-            invalid_non_positive_values += int(label_info["non_positive_count"])
+            invalid_non_positive_values += int(label_info["non_positive_numeric_count"])
             column_count = label_info["column_count"]
             if isinstance(column_count, int) and column_count > 0:
                 for stat in label_info["column_stats"]:
@@ -614,7 +614,7 @@ def audit_dyson_dataset(
                 )
             label_rows.append(
                 {
-                    "sample_stem": stem,
+                    "sample_id": sample_id,
                     **label_info,
                     "value_min": min(finite) if finite else None,
                     "value_max": max(finite) if finite else None,
@@ -635,7 +635,7 @@ def audit_dyson_dataset(
             for role_index, path in enumerate(paths):
                 file_manifest_rows.append(
                     {
-                        "sample_stem": stem,
+                        "sample_id": sample_id,
                         "role": role,
                         "role_index": role_index,
                         "relative_path": path.relative_to(raw_root).as_posix(),
@@ -644,10 +644,11 @@ def audit_dyson_dataset(
                     }
                 )
 
+        representative_path = next(iter(next(iter(roles.values()))))
         inventory_rows.append(
             {
                 "sample_id": sample_id,
-                "partition": sample_partition(next(iter(next(iter(roles.values())))), raw_root),
+                "partition": sample_partition(representative_path, raw_root),
                 "has_rgb": has_rgb,
                 "has_weight_label": has_label,
                 "has_bgremoved_rgb": "bgremoved_rgb" in singleton,
@@ -670,11 +671,11 @@ def audit_dyson_dataset(
                 "label_numeric_value_count": (
                     int(label_info["numeric_value_count"]) if label_info else 0
                 ),
-                "weight_non_finite_count": (
+                "label_non_finite_count": (
                     int(label_info["non_finite_count"]) if label_info else 0
                 ),
-                "weight_non_positive_count": (
-                    int(label_info["non_positive_count"]) if label_info else 0
+                "label_non_positive_numeric_count": (
+                    int(label_info["non_positive_numeric_count"]) if label_info else 0
                 ),
             }
         )
@@ -756,9 +757,9 @@ def audit_dyson_dataset(
         "sample_label_arrays": sample_label_arrays,
         "published_reference": PUBLISHED_REFERENCE,
         "invalid_non_finite_values": invalid_non_finite_values,
-        "invalid_non_positive_values": invalid_non_positive_values,
-        "finite_weight_min": label_value_min,
-        "finite_weight_max": label_value_max,
+        "non_positive_numeric_values": invalid_non_positive_values,
+        "finite_numeric_min": label_value_min,
+        "finite_numeric_max": label_value_max,
         "labels": label_rows,
     }
     (audit_root / "weight-label-audit.json").write_text(
@@ -773,7 +774,6 @@ def audit_dyson_dataset(
         and not missing_label
         and duplicate_count == 0
         and invalid_non_finite_values == 0
-        and invalid_non_positive_values == 0
         and label_schema_status == "SCALAR_OR_SINGLE_COLUMN_LABEL"
     )
 
@@ -781,6 +781,8 @@ def audit_dyson_dataset(
         "status": (
             "DYSON_NON_COMMERCIAL_REFERENCE_READY"
             if ready
+            else "DYSON_REFERENCE_SCHEMA_REVIEW_REQUIRED"
+            if exact_rgb_label > 0
             else "DYSON_REFERENCE_AUDIT_WITH_EXCEPTIONS"
         ),
         "contract": "nongtori-dyson-reference-audit.v2",
@@ -827,9 +829,9 @@ def audit_dyson_dataset(
             "sample_label_arrays": sample_label_arrays,
             "published_reference": PUBLISHED_REFERENCE,
             "invalid_non_finite_values": invalid_non_finite_values,
-            "invalid_non_positive_values": invalid_non_positive_values,
-            "finite_weight_min": label_value_min,
-            "finite_weight_max": label_value_max,
+            "non_positive_numeric_values": invalid_non_positive_values,
+            "finite_numeric_min": label_value_min,
+            "finite_numeric_max": label_value_max,
         },
         "license_guard": {
             "canonical_commercial_training_merge_allowed": False,
@@ -871,6 +873,7 @@ def audit_dyson_dataset(
     )
     print("-" * 88)
     print(f" Decision        {join_report['status']}")
+    print(" Note            label columns are schema-neutral until weight column semantics are verified")
     print(f" Commercial      BLOCKED · {DATASET_ROLE}")
     print("=" * 88)
 
