@@ -68,7 +68,8 @@ class DysonWeightReferenceTests(unittest.TestCase):
             report = audit_dyson_dataset(raw, audit)
 
             self.assertEqual(report["exact_rgb_weight_matched_count"], 1)
-            self.assertEqual(report["weight_label_summary"]["total_weight_annotations"], 2)
+            self.assertEqual(report["weight_label_summary"]["total_label_rows"], 1)
+            self.assertEqual(report["weight_label_summary"]["total_label_numeric_values"], 2)
             self.assertEqual(report["weight_label_summary"]["shape_counts"], {"(2,)": 1})
             self.assertFalse(report["commercial_training_ready"])
             self.assertEqual(report["dataset_role"], DATASET_ROLE)
@@ -98,6 +99,44 @@ class DysonWeightReferenceTests(unittest.TestCase):
             report = audit_dyson_dataset(raw, audit)
 
             self.assertEqual(report["missing_weight_count"], 1)
+
+    def test_same_basename_in_different_partitions_is_not_duplicate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            for partition in ("1", "2"):
+                folder = raw / "extracted" / partition
+                folder.mkdir(parents=True, exist_ok=True)
+                (folder / "sample_rgb.png").write_bytes(partition.encode())
+                np.save(folder / "sample_label.npy", np.array([[12.0, 1.0, 2.0]], dtype=np.float32))
+
+            report = audit_dyson_dataset(raw, audit)
+
+            self.assertEqual(report["total_sample_ids"], 2)
+            self.assertEqual(report["duplicate_role_count"], 0)
+            self.assertEqual(report["exact_rgb_weight_matched_count"], 2)
+
+    def test_multicolumn_label_requires_schema_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            raw.mkdir()
+            (raw / "sample_rgb.png").write_bytes(b"rgb")
+            np.save(
+                raw / "sample_label.npy",
+                np.array([[12.0, 100.0, 200.0], [13.0, 110.0, 210.0]], dtype=np.float32),
+            )
+
+            report = audit_dyson_dataset(raw, audit)
+
+            summary = report["weight_label_summary"]
+            self.assertEqual(summary["label_schema_status"], "UNRESOLVED_MULTI_COLUMN_LABEL")
+            self.assertEqual(summary["total_label_rows"], 2)
+            self.assertEqual(summary["total_label_numeric_values"], 6)
+            self.assertEqual(summary["column_count_counts"], {"3": 1})
+            self.assertEqual(report["status"], "DYSON_REFERENCE_SCHEMA_REVIEW_REQUIRED")
 
     def test_duplicate_role_is_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -130,7 +169,7 @@ class DysonWeightReferenceTests(unittest.TestCase):
 
             summary = report["weight_label_summary"]
             self.assertEqual(summary["invalid_non_finite_values"], 2)
-            self.assertEqual(summary["invalid_non_positive_values"], 1)
+            self.assertEqual(summary["non_positive_numeric_values"], 1)
             self.assertEqual(report["status"], "DYSON_REFERENCE_AUDIT_WITH_EXCEPTIONS")
 
     def test_acquisition_blocks_when_gdown_missing(self):
@@ -229,7 +268,7 @@ class DysonWeightReferenceTests(unittest.TestCase):
             report = audit_dyson_dataset(raw, audit)
 
             self.assertEqual(report["source_archive_count"], 4)
-            self.assertEqual(report["total_sample_stems"], 4)
+            self.assertEqual(report["total_sample_ids"], 4)
             self.assertEqual(report["exact_rgb_weight_matched_count"], 4)
             self.assertEqual(report["unclassified_file_count"], 0)
 
