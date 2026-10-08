@@ -6,11 +6,15 @@ import hashlib
 import importlib.util
 import json
 import math
+import shutil
+import stat
 import subprocess
 import sys
+import zipfile
+import zlib
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 SOURCE_ID = "DATA-WEIGHT-003"
@@ -68,6 +72,163 @@ def _gdown_available() -> bool:
     return importlib.util.find_spec("gdown") is not None
 
 
+def _crc32_file(path: Path) -> int:
+    value = 0
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            value = zlib.crc32(chunk, value)
+    return value & 0xFFFFFFFF
+
+
+def _safe_member_parts(info: zipfile.ZipInfo) -> tuple[str, ...]:
+    member = PurePosixPath(info.filename)
+    if member.is_absolute() or ".." in member.parts:
+        raise DysonPipelineError(
+            f"unsafe path in Dyson archive: {info.filename!r}"
+        )
+    mode = info.external_attr >> 16
+    if mode and stat.S_ISLNK(mode):
+        raise DysonPipelineError(
+            f"symlink member is not allowed in Dyson archive: {info.filename!r}"
+        )
+    parts = tuple(part for part in member.parts if part not in {"", "."})
+    if not parts:
+        raise DysonPipelineError(
+            f"empty member path in Dyson archive: {info.filename!r}"
+        )
+    return parts
+
+
+def extract_dyson_archives(
+    raw_root: Path = DEFAULT_RAW_ROOT,
+    audit_root: Path = DEFAULT_AUDIT_ROOT,
+) -> dict[str, Any]:
+    raw_root = Path(raw_root)
+    audit_root = Path(audit_root)
+    archive_paths = sorted(raw_root.glob("*.zip"))
+    expected_names = {"1.zip", "2.zip", "3.zip", "4.zip"}
+    actual_names = {path.name for path in archive_paths}
+    if actual_names != expected_names:
+        raise DysonPipelineError(
+            "Dyson Dataset #1 archive set is incomplete or unexpected: "
+            f"expected={sorted(expected_names)} actual={sorted(actual_names)}"
+        )
+
+    extraction_root = raw_root / "extracted"
+    extraction_root.mkdir(parents=True, exist_ok=True)
+    audit_root.mkdir(parents=True, exist_ok=True)
+
+    total_members = 0
+    total_reused = 0
+    total_extracted = 0
+    total_uncompressed_bytes = 0
+    archives: list[dict[str, Any]] = []
+
+    print("-" * 88)
+    print(" ARCHIVE MATERIALIZATION")
+    print("-" * 88)
+
+    for archive_index, archive_path in enumerate(archive_paths, start=1):
+        target_root = extraction_root / archive_path.stem
+        target_root.mkdir(parents=True, exist_ok=True)
+        reused = 0
+        extracted = 0
+        member_count = 0
+        uncompressed_bytes = 0
+
+        try:
+            archive_sha256 = sha256_file(archive_path)
+            with zipfile.ZipFile(archive_path) as zf:
+                bad_member = zf.testzip()
+                if bad_member is not None:
+                    raise DysonPipelineError(
+                        f"CRC failure in {archive_path.name}: {bad_member}"
+                    )
+                for info in zf.infolist():
+                    if info.is_dir():
+                        continue
+                    parts = _safe_member_parts(info)
+                    destination = target_root.joinpath(*parts)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    member_count += 1
+                    uncompressed_bytes += int(info.file_size)
+
+                    if (
+                        destination.is_file()
+                        and destination.stat().st_size == info.file_size
+                        and _crc32_file(destination) == info.CRC
+                    ):
+                        reused += 1
+                        continue
+
+                    part = destination.with_name(destination.name + ".part")
+                    try:
+                        with zf.open(info, "r") as source, part.open("wb") as sink:
+                            shutil.copyfileobj(source, sink, length=1024 * 1024)
+                        if part.stat().st_size != info.file_size:
+                            raise DysonPipelineError(
+                                f"size mismatch after extracting {info.filename}: "
+                                f"{part.stat().st_size}/{info.file_size}"
+                            )
+                        if _crc32_file(part) != info.CRC:
+                            raise DysonPipelineError(
+                                f"CRC mismatch after extracting {info.filename}"
+                            )
+                        part.replace(destination)
+                        extracted += 1
+                    except Exception:
+                        part.unlink(missing_ok=True)
+                        raise
+        except (zipfile.BadZipFile, OSError) as exc:
+            raise DysonPipelineError(
+                f"cannot materialize Dyson archive {archive_path}: {exc}"
+            ) from exc
+
+        total_members += member_count
+        total_reused += reused
+        total_extracted += extracted
+        total_uncompressed_bytes += uncompressed_bytes
+        archives.append(
+            {
+                "archive": archive_path.name,
+                "archive_size_bytes": archive_path.stat().st_size,
+                "archive_sha256": archive_sha256,
+                "target_root": str(target_root),
+                "member_file_count": member_count,
+                "reused_member_count": reused,
+                "extracted_member_count": extracted,
+                "uncompressed_bytes": uncompressed_bytes,
+            }
+        )
+        print(
+            f" [{archive_index}/4] {archive_path.name} · members {member_count:,} · "
+            f"reused {reused:,} · extracted {extracted:,}",
+            flush=True,
+        )
+
+    report = {
+        "status": "DYSON_ARCHIVES_MATERIALIZED",
+        "contract": "nongtori-dyson-extraction.v1",
+        "source_id": SOURCE_ID,
+        "archive_count": len(archive_paths),
+        "archive_names": [path.name for path in archive_paths],
+        "extraction_root": str(extraction_root),
+        "member_file_count": total_members,
+        "reused_member_count": total_reused,
+        "extracted_member_count": total_extracted,
+        "uncompressed_bytes": total_uncompressed_bytes,
+        "archives": archives,
+    }
+    output = audit_root / "extraction-manifest.json"
+    output.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f" materialized {total_members:,} member files")
+    print(f" manifest     {output}")
+    return report
+
+
 def acquire_dyson_dataset(
     raw_root: Path = DEFAULT_RAW_ROOT,
     audit_root: Path = DEFAULT_AUDIT_ROOT,
@@ -87,8 +248,8 @@ def acquire_dyson_dataset(
         )
 
     before = {
-        path.relative_to(raw_root).as_posix(): path.stat().st_size
-        for path in raw_root.rglob("*")
+        path.name: path.stat().st_size
+        for path in raw_root.glob("*.zip")
         if path.is_file()
     }
 
@@ -125,20 +286,15 @@ def acquire_dyson_dataset(
             "--retries 3 handles transient transfer failures."
         )
 
-    after_paths = sorted(path for path in raw_root.rglob("*") if path.is_file())
-    after = {
-        path.relative_to(raw_root).as_posix(): path.stat().st_size
-        for path in after_paths
-    }
-    reused = sum(
-        1 for relative, size in after.items()
-        if before.get(relative) == size
-    )
+    archive_paths = sorted(path for path in raw_root.glob("*.zip") if path.is_file())
+    after = {path.name: path.stat().st_size for path in archive_paths}
+    reused = sum(1 for name, size in after.items() if before.get(name) == size)
     new_or_changed = len(after) - reused
+    extraction = extract_dyson_archives(raw_root, audit_root)
 
     manifest = {
         "status": "DYSON_ACQUISITION_COMPLETE",
-        "contract": "nongtori-dyson-acquisition.v1",
+        "contract": "nongtori-dyson-acquisition.v2",
         "source_id": SOURCE_ID,
         "source_repo": SOURCE_REPO,
         "dataset_url": dataset_url,
@@ -147,9 +303,10 @@ def acquire_dyson_dataset(
         "commercial_training_ready": False,
         "retrieved_at": utc_now(),
         "raw_root": str(raw_root),
-        "file_count": len(after),
-        "reused_same_size_count": reused,
-        "new_or_changed_count": new_or_changed,
+        "archive_file_count": len(after),
+        "reused_archive_count": reused,
+        "new_or_changed_archive_count": new_or_changed,
+        "extraction": extraction,
         "note": (
             "Acquisition completion does not imply RGB/weight join validity. "
             "Run dyson-audit before any reference use."
@@ -158,9 +315,10 @@ def acquire_dyson_dataset(
     output = audit_root / "acquisition-manifest.json"
     output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f" files       {len(after):,}")
-    print(f" reused      {reused:,}")
-    print(f" new/changed {new_or_changed:,}")
+    print(f" archives       {len(after):,}")
+    print(f" reused archives {reused:,}")
+    print(f" new/changed     {new_or_changed:,}")
+    print(f" extracted files {extraction['member_file_count']:,}")
     print(f" manifest    {output}")
     print("=" * 88)
     return manifest
@@ -238,7 +396,10 @@ def audit_dyson_dataset(
     unclassified: list[Path] = []
     role_counts: Counter[str] = Counter()
 
+    source_archives = [path for path in all_files if path.suffix.lower() == ".zip"]
     for path in all_files:
+        if path.suffix.lower() == ".zip":
+            continue
         classified = classify_sample_file(path)
         if classified is None:
             unclassified.append(path)
@@ -284,6 +445,7 @@ def audit_dyson_dataset(
     print(f" license     {LICENSE} · commercial_training_ready=False")
     print(f" raw root    {raw_root}")
     print(f" files       {len(all_files):,}")
+    print(f" archives    {len(source_archives):,}")
     print(f" stems       {len(grouped):,}")
     print("-" * 88)
 
@@ -463,6 +625,8 @@ def audit_dyson_dataset(
         "audited_at": utc_now(),
         "raw_root": str(raw_root),
         "total_files": len(all_files),
+        "source_archive_count": len(source_archives),
+        "source_archive_names": [path.name for path in source_archives],
         "total_sample_stems": len(grouped),
         "role_counts": dict(sorted(role_counts.items())),
         "exact_rgb_weight_matched_count": exact_rgb_label,
