@@ -345,3 +345,26 @@ The CSV stores one row per strict physical berry with:
 - schema/provenance/license guard
 
 Current expected strict count from the observed local package is 637 berries. The four 6-column rows remain excluded pending separate semantic proof.
+
+
+## 13. Immutable reference freeze
+
+After the real strict manifest is verified, freeze it with:
+
+```bash
+python -m ml.data_pipeline.cli dyson-freeze-reference
+```
+
+Default snapshot:
+
+`data/snapshots/DYSON-REFERENCE-V001/`
+
+Artifacts:
+
+- `REFERENCE_SNAPSHOT.json`
+- `physical-berry-manifest.csv`
+- `rgb-asset-manifest.csv`
+
+The freeze revalidates the strict berry count (637 by default), re-hashes every referenced RGB asset, records upstream audit hashes, and refuses to overwrite an existing snapshot ID.
+
+This is a **NON_COMMERCIAL_REFERENCE** snapshot, not a training snapshot. It creates no train/validation/test split and preserves `commercial_training_ready=false`.
