@@ -13,7 +13,9 @@
 - `*_label.npy` is inspected without assuming scalar structure; dtype/shape/ndim/item count/finite/positive ranges are reported.
 - Every recognized file gets byte size + SHA-256 in `file-manifest.csv`.
 - The pipeline refuses automatic merge into Dryad or canonical commercial Weight training.
-- Next local gate: run real `dyson-acquire` then `dyson-audit`, share `join-audit.json` summary, and decide reference utility from actual label structure.
+- Real acquisition confirmed the public Drive payload is exactly `1.zip`~`4.zip` (~multi-GB total); direct audit before extraction correctly produced 0 recognized sample stems.
+- Acquisition V2 now automatically CRC-checks and safely materializes those four archives under `data/external/icra-dyson/extracted/<1~4>/`, reusing verified extracted members on rerun.
+- Next local gate: `git pull` → rerun `dyson-acquire` (archives reused, extraction performed) → `dyson-audit`, then review actual `label.npy` shape and annotation counts.
 - Canonical design: `docs/DYSON_WEIGHT_REFERENCE_V1.md`.
 ## WEIGHT RGB V2 training terminology + worker rationale — 2026-10-07
 
