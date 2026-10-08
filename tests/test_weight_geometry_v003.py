@@ -137,6 +137,43 @@ class GeometryV003Test(unittest.TestCase):
             places=9,
         )
 
+    def test_auxiliary_grade_absent_from_fold_is_excluded_without_keyerror(self):
+        strict = [
+            {"weight_with_calyx_g": 14, "width_mm": 23, "height_mm": 32},
+            {"weight_with_calyx_g": 18, "width_mm": 27, "height_mm": 35},
+            {"weight_with_calyx_g": 24, "width_mm": 32, "height_mm": 40},
+        ]
+        aux = [
+            {"weight_with_calyx_g": 10, "width_mm": 20, "height_mm": 30},
+            {"weight_with_calyx_g": 15, "width_mm": 24, "height_mm": 33},
+            {"weight_with_calyx_g": 19, "width_mm": 28, "height_mm": 36},
+            {"weight_with_calyx_g": 23, "width_mm": 31, "height_mm": 39},
+        ]
+
+        rows, weights, diagnostics = _build_sample_weights(
+            strict,
+            aux,
+            auxiliary_effective_mass_ratio=0.5,
+        )
+
+        self.assertEqual(diagnostics["auxiliary_pool_count"], 4)
+        self.assertEqual(diagnostics["auxiliary_row_count"], 3)
+        self.assertEqual(
+            diagnostics["auxiliary_excluded_absent_strict_grade_count"],
+            1,
+        )
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(len(weights), 6)
+        self.assertAlmostEqual(
+            diagnostics["auxiliary_effective_total_weight"],
+            1.5,
+            places=9,
+        )
+        self.assertNotIn(
+            "JM_WEIGHT_CANDIDATE",
+            diagnostics["auxiliary_per_row_weight_by_grade"],
+        )
+
     def test_selection_is_independent_of_official_validation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
