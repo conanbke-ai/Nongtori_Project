@@ -25,6 +25,7 @@ DATASET_URL = "https://drive.google.com/drive/folders/1meEKYLgdQpUgkpeqM6VgzHmJg
 LICENSE = "CC-BY-NC-SA"
 DATASET_ROLE = "NON_COMMERCIAL_REFERENCE"
 PUBLISHED_REFERENCE = {
+    "sets": 532,
     "images": 1588,
     "berries": 2413,
     "weight_annotations": 1910,
@@ -765,6 +766,10 @@ def audit_dyson_dataset(
     scene_instance_id_mismatch_count = 0
     candidate_weight_values: list[float] = []
     scene_examples: list[dict[str, Any]] = []
+    mismatch_scene_details: list[dict[str, Any]] = []
+    incomplete_scene_details: list[dict[str, Any]] = []
+    missing_full_label_scene_details: list[dict[str, Any]] = []
+    six_column_label_details: list[dict[str, Any]] = []
 
     for scene_id, samples in sorted(scene_groups.items()):
         by_view = {
@@ -774,6 +779,16 @@ def audit_dyson_dataset(
         }
         if {1, 2, 3}.issubset(by_view):
             three_view_scene_count += 1
+        else:
+            incomplete_scene_details.append(
+                {
+                    "scene_id": scene_id,
+                    "views": sorted(by_view),
+                    "missing_views": sorted({1, 2, 3} - set(by_view)),
+                    "sample_ids": [item["sample_id"] for item in samples],
+                    "label_shapes": [item["label_shape"] for item in samples],
+                }
+            )
 
         full_candidates = [
             item for item in samples
@@ -788,6 +803,16 @@ def audit_dyson_dataset(
             and item["label_shape"][1] == 3
         ]
 
+        if not full_candidates:
+            missing_full_label_scene_details.append(
+                {
+                    "scene_id": scene_id,
+                    "views": sorted(by_view),
+                    "sample_ids": [item["sample_id"] for item in samples],
+                    "label_shapes": [item["label_shape"] for item in samples],
+                }
+            )
+
         if full_candidates:
             full_label_scene_count += 1
             full_item = full_candidates[0]
@@ -796,6 +821,15 @@ def audit_dyson_dataset(
             for row in full_rows:
                 if len(row) == 7:
                     candidate_weight_values.append(float(row[1]))
+                elif len(row) == 6:
+                    six_column_label_details.append(
+                        {
+                            "scene_id": scene_id,
+                            "sample_id": full_item["sample_id"],
+                            "view_index": full_item["view_index"],
+                            "row": row,
+                        }
+                    )
 
             full_ids = [int(round(row[0])) for row in full_rows if row]
             coord_id_sets = []
@@ -809,6 +843,25 @@ def audit_dyson_dataset(
                 scene_instance_id_match_count += 1
             elif comparable:
                 scene_instance_id_mismatch_count += 1
+                mismatch_scene_details.append(
+                    {
+                        "scene_id": scene_id,
+                        "views": sorted(by_view),
+                        "full_sample_id": full_item["sample_id"],
+                        "full_label_shape": full_item["label_shape"],
+                        "full_instance_ids": full_ids,
+                        "coord_samples": [
+                            {
+                                "sample_id": item["sample_id"],
+                                "view_index": item["view_index"],
+                                "shape": item["label_shape"],
+                                "instance_ids": ids,
+                            }
+                            for item, ids in zip(coord_candidates, coord_id_sets)
+                        ],
+                        "full_rows": full_rows,
+                    }
+                )
 
             if len(scene_examples) < 12:
                 scene_examples.append(
@@ -843,6 +896,55 @@ def audit_dyson_dataset(
     )
     unique_rgb_hash_count = len(rgb_hash_to_paths)
 
+    partition_summary: dict[str, dict[str, int]] = defaultdict(lambda: {
+        "sample_count": 0,
+        "rgb_count": 0,
+        "label_count": 0,
+        "json_count": 0,
+        "missing_label_count": 0,
+    })
+    for row in inventory_rows:
+        partition = str(row["partition"])
+        summary = partition_summary[partition]
+        summary["sample_count"] += 1
+        summary["rgb_count"] += int(bool(row["has_rgb"]))
+        summary["label_count"] += int(bool(row["has_weight_label"]))
+        summary["missing_label_count"] += int(
+            bool(row["has_rgb"]) and not bool(row["has_weight_label"])
+        )
+    for sample_id, roles in grouped.items():
+        representative = next(iter(next(iter(roles.values()))))
+        partition = sample_partition(representative, raw_root)
+        partition_summary[partition]["json_count"] += int("instance_annotation_json" in roles)
+
+    paper_delta = {
+        "scene_delta": scene_count - int(PUBLISHED_REFERENCE["sets"]),
+        "rgb_delta": int(role_counts.get("rgb", 0)) - int(PUBLISHED_REFERENCE["images"]),
+        "note": (
+            "Local Google Drive package is compared to the ICRA 2022 published counts; "
+            "a positive delta indicates distinct additional local package content, not SHA duplicates."
+        ),
+    }
+
+    exception_report = {
+        "status": "DYSON_SCENE_EXCEPTION_AUDIT_COMPLETE",
+        "source_id": SOURCE_ID,
+        "mismatch_scene_count": len(mismatch_scene_details),
+        "mismatch_scenes": mismatch_scene_details,
+        "incomplete_three_view_scene_count": len(incomplete_scene_details),
+        "incomplete_three_view_scenes": incomplete_scene_details,
+        "missing_full_label_scene_count": len(missing_full_label_scene_details),
+        "missing_full_label_scenes": missing_full_label_scene_details,
+        "six_column_row_count": len(six_column_label_details),
+        "six_column_rows": six_column_label_details,
+        "partition_summary": dict(sorted(partition_summary.items())),
+        "paper_delta": paper_delta,
+    }
+    (audit_root / "scene-schema-exceptions.json").write_text(
+        json.dumps(exception_report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
     scene_schema_report = {
         "status": (
             "DYSON_SCENE_SCHEMA_CANDIDATE_VERIFIED"
@@ -870,6 +972,14 @@ def audit_dyson_dataset(
                 sum(candidate_weight_values) / len(candidate_weight_values)
                 if candidate_weight_values else None
             ),
+        },
+        "paper_delta": paper_delta,
+        "partition_summary": dict(sorted(partition_summary.items())),
+        "exception_summary": {
+            "mismatch_scene_count": len(mismatch_scene_details),
+            "incomplete_three_view_scene_count": len(incomplete_scene_details),
+            "missing_full_label_scene_count": len(missing_full_label_scene_details),
+            "six_column_row_count": len(six_column_label_details),
         },
         "rgb_identity": {
             "rgb_file_count": int(role_counts.get("rgb", 0)),
@@ -1028,6 +1138,7 @@ def audit_dyson_dataset(
             "file_manifest": str(file_manifest_path),
             "weight_label_audit": str(audit_root / "weight-label-audit.json"),
             "scene_schema_audit": str(audit_root / "scene-schema-audit.json"),
+            "scene_schema_exceptions": str(audit_root / "scene-schema-exceptions.json"),
             "join_audit": str(audit_root / "join-audit.json"),
         },
     }
@@ -1066,6 +1177,16 @@ def audit_dyson_dataset(
             f"{min(candidate_weight_values):.2f}~{max(candidate_weight_values):.2f}g · "
             f"mean {sum(candidate_weight_values)/len(candidate_weight_values):.2f}g"
         )
+    print(
+        f" Exceptions      ID mismatch {len(mismatch_scene_details):,} · "
+        f"incomplete scenes {len(incomplete_scene_details):,} · "
+        f"no-full-label {len(missing_full_label_scene_details):,} · "
+        f"6-col rows {len(six_column_label_details):,}"
+    )
+    print(
+        f" Paper delta     scenes {paper_delta['scene_delta']:+,} · "
+        f"RGB {paper_delta['rgb_delta']:+,}"
+    )
     print(
         f" Paper reference images={PUBLISHED_REFERENCE['images']:,} · "
         f"berries={PUBLISHED_REFERENCE['berries']:,} · "
