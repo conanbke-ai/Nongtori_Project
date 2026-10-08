@@ -1,3 +1,11 @@
+## Dyson RGB target-support audit — 2026-10-08
+
+- External RGB benchmark failure is not explained by mean/std shift alone: Dyson mean is -0.7287g vs Dryad test while std differs only +0.1649g.
+- Dyson nevertheless extends to 104g, so the next diagnostic separates Dryad-train target support from out-of-support Dyson berries.
+- New audit reports Dryad train min/max, Dyson below/in/above-support counts and rates, and RGB V001 error metrics for each support region.
+- Interpretation-only: no model/threshold/aggregation retuning is allowed.
+- Geometry external benchmark remains deferred until Dyson dimension_1/2/3 semantic axes can be verified from source evidence.
+
 ## Dyson RGB domain-shift audit — 2026-10-08
 
 - External RGB benchmark result: 631 berries / 1,868 crop views, MAE 7.6294g, RMSE 10.2286g, R² -1.0840, bias -5.9412g, grade accuracy 27.10%.
