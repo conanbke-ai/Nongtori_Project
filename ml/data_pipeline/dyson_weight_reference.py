@@ -660,6 +660,14 @@ def audit_dyson_dataset(
                 "has_label": has_label,
                 "label_shape": label_info["shape"] if label_info else None,
                 "label_rows": label_info["all_rows"] if label_info else [],
+                "rgb_path": (
+                    singleton["rgb"].relative_to(raw_root).as_posix()
+                    if has_rgb else None
+                ),
+                "bgremoved_rgb_path": (
+                    singleton["bgremoved_rgb"].relative_to(raw_root).as_posix()
+                    if "bgremoved_rgb" in singleton else None
+                ),
             }
         )
         if has_rgb:
@@ -886,6 +894,136 @@ def audit_dyson_dataset(
                     }
                 )
 
+    physical_berry_rows: list[dict[str, Any]] = []
+    view_coverage_counts: Counter[str] = Counter()
+    strict_scene_ids: set[str] = set()
+
+    for scene_id, samples in sorted(scene_groups.items()):
+        full_candidates = [
+            item for item in samples
+            if item["label_shape"]
+            and len(item["label_shape"]) == 2
+            and item["label_shape"][1] == 7
+        ]
+        for full_item in full_candidates:
+            for row in full_item["label_rows"]:
+                if len(row) != 7:
+                    continue
+                berry_id = int(round(row[0]))
+                observations: dict[int, dict[str, Any]] = {}
+                for item in samples:
+                    view_index = item["view_index"]
+                    if view_index is None or not item["rgb_path"]:
+                        continue
+                    matched_row = None
+                    for candidate in item["label_rows"]:
+                        if candidate and int(round(candidate[0])) == berry_id:
+                            matched_row = candidate
+                            break
+                    if matched_row is None:
+                        continue
+                    observations[int(view_index)] = {
+                        "rgb_path": item["rgb_path"],
+                        "bgremoved_rgb_path": item["bgremoved_rgb_path"],
+                        "x": float(matched_row[-2]),
+                        "y": float(matched_row[-1]),
+                        "label_width": len(matched_row),
+                    }
+
+                matched_views = sorted(observations)
+                view_coverage_counts[str(len(matched_views))] += 1
+                strict_scene_ids.add(scene_id)
+                physical_berry_rows.append(
+                    {
+                        "berry_key": f"{scene_id}#berry-{berry_id}",
+                        "scene_id": scene_id,
+                        "berry_instance_id": berry_id,
+                        "full_sample_id": full_item["sample_id"],
+                        "full_view_index": full_item["view_index"],
+                        "weight_g": float(row[1]),
+                        "dimension_1": float(row[2]),
+                        "dimension_2": float(row[3]),
+                        "dimension_3": float(row[4]),
+                        "full_center_x": float(row[5]),
+                        "full_center_y": float(row[6]),
+                        "matched_view_count": len(matched_views),
+                        "matched_view_indices": ",".join(str(v) for v in matched_views),
+                        "has_view_1_2_3": all(v in observations for v in (1, 2, 3)),
+                        "view_1_rgb_path": observations.get(1, {}).get("rgb_path", ""),
+                        "view_1_x": observations.get(1, {}).get("x", ""),
+                        "view_1_y": observations.get(1, {}).get("y", ""),
+                        "view_2_rgb_path": observations.get(2, {}).get("rgb_path", ""),
+                        "view_2_x": observations.get(2, {}).get("x", ""),
+                        "view_2_y": observations.get(2, {}).get("y", ""),
+                        "view_3_rgb_path": observations.get(3, {}).get("rgb_path", ""),
+                        "view_3_x": observations.get(3, {}).get("x", ""),
+                        "view_3_y": observations.get(3, {}).get("y", ""),
+                        "source_schema": "STRICT_7_COLUMN",
+                        "schema_interpretation": "HIGH_CONFIDENCE_INFERRED",
+                        "dataset_role": DATASET_ROLE,
+                        "commercial_training_ready": False,
+                    }
+                )
+
+    physical_berry_manifest_path = audit_root / "physical-berry-manifest.csv"
+    with physical_berry_manifest_path.open("w", encoding="utf-8", newline="") as handle:
+        fieldnames = (
+            list(physical_berry_rows[0].keys())
+            if physical_berry_rows
+            else ["berry_key"]
+        )
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(physical_berry_rows)
+
+    strict_weights = [float(row["weight_g"]) for row in physical_berry_rows]
+    physical_berry_summary = {
+        "status": "DYSON_STRICT_PHYSICAL_BERRY_MANIFEST_READY",
+        "contract": "nongtori-dyson-physical-berry-manifest.v1",
+        "source_id": SOURCE_ID,
+        "dataset_role": DATASET_ROLE,
+        "commercial_training_ready": False,
+        "schema_interpretation": {
+            "columns": [
+                "instance_id",
+                "weight_g",
+                "dimension_1",
+                "dimension_2",
+                "dimension_3",
+                "center_x",
+                "center_y",
+            ],
+            "confidence": "HIGH_CONFIDENCE_INFERRED",
+            "basis": (
+                "7-column rows repeat consistently across 498 full-label files; "
+                "the second field has strawberry-plausible gram values and companion "
+                "3-column rows preserve instance_id plus image coordinates."
+            ),
+        },
+        "strict_berry_count": len(physical_berry_rows),
+        "strict_scene_count": len(strict_scene_ids),
+        "weight_min_g": min(strict_weights) if strict_weights else None,
+        "weight_max_g": max(strict_weights) if strict_weights else None,
+        "weight_mean_g": (
+            sum(strict_weights) / len(strict_weights)
+            if strict_weights else None
+        ),
+        "matched_view_count_distribution": dict(sorted(view_coverage_counts.items())),
+        "all_view_1_2_3_berry_count": sum(
+            1 for row in physical_berry_rows if row["has_view_1_2_3"]
+        ),
+        "excluded_six_column_row_count": len(six_column_label_details),
+        "manifest_path": str(physical_berry_manifest_path),
+        "note": (
+            "Strict manifest includes only 7-column full-label rows. "
+            "6-column exceptions and annotation-only samples are excluded."
+        ),
+    }
+    (audit_root / "physical-berry-manifest.json").write_text(
+        json.dumps(physical_berry_summary, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
     duplicate_rgb_hashes = {
         digest: paths
         for digest, paths in rgb_hash_to_paths.items()
@@ -917,6 +1055,13 @@ def audit_dyson_dataset(
         partition = sample_partition(representative, raw_root)
         partition_summary[partition]["json_count"] += int("instance_annotation_json" in roles)
 
+    partition_roles: dict[str, str] = {}
+    for partition, summary in partition_summary.items():
+        if summary["label_count"] == 0 and summary["json_count"] > 0:
+            partition_roles[partition] = "ANNOTATION_ONLY_RGB_JSON"
+        else:
+            partition_roles[partition] = "WEIGHT_MULTIMODAL"
+
     paper_delta = {
         "scene_delta": scene_count - int(PUBLISHED_REFERENCE["sets"]),
         "rgb_delta": int(role_counts.get("rgb", 0)) - int(PUBLISHED_REFERENCE["images"]),
@@ -938,6 +1083,8 @@ def audit_dyson_dataset(
         "six_column_row_count": len(six_column_label_details),
         "six_column_rows": six_column_label_details,
         "partition_summary": dict(sorted(partition_summary.items())),
+        "partition_roles": dict(sorted(partition_roles.items())),
+        "physical_berry_summary": physical_berry_summary,
         "paper_delta": paper_delta,
     }
     (audit_root / "scene-schema-exceptions.json").write_text(
@@ -975,6 +1122,8 @@ def audit_dyson_dataset(
         },
         "paper_delta": paper_delta,
         "partition_summary": dict(sorted(partition_summary.items())),
+        "partition_roles": dict(sorted(partition_roles.items())),
+        "physical_berry_summary": physical_berry_summary,
         "exception_summary": {
             "mismatch_scene_count": len(mismatch_scene_details),
             "incomplete_three_view_scene_count": len(incomplete_scene_details),
@@ -1139,6 +1288,8 @@ def audit_dyson_dataset(
             "weight_label_audit": str(audit_root / "weight-label-audit.json"),
             "scene_schema_audit": str(audit_root / "scene-schema-audit.json"),
             "scene_schema_exceptions": str(audit_root / "scene-schema-exceptions.json"),
+            "physical_berry_manifest_csv": str(physical_berry_manifest_path),
+            "physical_berry_manifest_json": str(audit_root / "physical-berry-manifest.json"),
             "join_audit": str(audit_root / "join-audit.json"),
         },
     }
@@ -1186,6 +1337,14 @@ def audit_dyson_dataset(
     print(
         f" Paper delta     scenes {paper_delta['scene_delta']:+,} · "
         f"RGB {paper_delta['rgb_delta']:+,}"
+    )
+    print(
+        f" Physical berry  strict {physical_berry_summary['strict_berry_count']:,} · "
+        f"scenes {physical_berry_summary['strict_scene_count']:,} · "
+        f"all 3 views {physical_berry_summary['all_view_1_2_3_berry_count']:,}"
+    )
+    print(
+        f" View coverage   {physical_berry_summary['matched_view_count_distribution']}"
     )
     print(
         f" Paper reference images={PUBLISHED_REFERENCE['images']:,} · "
