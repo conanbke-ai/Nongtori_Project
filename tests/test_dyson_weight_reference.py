@@ -177,6 +177,56 @@ class DysonWeightReferenceTests(unittest.TestCase):
             self.assertEqual(rgb["unique_rgb_sha256_count"], 1)
             self.assertEqual(rgb["duplicate_rgb_file_count"], 1)
 
+    def test_scene_exception_report_captures_mismatch_and_six_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            folder = raw / "extracted" / "1" / "1" / "900"
+            folder.mkdir(parents=True)
+
+            scene = "strawberry_dyson_lincoln_tbd__900"
+            for view in (1, 2, 3):
+                (folder / f"{scene}_{view}_rgb.png").write_bytes(f"rgb-{view}".encode())
+
+            full6 = np.array([[1.0, 19.0, 30.0, 20.0, 100.0, 80.0]], dtype=np.float32)
+            coords2 = np.array([[1.0, 110.0, 90.0]], dtype=np.float32)
+            coords3 = np.array([[2.0, 120.0, 95.0]], dtype=np.float32)
+            np.save(folder / f"{scene}_1_label.npy", full6)
+            np.save(folder / f"{scene}_2_label.npy", coords2)
+            np.save(folder / f"{scene}_3_label.npy", coords3)
+
+            report = audit_dyson_dataset(raw, audit)
+            exc_path = audit / "scene-schema-exceptions.json"
+            exc = json.loads(exc_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(report["scene_schema_summary"]["exception_summary"]["mismatch_scene_count"], 1)
+            self.assertEqual(exc["mismatch_scene_count"], 1)
+            self.assertEqual(exc["six_column_row_count"], 1)
+            self.assertEqual(exc["incomplete_three_view_scene_count"], 0)
+
+    def test_paper_delta_uses_scene_and_rgb_counts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            audit = root / "audit"
+            folder = raw / "extracted" / "1" / "1" / "901"
+            folder.mkdir(parents=True)
+
+            scene = "strawberry_dyson_lincoln_tbd__901"
+            for view in (1, 2, 3):
+                (folder / f"{scene}_{view}_rgb.png").write_bytes(f"rgb-{view}".encode())
+                np.save(
+                    folder / f"{scene}_{view}_label.npy",
+                    np.array([[1.0, 12.0, 20.0]], dtype=np.float32),
+                )
+
+            report = audit_dyson_dataset(raw, audit)
+            delta = report["scene_schema_summary"]["paper_delta"]
+
+            self.assertEqual(delta["scene_delta"], 1 - 532)
+            self.assertEqual(delta["rgb_delta"], 3 - 1588)
+
     def test_multicolumn_label_requires_schema_review(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
