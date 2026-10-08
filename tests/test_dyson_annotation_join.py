@@ -149,11 +149,8 @@ class DysonAnnotationJoinAuditTests(unittest.TestCase):
                 annotation_root=annotation_root,
                 audit_root=audit_root,
             )
-            rows = list(
-                csv.DictReader(
-                    (audit_root / "berry-annotation-join.csv").open(encoding="utf-8")
-                )
-            )
+            with (audit_root / "berry-annotation-join.csv").open(encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
 
             self.assertEqual(report["unique_geometric_match_count"], 1)
             self.assertEqual(report["unique_annotation_object_count"], 2)
@@ -184,11 +181,8 @@ class DysonAnnotationJoinAuditTests(unittest.TestCase):
                 annotation_root=annotation_root,
                 audit_root=audit_root,
             )
-            row = next(
-                csv.DictReader(
-                    (audit_root / "berry-annotation-join.csv").open(encoding="utf-8")
-                )
-            )
+            with (audit_root / "berry-annotation-join.csv").open(encoding="utf-8") as handle:
+                row = next(csv.DictReader(handle))
 
             self.assertEqual(row["berry_instance_id"], "99")
             self.assertEqual(row["annotation_index"], "1")
@@ -210,11 +204,8 @@ class DysonAnnotationJoinAuditTests(unittest.TestCase):
                 annotation_root=annotation_root,
                 audit_root=audit_root,
             )
-            row = next(
-                csv.DictReader(
-                    (audit_root / "berry-annotation-join.csv").open(encoding="utf-8")
-                )
-            )
+            with (audit_root / "berry-annotation-join.csv").open(encoding="utf-8") as handle:
+                row = next(csv.DictReader(handle))
 
             self.assertEqual(report["no_object_match_count"], 1)
             self.assertEqual(row["join_status"], "NO_OBJECT_MATCH")
@@ -239,11 +230,8 @@ class DysonAnnotationJoinAuditTests(unittest.TestCase):
                 annotation_root=annotation_root,
                 audit_root=audit_root,
             )
-            row = next(
-                csv.DictReader(
-                    (audit_root / "berry-annotation-join.csv").open(encoding="utf-8")
-                )
-            )
+            with (audit_root / "berry-annotation-join.csv").open(encoding="utf-8") as handle:
+                row = next(csv.DictReader(handle))
 
             self.assertEqual(report["ambiguous_match_count"], 1)
             self.assertEqual(row["join_status"], "AMBIGUOUS_MATCH")
