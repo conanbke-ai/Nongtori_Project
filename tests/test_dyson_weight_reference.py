@@ -143,10 +143,9 @@ class DysonWeightReferenceTests(unittest.TestCase):
             root = Path(tmp)
             raw = root / "raw"
             audit = root / "audit"
-            (raw / "a").mkdir(parents=True)
-            (raw / "b").mkdir(parents=True)
-            (raw / "a" / "sample_rgb.png").write_bytes(b"a")
-            (raw / "b" / "sample_rgb.png").write_bytes(b"b")
+            raw.mkdir()
+            (raw / "sample_rgb.png").write_bytes(b"a")
+            (raw / "sample_RGB.PNG").write_bytes(b"b")
             np.save(raw / "sample_label.npy", np.array([12.0], dtype=np.float32))
 
             report = audit_dyson_dataset(raw, audit)
