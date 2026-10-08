@@ -627,3 +627,32 @@ It also reports Dyson RGB V001 error metrics by actual-weight band:
 ```
 
 This audit is descriptive only. It does not establish causality and must not be used to retune the frozen V001 model or product thresholds.
+
+
+## 19. RGB V001 target-support audit
+
+The external Dyson failure must be separated into in-support and out-of-support cases relative to the frozen Dryad training target range.
+
+Command:
+
+```bash
+python -m ml.weight_baseline.dyson_rgb_support_audit_v1
+```
+
+The audit uses the immutable Dryad train split only to define the observed target support:
+
+```text
+[min(train weight), max(train weight)]
+```
+
+Dyson berries are then classified as:
+
+```text
+below Dryad train support
+inside Dryad train support
+above Dryad train support
+```
+
+For each region it reports count, MAE, RMSE, bias, R², and max absolute error.
+
+This is diagnostic only. It does not establish that out-of-support weight is the sole cause of model failure, and it must not be used to tune RGB V001.
