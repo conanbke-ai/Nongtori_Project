@@ -483,3 +483,67 @@ data/audit/icra-dyson-annotations/
 Schema counts are computed once per unique annotation JSON/object rather than once per physical berry, preventing repeat-count inflation.
 
 The next crop-materialization gate may use only rows whose status is `UNIQUE_GEOMETRIC_MATCH`. Source exceptions remain explicit and are not repaired automatically.
+
+
+## 16. Berry crop materialization
+
+After the annotation join audit is reviewed, materialize berry-level RGB crops with:
+
+```bash
+python -m ml.data_pipeline.cli dyson-materialize-berry-crops
+```
+
+Eligibility is strict:
+
+```text
+join_status == UNIQUE_GEOMETRIC_MATCH
+```
+
+All other join rows remain excluded. No nearest-object fallback or ambiguous selection is allowed.
+
+Default paths:
+
+```text
+source RGB:
+data/external/icra-dyson/
+
+join audit:
+data/audit/icra-dyson-annotations/
+
+crop output:
+data/external/icra-dyson-berry-crops/
+
+crop audit:
+data/audit/icra-dyson-berry-crops/
+```
+
+Crop rule:
+
+- input bbox semantics: absolute XYXY;
+- pixel left/top = floor(x1/y1);
+- pixel right/bottom = ceil(x2/y2);
+- source image bounds are checked during materialization;
+- out-of-bounds bbox is reported and never clamped;
+- source RGB files are read-only;
+- reruns reuse existing crop files.
+
+Artifacts:
+
+```text
+data/audit/icra-dyson-berry-crops/
+├─ berry-crop-manifest.csv
+└─ berry-crop-audit.json
+```
+
+The crop manifest preserves:
+
+- berry / scene / view identity;
+- frozen weight and three physical dimensions;
+- source RGB path and SHA-256;
+- source center;
+- source bbox and integer crop box;
+- numeric category ID;
+- crop path and SHA-256;
+- NON_COMMERCIAL_REFERENCE provenance guard.
+
+These crops are external reference inputs only. They do not alter `DYSON-REFERENCE-V001`, do not create a commercial split, and must not be merged into Dryad/canonical training.
