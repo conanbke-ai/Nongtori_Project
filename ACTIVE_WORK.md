@@ -1,3 +1,14 @@
+## Dyson external RGB result freeze — 2026-10-12
+
+- External RGB V001 result is frozen as `EXTERNAL_GENERALIZATION_FAILED / DOMAIN_SHIFT_CONFIRMED`.
+- Dyson external benchmark: 631 berries / 1,868 views, MAE 7.6294g, RMSE 10.2286g, R² -1.0840, bias -5.9412g, grade accuracy 27.10%.
+- Target-support audit: 605/631 berries (95.88%) are inside Dryad train weight support but remain MAE 7.5911g / R² -1.7617 / bias -6.2007g.
+- Input-domain audit shows substantial low-level shift, especially saturation, blue-channel mean, luminance, contrast, and framing.
+- Source width/height SMD is documented as structural full-image-vs-crop mismatch and is not treated as causal evidence.
+- No Dyson retraining/tuning/model selection is allowed for RGB V001.
+- Canonical result: `docs/DYSON_EXTERNAL_RGB_V001_RESULT_20261012.md`.
+- Portfolio direction after this freeze: prioritize product/API/UI/field acceptance; external robustness becomes successor research scope.
+
 ## Dyson RGB input-domain audit — 2026-10-08
 
 - Target-support audit shows 605/631 Dyson berries (95.88%) are inside the frozen Dryad train weight range, yet in-support RGB V001 performance is still MAE 7.5911g / R² -1.7617 / bias -6.2007g.
