@@ -37,7 +37,7 @@ from .dyson_annotations import acquire_dyson_annotations, audit_dyson_annotation
 from .dyson_annotation_join import audit_dyson_annotation_join
 from .dyson_berry_crops import materialize_dyson_berry_crops
 from .strawberry_detector_data import prepare_strawberry_detector_data, StrawberryDetectorDataError
-from .strawberry_detector_acquisition import materialize_strawberry_ds_parquet, StrawberryDetectorAcquisitionError
+from .strawberry_detector_acquisition import acquire_and_materialize_strawberry_ds, materialize_strawberry_ds_parquet, StrawberryDetectorAcquisitionError
 from .field_audit import audit_field_csv
 from .incremental import incremental_scan_csv
 from .normalize import normalize_external_csv, normalize_field_csv
@@ -395,9 +395,8 @@ def main(argv: list[str] | None = None) -> int:
             return 3
     if args.command == "strawberry-detector-acquire":
         try:
-            report = materialize_strawberry_ds_parquet(
-                parquet_path=args.parquet,
-                output_root=args.output_root,
+            report = acquire_and_materialize_strawberry_ds(
+                download_root=args.output_root.parent,
                 audit_root=args.audit_root,
             )
             print(json.dumps(report, ensure_ascii=False, indent=2))
