@@ -1,3 +1,11 @@
+## Pest scouting CI validation gate — 2026-10-12
+
+- Current main pest scouting implementation remains canonical; this workstream changes validation only.
+- Existing app workflow already runs `npm run test:workflows` and `npm run lint`.
+- Added `npm run build` to the same PR-triggered workflow so application changes must pass workflow regression + lint + production build together.
+- This CI gate does not replace actual browser/mobile visual acceptance.
+- Final pest scouting PASS still requires rendered desktop/mobile interaction QA and runtime payload verification.
+
 ## Dyson external RGB result freeze — 2026-10-12
 
 - External RGB V001 result is frozen as `EXTERNAL_GENERALIZATION_FAILED / DOMAIN_SHIFT_CONFIRMED`.
