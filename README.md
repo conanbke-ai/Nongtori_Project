@@ -150,3 +150,38 @@ lint / format
 - [Design Guide](docs/DESIGN_GUIDE.md)
 - [Development Standard](docs/DEVELOPMENT.md)
 - [Migration Notes](docs/MIGRATION_NOTES.md)
+
+
+## Strawberry detector preparation
+
+For the first strawberry object-detection baseline, Nongtori reuses the existing `DATA-RIP-001 / Strawberry-DS` source as public bbox supervision.
+
+The source ripeness classes remain preserved in audit metadata, but detector training collapses them to one class:
+
+```text
+Green / White / Early-Turning / Turning / Late-Turning / Red
+→ strawberry
+```
+
+Prepare and audit the local dataset with:
+
+```bash
+python -m ml.data_pipeline.cli strawberry-detector-prepare
+```
+
+Default source root:
+
+```text
+data/external/strawberry-ds/
+```
+
+Default audit outputs:
+
+```text
+data/audit/strawberry-detector-v001/
+├─ detector-image-manifest.csv
+├─ detector-object-manifest.csv
+└─ detector-data-audit.json
+```
+
+The gate validates image/label pairing and YOLO boxes before any detector training. Field-farm images remain a separate later fine-tuning and acceptance cohort.
