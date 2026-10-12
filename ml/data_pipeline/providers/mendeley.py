@@ -15,7 +15,7 @@ from .direct_http import stream_download
 
 
 MENDELEY_API_ROOT = "https://api.data.mendeley.com"
-MENDELEY_TOKEN_URL = "https://auth.data.mendeley.com/oauth2/token"
+MENDELEY_TOKEN_URL = "https://auth.data.mendeley.com/oauth/token"
 
 
 class MendeleyAccessError(RuntimeError):
