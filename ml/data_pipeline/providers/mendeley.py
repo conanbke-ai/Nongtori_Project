@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import json
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -13,12 +15,91 @@ from .direct_http import stream_download
 
 
 MENDELEY_API_ROOT = "https://api.data.mendeley.com"
+MENDELEY_TOKEN_URL = "https://auth.data.mendeley.com/oauth2/token"
+
+
+class MendeleyAccessError(RuntimeError):
+    pass
+
+
+def _load_env_local(path: Path = Path(".env.local")) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
+
+
+def _request_access_token(timeout: int = 60) -> str:
+    _load_env_local()
+    explicit = os.environ.get("MENDELEY_DATA_TOKEN")
+    if explicit:
+        return explicit
+
+    client_id = os.environ.get("MENDELEY_DATA_CLIENT_ID")
+    client_secret = os.environ.get("MENDELEY_DATA_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise MendeleyAccessError(
+            "Mendeley Data credentials are missing. Register one Digital Commons Data API "
+            "client, then put MENDELEY_DATA_CLIENT_ID and MENDELEY_DATA_CLIENT_SECRET in "
+            ".env.local. After that, dataset downloads are fully automated."
+        )
+
+    auth = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+    body = urllib.parse.urlencode(
+        {
+            "grant_type": "client_credentials",
+            "scope": "dcd:profile",
+        }
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        MENDELEY_TOKEN_URL,
+        data=body,
+        headers={
+            "Authorization": f"Basic {auth}",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+            "User-Agent": "Nongtori-Data-Pipeline/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.load(response)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:500]
+        raise MendeleyAccessError(
+            f"Failed to obtain Mendeley Data access token: HTTP {exc.code}: {detail}"
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise MendeleyAccessError(
+            f"Failed to obtain Mendeley Data access token: {exc.reason}"
+        ) from exc
+
+    token = str(payload.get("access_token") or "")
+    if not token:
+        raise MendeleyAccessError("Mendeley Data token endpoint returned no access_token")
+    return token
 
 
 class MendeleyAdapter(ProviderAdapter):
-    """Download a published Mendeley Data version through the current public API."""
+    """Download a published Mendeley Data version through the authenticated API."""
 
-    def _list_files(self, dataset_id: str, version: str) -> tuple[str, list[dict[str, object]]]:
+    def _list_files(
+        self,
+        dataset_id: str,
+        version: str,
+        access_token: str,
+    ) -> tuple[str, list[dict[str, object]]]:
         query = urllib.parse.urlencode(
             {
                 "version": version,
@@ -27,56 +108,40 @@ class MendeleyAdapter(ProviderAdapter):
                 "$limit": 500,
             }
         )
-        candidates = [
-            f"{MENDELEY_API_ROOT}/datasets/publics/{dataset_id}/files?{query}",
-            f"{MENDELEY_API_ROOT}/datasets/{dataset_id}/files?{query}",
-        ]
-        errors: list[str] = []
-        headers = {
-            "Accept": "application/json",
-            "User-Agent": "Nongtori-Data-Pipeline/1.0 (+https://github.com/conanbke-ai/Nongtori_Project)",
-        }
-
-        for api_url in candidates:
-            request = urllib.request.Request(api_url, headers=headers)
-            try:
-                with urllib.request.urlopen(request, timeout=60) as response:
-                    payload = json.load(response)
-            except urllib.error.HTTPError as exc:
-                errors.append(f"{api_url} -> HTTP {exc.code}")
-                continue
-            except urllib.error.URLError as exc:
-                errors.append(f"{api_url} -> {exc.reason}")
-                continue
-
-            if isinstance(payload, dict):
-                files = payload.get("results") or payload.get("files") or []
-            else:
-                files = payload
-            if isinstance(files, list) and files:
-                return api_url, files
-            errors.append(f"{api_url} -> empty/unsupported response")
-
-        auth_required = any("HTTP 401" in error for error in errors)
-        if auth_required:
-            raise RuntimeError(
-                "MENDELEY_API_AUTH_REQUIRED: the current Digital Commons Data API "
-                "requires OAuth2 even for public dataset file-list endpoints. "
-                "For this registered public source, use the source.original_url "
-                "Download All action once, then place/extract the files under the "
-                "canonical local source directory. API client registration is not "
-                "required for Nongtori detector V001. "
-                + "; ".join(errors)
-            )
-        raise RuntimeError(
-            "Mendeley public dataset file listing failed. "
-            + "; ".join(errors)
+        api_url = f"{MENDELEY_API_ROOT}/datasets/publics/{dataset_id}/files?{query}"
+        request = urllib.request.Request(
+            api_url,
+            headers={
+                "Accept": "application/json",
+                "Authorization": f"Bearer {access_token}",
+                "User-Agent": "Nongtori-Data-Pipeline/1.0",
+            },
         )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                payload = json.load(response)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:500]
+            raise MendeleyAccessError(
+                f"Mendeley file listing failed: HTTP {exc.code}: {detail}"
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise MendeleyAccessError(
+                f"Mendeley file listing failed: {exc.reason}"
+            ) from exc
+
+        files = payload.get("results") or payload.get("files") or [] if isinstance(payload, dict) else payload
+        if not isinstance(files, list) or not files:
+            raise MendeleyAccessError(
+                f"Mendeley returned no files for dataset {dataset_id} version {version}"
+            )
+        return api_url, files
 
     def download(self, source: SourceRecord, output_dir: Path) -> DownloadResult:
         dataset_id = source.retrieval["dataset_id"]
         version = str(source.retrieval.get("version", "1"))
-        api_url, files = self._list_files(dataset_id, version)
+        access_token = _request_access_token()
+        api_url, files = self._list_files(dataset_id, version, access_token)
 
         output_dir = Path(output_dir)
         downloaded: list[Path] = []
@@ -84,25 +149,38 @@ class MendeleyAdapter(ProviderAdapter):
         for index, item in enumerate(files, start=1):
             details = item.get("content_details") or {}
             url = details.get("download_url")
-            if not url:
-                file_id = item.get("id")
-                if not file_id:
-                    raise RuntimeError(
-                        f"Mendeley file entry has neither download_url nor id: {item!r}"
-                    )
-                url = (
-                    f"{MENDELEY_API_ROOT}/datasets/{dataset_id}/files/"
-                    f"{file_id}/file_downloaded?version={urllib.parse.quote(version)}"
-                )
-
+            expected_sha256 = details.get("sha256_hash")
             filename = (
                 item.get("filename")
                 or item.get("name")
-                or Path(urlparse(str(url)).path).name
+                or (Path(urlparse(str(url)).path).name if url else "")
                 or f"mendeley-file-{index}"
             )
             destination = output_dir / str(filename)
-            meta = stream_download(str(url), destination)
+
+            if url:
+                meta = stream_download(
+                    str(url),
+                    destination,
+                    str(expected_sha256) if expected_sha256 else None,
+                )
+            else:
+                file_id = item.get("id")
+                if not file_id:
+                    raise MendeleyAccessError(
+                        f"Mendeley file entry has neither download_url nor id: {item!r}"
+                    )
+                api_download_url = (
+                    f"{MENDELEY_API_ROOT}/datasets/{dataset_id}/files/"
+                    f"{file_id}/file_downloaded?version={urllib.parse.quote(version)}"
+                )
+                meta = stream_download(
+                    api_download_url,
+                    destination,
+                    str(expected_sha256) if expected_sha256 else None,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+
             downloaded.append(destination)
             entries.append({"filename": str(filename), **meta})
 
@@ -111,5 +189,9 @@ class MendeleyAdapter(ProviderAdapter):
             source.provider,
             output_dir,
             tuple(downloaded),
-            {"api_url": api_url, "files": entries},
+            {
+                "api_url": api_url,
+                "authenticated": True,
+                "files": entries,
+            },
         )
