@@ -57,9 +57,19 @@ class MendeleyAdapter(ProviderAdapter):
                 return api_url, files
             errors.append(f"{api_url} -> empty/unsupported response")
 
+        auth_required = any("HTTP 401" in error for error in errors)
+        if auth_required:
+            raise RuntimeError(
+                "MENDELEY_API_AUTH_REQUIRED: the current Digital Commons Data API "
+                "requires OAuth2 even for public dataset file-list endpoints. "
+                "For this registered public source, use the source.original_url "
+                "Download All action once, then place/extract the files under the "
+                "canonical local source directory. API client registration is not "
+                "required for Nongtori detector V001. "
+                + "; ".join(errors)
+            )
         raise RuntimeError(
             "Mendeley public dataset file listing failed. "
-            "The legacy data.mendeley.com/public-api endpoint is no longer used. "
             + "; ".join(errors)
         )
 
