@@ -37,6 +37,7 @@ from .dyson_annotations import acquire_dyson_annotations, audit_dyson_annotation
 from .dyson_annotation_join import audit_dyson_annotation_join
 from .dyson_berry_crops import materialize_dyson_berry_crops
 from .strawberry_detector_data import prepare_strawberry_detector_data, StrawberryDetectorDataError
+from .strawberry_detector_acquisition import materialize_strawberry_ds_parquet, StrawberryDetectorAcquisitionError
 from .field_audit import audit_field_csv
 from .incremental import incremental_scan_csv
 from .normalize import normalize_external_csv, normalize_field_csv
@@ -73,7 +74,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("dyson-annotations-audit"); p.add_argument("--annotation-root", type=Path, default=Path("data/external/icra-dyson-annotations")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson-annotations"))
     p = sub.add_parser("dyson-annotation-join-audit"); p.add_argument("--snapshot-dir", type=Path, default=Path("data/snapshots/DYSON-REFERENCE-V001")); p.add_argument("--annotation-root", type=Path, default=Path("data/external/icra-dyson-annotations/extracted")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson-annotations"))
     p = sub.add_parser("dyson-materialize-berry-crops"); p.add_argument("--snapshot-dir", type=Path, default=Path("data/snapshots/DYSON-REFERENCE-V001")); p.add_argument("--raw-root", type=Path, default=Path("data/external/icra-dyson")); p.add_argument("--join-audit-root", type=Path, default=Path("data/audit/icra-dyson-annotations")); p.add_argument("--output-root", type=Path, default=Path("data/external/icra-dyson-berry-crops")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson-berry-crops"))
-    p = sub.add_parser("strawberry-detector-prepare"); p.add_argument("--source-root", type=Path, default=Path("data/external/DATA-RIP-001/1")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/strawberry-detector-v001")); p.add_argument("--seed", default="strawberry-detector-v001"); p.add_argument("--train-ratio", type=float, default=0.80); p.add_argument("--val-ratio", type=float, default=0.10); p.add_argument("--test-ratio", type=float, default=0.10)
+    p = sub.add_parser("strawberry-detector-acquire"); p.add_argument("--parquet", type=Path, default=Path("data/external/DATA-RIP-001/1/data/train-00000-of-00001.parquet")); p.add_argument("--output-root", type=Path, default=Path("data/external/DATA-RIP-001/1/materialized")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/strawberry-detector-v001"))
+    p = sub.add_parser("strawberry-detector-prepare"); p.add_argument("--source-root", type=Path, default=Path("data/external/DATA-RIP-001/1/materialized")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/strawberry-detector-v001")); p.add_argument("--seed", default="strawberry-detector-v001"); p.add_argument("--train-ratio", type=float, default=0.80); p.add_argument("--val-ratio", type=float, default=0.10); p.add_argument("--test-ratio", type=float, default=0.10)
     p = sub.add_parser("snapshot"); p.add_argument("source_id"); p.add_argument("--audit-dir", type=Path, required=True); p.add_argument("--snapshot-root", type=Path, required=True); p.add_argument("--snapshot-id", required=True)
     p = sub.add_parser("incremental-scan"); p.add_argument("--input", type=Path, required=True); p.add_argument("--ledger", type=Path, required=True); p.add_argument("--output-ledger", type=Path, required=True); p.add_argument("--key-field", action="append", default=[]); p.add_argument("--ignore-field", action="append", default=[])
     p = sub.add_parser("field-audit"); p.add_argument("--input", type=Path, required=True); p.add_argument("--output", type=Path)
@@ -390,6 +392,18 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if report["status"] == "DYSON_BERRY_CROPS_MATERIALIZED" else 2
         except DysonPipelineError as exc:
             print(json.dumps({"status": "DYSON_BERRY_CROP_MATERIALIZATION_BLOCKED", "error": str(exc)}, ensure_ascii=False, indent=2))
+            return 3
+    if args.command == "strawberry-detector-acquire":
+        try:
+            report = materialize_strawberry_ds_parquet(
+                parquet_path=args.parquet,
+                output_root=args.output_root,
+                audit_root=args.audit_root,
+            )
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+            return 0 if report["status"] == "STRAWBERRY_DETECTOR_ACQUISITION_COMPLETE" else 2
+        except StrawberryDetectorAcquisitionError as exc:
+            print(json.dumps({"status": "STRAWBERRY_DETECTOR_ACQUISITION_BLOCKED", "error": str(exc)}, ensure_ascii=False, indent=2))
             return 3
     if args.command == "strawberry-detector-prepare":
         try:
