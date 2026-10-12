@@ -84,6 +84,38 @@ class StrawberryDetectorDataTests(unittest.TestCase):
                 by_image.setdefault(row["image_key"], set()).add(row["split"])
             self.assertTrue(all(len(splits) == 1 for splits in by_image.values()))
 
+    def test_boundary_touching_box_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_pair(
+                root,
+                "edge",
+                "0 0.2337760417 0.0208333333 0.0486979167 0.0416666667\n",
+            )
+            report = prepare_strawberry_detector_data(
+                source_root=root,
+                audit_root=root / "audit",
+            )
+            self.assertEqual(report["parse_error_count"], 0)
+            self.assertEqual(report["eligible_object_count"], 1)
+
+    def test_source_split_directory_is_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            image = root / "images" / "validation" / "a.jpg"
+            label = root / "labels" / "validation" / "a.txt"
+            image.parent.mkdir(parents=True, exist_ok=True)
+            label.parent.mkdir(parents=True, exist_ok=True)
+            image.write_bytes(b"fake-image")
+            label.write_text("1 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+
+            report = prepare_strawberry_detector_data(
+                source_root=root,
+                audit_root=root / "audit",
+                seed="ignored-for-source-split",
+            )
+            self.assertEqual(report["split_counts"], {"validation": 1})
+
     def test_missing_pair_is_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
