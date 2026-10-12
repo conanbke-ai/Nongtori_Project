@@ -1,3 +1,12 @@
+## Dyson RGB input-domain audit — 2026-10-08
+
+- Target-support audit shows 605/631 Dyson berries (95.88%) are inside the frozen Dryad train weight range, yet in-support RGB V001 performance is still MAE 7.5911g / R² -1.7617 / bias -6.2007g.
+- Therefore target-range mismatch is not sufficient to explain the external failure.
+- New audit compares Dryad test RGB views vs Dyson berry crops under the same RGB V001 geometric eval preprocessing (Resize short edge 256 → CenterCrop 224).
+- Metrics: source width/height/aspect, center-crop retained fraction, RGB channel mean/std, luminance mean/std, saturation mean.
+- Reports per-cohort distributions plus standardized mean differences and largest low-level input shifts.
+- Interpretation-only: no RGB V001 retraining/tuning/model selection is allowed.
+
 ## Dyson RGB target-support audit — 2026-10-08
 
 - External RGB benchmark failure is not explained by mean/std shift alone: Dyson mean is -0.7287g vs Dryad test while std differs only +0.1649g.

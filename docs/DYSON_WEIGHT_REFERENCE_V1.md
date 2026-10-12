@@ -656,3 +656,42 @@ above Dryad train support
 For each region it reports count, MAE, RMSE, bias, R², and max absolute error.
 
 This is diagnostic only. It does not establish that out-of-support weight is the sole cause of model failure, and it must not be used to tune RGB V001.
+
+
+## 20. RGB V001 low-level input-domain audit
+
+Because most Dyson berries remain inside the Dryad train target range while external performance still collapses, compare the actual model input distributions.
+
+Command:
+
+```bash
+python -m ml.weight_baseline.dyson_rgb_input_domain_audit_v1
+```
+
+Comparison:
+
+```text
+Dryad frozen test RGB views
+vs
+successful Dyson berry crops
+```
+
+Both cohorts are measured after the same geometric evaluation preprocessing contract used by RGB V001:
+
+```text
+Resize short edge to 256
+→ CenterCrop 224
+→ measure pixels before ImageNet normalization
+```
+
+Reported low-level features:
+
+- source width / height / aspect ratio;
+- fraction of resized image retained by the 224×224 center crop;
+- R/G/B channel means and standard deviations;
+- luminance mean / standard deviation;
+- HSV saturation mean.
+
+For each feature the audit records both cohort distributions, mean delta, and standardized mean difference. The largest standardized shifts are ranked for interpretation.
+
+This is an input-domain diagnostic only. It cannot establish a causal factor by itself and must not be used to tune the frozen RGB V001 model.
