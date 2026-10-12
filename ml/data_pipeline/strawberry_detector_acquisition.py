@@ -5,9 +5,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
-import pyarrow.parquet as pq
-
 from .strawberry_detector_data import prepare_strawberry_detector_data
 
 
@@ -39,6 +36,14 @@ def materialize_strawberry_ds_parquet(
     output_root: Path = Path("data/external/DATA-RIP-001/1/materialized"),
     audit_root: Path = Path("data/audit/strawberry-detector-v001"),
 ) -> dict[str, Any]:
+    try:
+        from PIL import Image
+        import pyarrow.parquet as pq
+    except ImportError as exc:
+        raise StrawberryDetectorAcquisitionError(
+            "Strawberry detector materialization requires Pillow and pyarrow. "
+            "Install once with: python -m pip install pillow pyarrow"
+        ) from exc
     parquet_path = Path(parquet_path)
     output_root = Path(output_root)
     audit_root = Path(audit_root)
@@ -192,6 +197,55 @@ def materialize_strawberry_ds_parquet(
     }
 
     (audit_root / "acquisition-summary.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return report
+
+
+def acquire_and_materialize_strawberry_ds(
+    *,
+    download_root: Path = Path("data/external/DATA-RIP-001/1"),
+    audit_root: Path = Path("data/audit/strawberry-detector-v001"),
+) -> dict[str, Any]:
+    try:
+        from huggingface_hub import HfApi, snapshot_download
+    except ImportError as exc:
+        raise StrawberryDetectorAcquisitionError(
+            "Automatic Strawberry-DS download requires huggingface_hub. "
+            "Install once with: python -m pip install huggingface_hub"
+        ) from exc
+
+    download_root = Path(download_root)
+    try:
+        info = HfApi().dataset_info(
+            "Project-AgML/Strawberry-DS_strawberry_detection"
+        )
+        revision = str(info.sha)
+        snapshot_download(
+            repo_id="Project-AgML/Strawberry-DS_strawberry_detection",
+            repo_type="dataset",
+            revision=revision,
+            local_dir=download_root,
+        )
+    except Exception as exc:
+        raise StrawberryDetectorAcquisitionError(
+            f"Automatic Hugging Face acquisition failed: {exc}"
+        ) from exc
+
+    parquet_path = download_root / "data" / "train-00000-of-00001.parquet"
+    report = materialize_strawberry_ds_parquet(
+        parquet_path=parquet_path,
+        output_root=download_root / "materialized",
+        audit_root=audit_root,
+    )
+    report["acquisition"] = {
+        "provider": "Hugging Face",
+        "repo_id": "Project-AgML/Strawberry-DS_strawberry_detection",
+        "revision": revision,
+        "canonical_origin": "Mendeley Strawberry-DS / DATA-RIP-001",
+    }
+    (Path(audit_root) / "acquisition-summary.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
