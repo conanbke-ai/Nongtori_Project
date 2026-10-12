@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,9 @@ def materialize_strawberry_ds_parquet(
         raise StrawberryDetectorAcquisitionError(
             f"Strawberry-DS parquet missing: {parquet_path}"
         )
+
+    if output_root.exists():
+        shutil.rmtree(output_root)
 
     images_dir = output_root / "images"
     labels_dir = output_root / "labels"
