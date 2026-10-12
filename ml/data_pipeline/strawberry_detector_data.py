@@ -8,7 +8,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .annotation_audit import STRAWBERRY_DS_CLASSES
-from .dyson_weight_reference import DysonPipelineError
+class StrawberryDetectorDataError(RuntimeError):
+    pass
 
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
@@ -139,11 +140,11 @@ def prepare_strawberry_detector_data(
     audit_root = Path(audit_root)
 
     if not source_root.is_dir():
-        raise DysonPipelineError(f"Strawberry-DS root missing: {source_root}")
+        raise StrawberryDetectorDataError(f"Strawberry-DS root missing: {source_root}")
     if abs((train_ratio + val_ratio + test_ratio) - 1.0) > 1e-9:
-        raise DysonPipelineError("train/validation/test ratios must sum to 1")
+        raise StrawberryDetectorDataError("train/validation/test ratios must sum to 1")
     if min(train_ratio, val_ratio, test_ratio) <= 0:
-        raise DysonPipelineError("all split ratios must be positive")
+        raise StrawberryDetectorDataError("all split ratios must be positive")
 
     images, labels, ambiguous = _index_paths(source_root)
     all_keys = sorted(set(images) | set(labels))
