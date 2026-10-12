@@ -1,3 +1,14 @@
+## Strawberry detector data gate V001 — 2026-10-12
+
+- New workstream: `feat/strawberry-detector-data-v001`.
+- Source candidate: `DATA-RIP-001 / Strawberry-DS` (247 RGB images, YOLO bbox labels, CC-BY-4.0).
+- Detector training role is object localization only; the six ripeness classes are preserved for provenance/audit but collapsed to one detector class: `strawberry`.
+- New command: `python -m ml.data_pipeline.cli strawberry-detector-prepare`.
+- Preparation gate performs exact image↔label pairing, normalized-box validation, duplicate/ambiguous-path detection, and deterministic image-level train/validation/test split.
+- Outputs: detector image manifest, detector object manifest, detector-data audit JSON.
+- This gate does not train a model yet; baseline training starts only after the real local audit is reviewed.
+- Field photos are not required for this gate and remain separate future fine-tuning/acceptance data.
+
 ## Pest scouting CI validation gate — 2026-10-12
 
 - Current main pest scouting implementation remains canonical; this workstream changes validation only.
