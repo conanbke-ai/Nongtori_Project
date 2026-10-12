@@ -14,6 +14,7 @@ class StrawberryDetectorDataError(RuntimeError):
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 DETECTOR_CLASS_NAME = "strawberry"
+BOUNDARY_EPSILON = 1e-8
 DEFAULT_SOURCE_ROOT = Path("data/external/strawberry-ds")
 DEFAULT_AUDIT_ROOT = Path("data/audit/strawberry-detector-v001")
 
@@ -96,7 +97,12 @@ def _parse_label_file(path: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
         y1 = y_center - height / 2.0
         x2 = x_center + width / 2.0
         y2 = y_center + height / 2.0
-        if x1 < 0.0 or y1 < 0.0 or x2 > 1.0 or y2 > 1.0:
+        if (
+            x1 < -BOUNDARY_EPSILON
+            or y1 < -BOUNDARY_EPSILON
+            or x2 > 1.0 + BOUNDARY_EPSILON
+            or y2 > 1.0 + BOUNDARY_EPSILON
+        ):
             errors.append({"line": line_no, "error": "BOX_EXTENDS_OUTSIDE_IMAGE", "raw": line})
             continue
 
@@ -118,6 +124,14 @@ def _parse_label_file(path: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
 
 
 def _assign_split(key: str, seed: str, train_ratio: float, val_ratio: float) -> str:
+    prefix = key.split("/", 1)[0].lower()
+    if prefix == "train":
+        return "train"
+    if prefix in {"valid", "validation", "val"}:
+        return "validation"
+    if prefix == "test":
+        return "test"
+
     digest = hashlib.sha256(f"{seed}:{key}".encode("utf-8")).digest()
     value = int.from_bytes(digest[:8], "big") / float(2**64)
     if value < train_ratio:
@@ -276,10 +290,11 @@ def prepare_strawberry_detector_data(
         },
         "split_policy": {
             "unit": "IMAGE_KEY",
-            "seed": seed,
-            "train_ratio": train_ratio,
-            "validation_ratio": val_ratio,
-            "test_ratio": test_ratio,
+            "source_split_preserved_when_present": True,
+            "fallback_seed": seed,
+            "fallback_train_ratio": train_ratio,
+            "fallback_validation_ratio": val_ratio,
+            "fallback_test_ratio": test_ratio,
         },
         "discovered_image_count": len(images),
         "discovered_label_count": len(labels),
