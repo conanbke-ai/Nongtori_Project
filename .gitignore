@@ -45,3 +45,14 @@ next-env.d.ts
 /data/audit/
 /data/snapshots/
 /ml/data_pipeline/data/
+
+# Python / local ML runtime
+.venv*/
+__pycache__/
+*.py[cod]
+
+# Local ML experiment outputs
+/artifacts/
+
+# npm install is used only for local/CI validation; pnpm lock remains canonical
+/package-lock.json
