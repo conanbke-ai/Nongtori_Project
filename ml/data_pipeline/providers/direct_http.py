@@ -11,11 +11,19 @@ from .base import ProviderAdapter
 _CHUNK = 1024 * 1024
 
 
-def stream_download(url: str, destination: Path, expected_sha256: str | None = None) -> dict[str, str | int]:
+def stream_download(
+    url: str,
+    destination: Path,
+    expected_sha256: str | None = None,
+    *,
+    headers: dict[str, str] | None = None,
+    timeout: int = 300,
+) -> dict[str, str | int]:
     destination.parent.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256()
     size = 0
-    with urllib.request.urlopen(url) as response, destination.open("wb") as out:
+    request = urllib.request.Request(url, headers=headers or {})
+    with urllib.request.urlopen(request, timeout=timeout) as response, destination.open("wb") as out:
         while True:
             chunk = response.read(_CHUNK)
             if not chunk:
