@@ -239,7 +239,7 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
             const state = stateLabels[row.current_state] ?? stateLabels.WATCH;
             const metrics = metricSummary(row, language);
             const reason = row.last_alert_reason && reasonLabels[row.last_alert_reason] ? localized(reasonLabels[row.last_alert_reason], language) : null;
-            return <button aria-pressed={selectedId === row.id} className={`scouting-location-row state-${row.current_state.toLowerCase()} ${selectedId === row.id ? 'selected' : ''}`} key={row.id} onClick={() => setSelectedId(row.id)} role="listitem" type="button">
+            return <button aria-current={selectedId === row.id ? 'true' : undefined} className={`scouting-location-row state-${row.current_state.toLowerCase()} ${selectedId === row.id ? 'selected' : ''}`} key={row.id} onClick={() => setSelectedId(row.id)} type="button">
               <span className="scouting-state-badge">{localized(state, language)}</span>
               <span className="scouting-location-identity"><strong>{locationLabel(row)}</strong><small>{text.candidate}: {issueLabel(row, language)}</small></span>
               <span className="scouting-location-signals">{metrics.length ? metrics.join(' · ') : reason ?? '-'}</span>
