@@ -81,7 +81,14 @@ def materialize_strawberry_ds_parquet(
         source_name = str(image.get("path") or f"sample-{index:06d}.jpg")
         suffix = Path(source_name).suffix.lower() or ".jpg"
         sample_id = f"sample-{index:06d}"
-        image_path = images_dir / f"{sample_id}{suffix}"
+        canonical_split = (
+            "validation" if original_split.lower() in {"valid", "validation", "val"}
+            else original_split.lower()
+        )
+        if canonical_split not in {"train", "validation", "test"}:
+            canonical_split = "unknown"
+        image_path = images_dir / canonical_split / f"{sample_id}{suffix}"
+        image_path.parent.mkdir(parents=True, exist_ok=True)
 
         if not raw_bytes:
             raise StrawberryDetectorAcquisitionError(
@@ -145,7 +152,8 @@ def materialize_strawberry_ds_parquet(
             class_counts[class_name] = class_counts.get(class_name, 0) + 1
             bbox_total += 1
 
-        label_path = labels_dir / f"{sample_id}.txt"
+        label_path = labels_dir / canonical_split / f"{sample_id}.txt"
+        label_path.parent.mkdir(parents=True, exist_ok=True)
         label_path.write_text(
             "\n".join(label_lines) + ("\n" if label_lines else ""),
             encoding="utf-8",
@@ -161,6 +169,7 @@ def materialize_strawberry_ds_parquet(
                 "source_row_index": index,
                 "source_image_name": source_name,
                 "original_split": original_split,
+                "canonical_split": canonical_split,
                 "image_width": width,
                 "image_height": height,
                 "bbox_count": len(boxes),
