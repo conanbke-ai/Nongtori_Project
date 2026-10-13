@@ -1,3 +1,16 @@
+## Mite public acquisition/audit V001 — 2026-10-13
+
+- Workstream: `feat/mite-public-acquisition-v001`.
+- `DATA-PEST-001` is pinned to Roboflow Universe version 1 as the strawberry-context pest candidate.
+- `DATA-PEST-002` is pinned to Gent Lab TSSM Detection v2 version 210, matching the official three-class miteVision configuration: Adult_female / Immature / Viable_egg.
+- Added Roboflow provider support using `ROBOFLOW_API_KEY` from local `.env.local`.
+- New command: `python -m ml.data_pipeline.cli mite-public-acquire-audit`.
+- Acquisition format: YOLOv8 export.
+- Audit reports exact split image counts, bbox/class counts, missing labels, invalid YOLO rows, exact cross-split SHA-256 duplicates, and Roboflow origin-key cross-split overlap.
+- Roboflow-export filename origin keys strip the `.rf.<hash>` suffix so augmented/re-exported derivatives can be detected across splits.
+- Public source roles remain separate; no combined training snapshot is frozen until audit results are reviewed.
+- No public-source result can establish Nongtori field readiness.
+
 ## Mite public data source gate V001 — 2026-10-13
 
 - Workstream: `feat/mite-public-data-audit-v001`.
