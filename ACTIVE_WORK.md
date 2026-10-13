@@ -1,3 +1,17 @@
+## Strawberry detector baseline V001 test freeze — 2026-10-13
+
+- Frozen checkpoint: epoch 12 selected on validation only.
+- Official test evaluated once; test results are report-only and prohibited from model/threshold/hyperparameter selection.
+- Test cohort: 26 images / 104 GT boxes.
+- Frozen test metrics:
+  - mAP50: 0.713840
+  - mAP50-95: 0.435940
+  - Precision@0.5: 0.817204
+  - Recall@0.5: 0.730769
+- Validation → test gap is retained as generalization evidence; no V001 retuning is allowed from this test result.
+- V001 role: public-data strawberry localization baseline, not field-ready detector.
+- Next detector step requires independent field/external acceptance or a successor dataset/snapshot; do not tune against the frozen test.
+
 ## Strawberry detector baseline V001 validation freeze — 2026-10-13
 
 - Local GPU training completed on RTX 4060 with early stopping at epoch 17/20.
