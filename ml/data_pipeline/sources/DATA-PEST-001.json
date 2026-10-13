@@ -14,7 +14,8 @@
     "workspace": "ditastrawberry-jjmk0",
     "project": "strawberry-7pzfi",
     "requires_api_key": true,
-    "env_var": "ROBOFLOW_API_KEY"
+    "env_var": "ROBOFLOW_API_KEY",
+    "version_number": 1
   },
   "original_labels": [
     "dry",
@@ -27,5 +28,5 @@
     "target_label": "Tetranychus Urticae",
     "status": "LABEL_AND_SPLIT_AUDIT_REQUIRED"
   },
-  "notes": "Roboflow Universe reports ~2.8k images and CC BY 4.0. Useful because the target appears in strawberry-context images, but dataset description/provenance is sparse. Do not mark APPROVED until exact version, split, duplicate/augmentation provenance, and class counts are audited."
+  "notes": "Pinned Roboflow Universe v1 acquisition candidate. Universe reports ~2.8k strawberry-context images and CC BY 4.0. Exact downloaded split/class/origin-key duplication and augmentation provenance must be audited before training approval."
 }
