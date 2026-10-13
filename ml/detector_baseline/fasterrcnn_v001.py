@@ -461,7 +461,7 @@ def train(args) -> int:
             log("EARLY_STOP validation metric did not improve")
             break
 
-    checkpoint = torch.load(args.output / "best.pt", map_location="cpu")
+    checkpoint = torch.load(args.output / "best.pt", map_location="cpu", weights_only=False)
     summary = {
         "status": "STRAWBERRY_DETECTOR_V001_TRAINED",
         "model_name": MODEL_NAME,
@@ -499,7 +499,7 @@ def evaluate_test(args) -> int:
         )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    checkpoint = torch.load(args.checkpoint, map_location="cpu")
+    checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     if checkpoint.get("audit_sha256") != _sha256(args.audit):
         raise DetectorBaselineError("checkpoint/audit provenance mismatch")
 
