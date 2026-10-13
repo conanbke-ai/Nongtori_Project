@@ -1,3 +1,16 @@
+## Strawberry detector baseline V001 validation freeze — 2026-10-13
+
+- Local GPU training completed on RTX 4060 with early stopping at epoch 17/20.
+- Best checkpoint selected at epoch 12 using validation-only policy.
+- Frozen validation metrics:
+  - mAP50: 0.8318
+  - mAP50-95: 0.5296
+  - Precision@0.5: 0.8630
+  - Recall@0.5: 0.8400
+- Training loss at epoch 12: 0.2346.
+- Selection is now frozen for V001. No hyperparameter/model/threshold changes may use official test results.
+- Next gate: explicit one-time test evaluation of the frozen epoch-12 checkpoint.
+
 ## Strawberry detector baseline V001 — 2026-10-13
 
 - Workstream: `feat/strawberry-detector-baseline-v001`.
