@@ -4,7 +4,7 @@
   "provider": "roboflow",
   "title": "TSSM Detection v2",
   "original_url": "https://universe.roboflow.com/gent-lab/tssm-detection-v2",
-  "version_or_revision": "v2",
+  "version_or_revision": "210",
   "license": "CC-BY-4.0",
   "license_checked_at": "2026-10-13",
   "redistribution_allowed": "allowed_with_attribution",
@@ -16,37 +16,22 @@
     "requires_api_key": true,
     "env_var": "ROBOFLOW_API_KEY",
     "official_code_url": "https://github.com/mswiseman/miteVision",
-    "test_set_doi": "10.5281/zenodo.16945379"
+    "test_set_doi": "10.5281/zenodo.16945379",
+    "version_number": 210
   },
   "original_labels": [
     "Adult_female",
-    "Adult_male",
-    "Aphid",
-    "Dead_mite",
-    "Frass",
-    "Hatching_egg",
     "Immature",
-    "Looper_egg",
-    "Predatory_mite",
-    "Predatory_mite_egg",
-    "Psyllobora_egg",
-    "Scale",
-    "Stethorus_egg",
-    "Stethorus_larva",
-    "Thrips",
     "Viable_egg"
   ],
   "nongtori_mapping": {
     "role": "TSSM_MORPHOLOGY_AND_LIFE_STAGE_REFERENCE",
     "tssm_positive_labels": [
       "Adult_female",
-      "Adult_male",
       "Immature",
-      "Viable_egg",
-      "Hatching_egg",
-      "Dead_mite"
+      "Viable_egg"
     ],
-    "status": "HOST_DOMAIN_AND_LABEL_COLLAPSE_AUDIT_REQUIRED"
+    "status": "PINNED_V210_AUDIT_REQUIRED"
   },
-  "notes": "Gent Lab / miteVision public dataset. Official project reports >1,500 annotated images and ~32,000 instances across multiple host species. Strong TSSM morphology reference but not strawberry-field equivalent; field acceptance must remain separate."
+  "notes": "Pinned to Gent Lab TSSM Detection v2 dataset version 210, the official miteVision three-class configuration (Adult_female, Immature, Viable_egg). Public source is a morphology/host-diversity reference, not strawberry-field acceptance data."
 }
