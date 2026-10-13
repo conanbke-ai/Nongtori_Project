@@ -1,3 +1,22 @@
+## Mite field detector baseline V001 — 2026-10-13
+
+- Workstream: `feat/mite-detector-baseline-v001`.
+- Baseline purpose: establish a fixed public strawberry-context detection reference before any morphology-transfer experiment.
+- Dataset: `MITE-PUBLIC-FIELD-CONTEXT-V001` only.
+- Model: torchvision `fasterrcnn_mobilenet_v3_large_fpn`.
+- Classes remain explicit instead of collapsing non-mite annotations into unlabeled background:
+  - Tetranychus Urticae
+  - dry
+  - gray_mold
+  - scorch
+- Primary checkpoint selection metric: Tetranychus Urticae mAP50-95.
+- Tie-breakers: mite mAP50, then mite recall@0.5.
+- Supporting metric: macro mAP50 / mAP50-95 across all four classes.
+- Test split remains locked during training and is evaluated only after the validation-selected checkpoint is frozen.
+- `MITE-PUBLIC-MORPHOLOGY-V001` is not mixed into V001. A later successor may test morphology pretraining/transfer against this fixed baseline.
+- Public test metrics remain development evidence only and cannot establish Nongtori field readiness.
+- Local GPU command: `python -m ml.detector_baseline.mite_field_v001 train`.
+
 ## Mite public snapshots V001 freeze — 2026-10-13
 
 - `MITE-PUBLIC-FIELD-CONTEXT-V001`
