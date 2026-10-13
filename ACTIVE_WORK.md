@@ -1,3 +1,16 @@
+## Strawberry detector baseline V001 — 2026-10-13
+
+- Workstream: `feat/strawberry-detector-baseline-v001`.
+- Input gate: Strawberry detector data V001 frozen at 247 images / 1,083 boxes / source split train 172, validation 49, test 26.
+- Baseline model: torchvision `fasterrcnn_mobilenet_v3_large_fpn`, single foreground class `strawberry`.
+- Selection policy: validation only. Official test remains `LOCKED_NOT_EVALUATED` during training/model selection.
+- Metrics: mAP50, mAP50-95, precision@0.5, recall@0.5.
+- Training blocks CPU by default when CUDA is unavailable; `--allow-cpu` is explicit override.
+- Best checkpoint selection key: validation mAP50-95 → mAP50 → recall@0.5.
+- Artifacts: `artifacts/detector/fasterrcnn-v001/best.pt`, `metrics.jsonl`, `run.log`, `summary.json`.
+- Test evaluation is a separate explicit command and must not feed back into model selection.
+- Local GPU training is required before any performance PASS claim.
+
 ## Strawberry detector data gate V001 — 2026-10-12
 
 - New workstream: `feat/strawberry-detector-data-v001`.
