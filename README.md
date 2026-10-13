@@ -210,3 +210,26 @@ python -m ml.detector_baseline.fasterrcnn_v001 evaluate-test
 ```
 
 Training output defaults to `artifacts/detector/fasterrcnn-v001/`.
+
+
+## Mite public dataset acquisition
+
+Public mite/pest datasets are downloaded through the registered Roboflow source records. Keep the real API key only in `.env.local`:
+
+```text
+ROBOFLOW_API_KEY=...
+```
+
+Install the downloader dependency once:
+
+```bash
+python -m pip install roboflow
+```
+
+Then download and audit both pinned sources:
+
+```bash
+python -m ml.data_pipeline.cli mite-public-acquire-audit
+```
+
+The audit is written under `data/audit/mite-public-v001/`. Public datasets remain separate from Nongtori field acceptance data.
