@@ -53,6 +53,13 @@ class StrawberryDetectorBaselineContractTests(unittest.TestCase):
             with self.assertRaises(DetectorBaselineError):
                 _load_audit(path)
 
+    def test_dataset_class_is_module_level_pickle_safe(self):
+        import pickle
+        from ml.detector_baseline.fasterrcnn_v001 import StrawberryDetectionDataset
+        payload = pickle.dumps(StrawberryDetectionDataset)
+        restored = pickle.loads(payload)
+        self.assertIs(restored, StrawberryDetectionDataset)
+
     def test_ap_uses_interpolated_precision(self):
         ap = _ap_from_pr(
             recalls=[0.25, 0.50, 0.75, 1.0],
