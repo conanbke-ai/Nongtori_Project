@@ -68,7 +68,8 @@ DISCOVERED
 | DATA-QUAL-001 | ICRA 2022 strawberry picking/weight dataset | RGB/RGB-D weight architecture/reference | CC-BY-NC-SA, commercial 금지 | NON_COMMERCIAL_ONLY |
 | DATA-QUAL-002 | UC Davis Dryad Strawberry Database | RGB weight/geometry pretraining 후보 | Dryad CC0, commercial use allowed | REVIEW_REQUIRED |
 | DATA-DIS-001 | Strawberry disease multimodal public dataset 후보 | 질병 보조 | 비상업 조건 재확인 | REVIEW_REQUIRED |
-| DATA-PEST-001 | Strawberry pest public dataset 후보 | 병해충 label audit | 원 출처/label/license audit 필요 | REVIEW_REQUIRED |
+| DATA-PEST-001 | Roboflow / Strawberry Dataset | 딸기 field-context 병해충 탐지 후보 | CC BY 4.0 / API key acquisition | REVIEW_REQUIRED |
+| DATA-PEST-002 | Gent Lab / TSSM Detection v2 + miteVision | 응애 morphology/life-stage reference | CC BY 4.0 / API key acquisition | REVIEW_REQUIRED |
 | DATA-FIELD-001 | NONGTORI_FIELD | 실제 현장 사진/영상 | PRIVATE | IN_USE |
 | MODEL-TRACK-001 | ByteTrack | MOT baseline | 공식 repo/license audit | REVIEW_REQUIRED |
 | MODEL-TRACK-002 | BoT-SORT | moving-camera MOT candidate | 공식 repo/license audit | REVIEW_REQUIRED |
@@ -210,3 +211,21 @@ Git에 저장하지 않음:
 - 재배포 제한 데이터
 - 실제 농장 private 원본
 - 대용량 checkpoint/weights
+
+
+### DATA-PEST-001
+
+- Role: `STRAWBERRY_FIELD_CONTEXT_PEST_DETECTION_CANDIDATE`
+- Target label: `Tetranychus Urticae`
+- Usefulness: strawberry-context pest imagery.
+- Gate before training: exact downloadable version, class counts, split integrity, duplicate/augmentation provenance.
+- This source alone is not accepted as field validation.
+
+### DATA-PEST-002
+
+- Role: `TSSM_MORPHOLOGY_AND_LIFE_STAGE_REFERENCE`
+- Official project reference: Gent Lab / miteVision.
+- Multiple mite/life-stage and non-target arthropod labels are preserved at source level.
+- Nongtori may later define an explicit TSSM-positive label-collapse policy, but must not silently collapse labels before an audit snapshot.
+- Host/domain mismatch remains material; this source is not a substitute for strawberry-field acceptance.
+
