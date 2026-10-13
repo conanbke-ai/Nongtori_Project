@@ -1,3 +1,16 @@
+## Mite public data source gate V001 — 2026-10-13
+
+- Workstream: `feat/mite-public-data-audit-v001`.
+- Goal: progress the main Nongtori pest-scouting ML workstream without waiting for unfinished field-photo organization.
+- Registered two public-source roles instead of collapsing them into one training pool:
+  - `DATA-PEST-001`: strawberry field-context pest detection candidate.
+  - `DATA-PEST-002`: TSSM morphology/life-stage reference.
+- Both are currently registered as CC-BY-4.0 / attribution-required commercial-use candidates, but remain `REVIEW_REQUIRED` until exact downloaded versions are audited.
+- Field readiness is explicitly separate: public sources alone cannot establish field-ready mite scouting.
+- New command: `python -m ml.data_pipeline.cli mite-public-source-audit`.
+- Audit gate verifies license/commercial-use role separation and acquisition requirements before any training snapshot is created.
+- Next gate after this PR: automated acquisition + exact split/class/duplicate/augmentation audit for both sources, then freeze a mite-training candidate snapshot.
+
 ## Strawberry detector baseline V001 test freeze — 2026-10-13
 
 - Frozen checkpoint: epoch 12 selected on validation only.
