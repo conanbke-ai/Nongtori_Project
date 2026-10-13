@@ -18,6 +18,7 @@ SOURCES = ("DATA-PEST-001", "DATA-PEST-002")
 SPLIT_ALIASES = {"train": "train", "valid": "validation", "val": "validation", "validation": "validation", "test": "test"}
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 RF_SUFFIX_RE = re.compile(r"\.rf\.[0-9a-fA-F]+$")
+BOUNDARY_EPSILON = 1e-6
 
 
 class MitePublicAcquisitionError(RuntimeError):
@@ -39,41 +40,68 @@ def _origin_key(path: Path) -> str:
 
 
 def _find_data_yaml(root: Path) -> Path | None:
-    candidates = sorted(root.rglob("data.yaml"))
+    candidates = []
+    for pattern in ("data.yaml", "data.yml", "dataset.yaml", "dataset.yml"):
+        candidates.extend(root.rglob(pattern))
+    candidates = sorted(set(candidates))
     return candidates[0] if candidates else None
 
 
 def _parse_names(data_yaml: Path | None) -> dict[int, str]:
     if data_yaml is None:
         return {}
+
     text = data_yaml.read_text(encoding="utf-8-sig")
+
+    try:
+        import yaml
+        payload = yaml.safe_load(text) or {}
+        raw_names = payload.get("names")
+        if isinstance(raw_names, list):
+            return {i: str(name) for i, name in enumerate(raw_names)}
+        if isinstance(raw_names, dict):
+            return {int(k): str(v) for k, v in raw_names.items()}
+    except Exception:
+        pass
+
     lines = text.splitlines()
     for idx, line in enumerate(lines):
         stripped = line.strip()
-        if stripped.startswith("names:"):
-            value = stripped.split(":", 1)[1].strip()
-            if value:
-                try:
-                    parsed = ast.literal_eval(value)
-                    if isinstance(parsed, list):
-                        return {i: str(name) for i, name in enumerate(parsed)}
-                    if isinstance(parsed, dict):
-                        return {int(k): str(v) for k, v in parsed.items()}
-                except Exception:
-                    pass
-            names: dict[int, str] = {}
-            for child in lines[idx + 1 :]:
-                if not child.startswith((" ", "\t")):
-                    break
-                item = child.strip()
-                if ":" not in item:
-                    continue
-                key, val = item.split(":", 1)
-                try:
-                    names[int(key.strip())] = val.strip().strip("'\"")
-                except ValueError:
-                    continue
-            return names
+        if not stripped.startswith("names:"):
+            continue
+
+        value = stripped.split(":", 1)[1].strip()
+        if value:
+            try:
+                parsed = ast.literal_eval(value)
+                if isinstance(parsed, list):
+                    return {i: str(name) for i, name in enumerate(parsed)}
+                if isinstance(parsed, dict):
+                    return {int(k): str(v) for k, v in parsed.items()}
+            except Exception:
+                # YAML inline list can contain unquoted names. Parse conservatively.
+                if value.startswith("[") and value.endswith("]"):
+                    items = [
+                        item.strip().strip("'\"")
+                        for item in value[1:-1].split(",")
+                        if item.strip()
+                    ]
+                    return {i: item for i, item in enumerate(items)}
+
+        names: dict[int, str] = {}
+        for child in lines[idx + 1 :]:
+            if not child.startswith((" ", "\t")):
+                break
+            item = child.strip()
+            if ":" not in item:
+                continue
+            key, val = item.split(":", 1)
+            try:
+                names[int(key.strip())] = val.strip().strip("'\"")
+            except ValueError:
+                continue
+        return names
+
     return {}
 
 
@@ -164,11 +192,28 @@ def audit_roboflow_yolo_dataset(
                         "error": "YOLO_PARSE_ERROR",
                     })
                     continue
-                if any(v < 0.0 or v > 1.0 for v in coords) or coords[2] <= 0 or coords[3] <= 0:
+                xc, yc, bw, bh = coords
+                x1 = xc - bw / 2.0
+                y1 = yc - bh / 2.0
+                x2 = xc + bw / 2.0
+                y2 = yc + bh / 2.0
+                if (
+                    bw <= 0
+                    or bh <= 0
+                    or xc < -BOUNDARY_EPSILON
+                    or yc < -BOUNDARY_EPSILON
+                    or xc > 1.0 + BOUNDARY_EPSILON
+                    or yc > 1.0 + BOUNDARY_EPSILON
+                    or x1 < -BOUNDARY_EPSILON
+                    or y1 < -BOUNDARY_EPSILON
+                    or x2 > 1.0 + BOUNDARY_EPSILON
+                    or y2 > 1.0 + BOUNDARY_EPSILON
+                ):
                     parse_errors.append({
                         "label": str(label_path.relative_to(root)),
                         "line": line_no,
                         "error": "INVALID_NORMALIZED_BOX",
+                        "raw": line,
                     })
                     continue
                 class_name = names.get(class_id, f"CLASS_{class_id}")
@@ -198,7 +243,14 @@ def audit_roboflow_yolo_dataset(
     expected_coverage = expected_labels.issubset(set(names.values())) if names else False
 
     status = "MITE_PUBLIC_DATASET_AUDITED"
-    if missing_labels or parse_errors or cross_split_exact or cross_split_origin:
+    if (
+        missing_labels
+        or parse_errors
+        or cross_split_exact
+        or cross_split_origin
+        or not names
+        or not expected_coverage
+    ):
         status = "MITE_PUBLIC_DATASET_REVIEW_REQUIRED"
 
     manifest_path = output_dir / "image-manifest.csv"
@@ -230,6 +282,11 @@ def audit_roboflow_yolo_dataset(
         "exact_cross_split_duplicate_count": len(cross_split_exact),
         "origin_key_cross_split_count": len(cross_split_origin),
         "augmented_or_reexported_origin_group_count": augmented_origin_groups,
+        "split_reuse_policy": (
+            "DO_NOT_USE_OFFICIAL_SPLIT_FOR_NONGTORI_ACCEPTANCE"
+            if cross_split_exact or cross_split_origin
+            else "SOURCE_SPLIT_ELIGIBLE_PENDING_REVIEW"
+        ),
         "exceptions": {
             "missing_label_examples": missing_labels[:30],
             "parse_error_examples": parse_errors[:30],
