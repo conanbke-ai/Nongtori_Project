@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .models import DownloadResult, SourceRecord
-from .providers import AIHubAdapter, DirectHttpAdapter, HuggingFaceAdapter, KaggleAdapter, MendeleyAdapter
+from .providers import AIHubAdapter, DirectHttpAdapter, HuggingFaceAdapter, KaggleAdapter, MendeleyAdapter, RoboflowAdapter
 
 
 class DatasetDownloader:
@@ -14,6 +14,7 @@ class DatasetDownloader:
             "huggingface": HuggingFaceAdapter(),
             "kaggle": KaggleAdapter(),
             "aihub": AIHubAdapter(),
+            "roboflow": RoboflowAdapter(),
         }
 
     def download(self, source: SourceRecord, raw_root: Path) -> DownloadResult:
