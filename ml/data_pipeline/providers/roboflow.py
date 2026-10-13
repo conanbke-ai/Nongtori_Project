@@ -62,7 +62,7 @@ class RoboflowAdapter(ProviderAdapter):
         rf = Roboflow(api_key=api_key)
         project = rf.workspace(workspace).project(project_slug)
         version = project.version(version_number)
-        dataset = version.download("yolov8", location=str(output_dir))
+        dataset = version.download("yolov8", location=str(output_dir), overwrite=True)
 
         root = Path(getattr(dataset, "location", output_dir))
         if not root.exists():
