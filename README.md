@@ -185,3 +185,28 @@ data/audit/strawberry-detector-v001/
 ```
 
 The gate validates image/label pairing and YOLO boxes before any detector training. Field-farm images remain a separate later fine-tuning and acceptance cohort.
+
+
+## Strawberry detector baseline V001
+
+After `STRAWBERRY_DETECTOR_DATA_READY`, train the fixed one-class baseline:
+
+```bash
+python -m ml.detector_baseline.fasterrcnn_v001 train
+```
+
+The baseline uses torchvision Faster R-CNN MobileNetV3-FPN and preserves the frozen source split:
+
+```text
+train      172
+validation  49
+test        26
+```
+
+Validation selects the best checkpoint. Test is locked during training and is evaluated only with an explicit final command:
+
+```bash
+python -m ml.detector_baseline.fasterrcnn_v001 evaluate-test
+```
+
+Training output defaults to `artifacts/detector/fasterrcnn-v001/`.

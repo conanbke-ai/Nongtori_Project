@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - 'ml/data_pipeline/**'
+      - 'ml/detector_baseline/**'
       - 'tests/test_*.py'
       - '.github/workflows/data-pipeline-tests.yml'
   push:
     branches: [main]
     paths:
       - 'ml/data_pipeline/**'
+      - 'ml/detector_baseline/**'
       - 'tests/test_*.py'
       - '.github/workflows/data-pipeline-tests.yml'
 
@@ -22,7 +24,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile
-        run: python -m compileall -q ml/data_pipeline tests
+        run: python -m compileall -q ml/data_pipeline ml/detector_baseline tests
       - name: Unit tests
         run: python -m unittest discover -s tests -p 'test_*.py'
       - name: Registry CLI smoke

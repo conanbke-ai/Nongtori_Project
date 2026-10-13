@@ -1,3 +1,43 @@
+## Strawberry detector baseline V001 test freeze — 2026-10-13
+
+- Frozen checkpoint: epoch 12 selected on validation only.
+- Official test evaluated once; test results are report-only and prohibited from model/threshold/hyperparameter selection.
+- Test cohort: 26 images / 104 GT boxes.
+- Frozen test metrics:
+  - mAP50: 0.713840
+  - mAP50-95: 0.435940
+  - Precision@0.5: 0.817204
+  - Recall@0.5: 0.730769
+- Validation → test gap is retained as generalization evidence; no V001 retuning is allowed from this test result.
+- V001 role: public-data strawberry localization baseline, not field-ready detector.
+- Next detector step requires independent field/external acceptance or a successor dataset/snapshot; do not tune against the frozen test.
+
+## Strawberry detector baseline V001 validation freeze — 2026-10-13
+
+- Local GPU training completed on RTX 4060 with early stopping at epoch 17/20.
+- Best checkpoint selected at epoch 12 using validation-only policy.
+- Frozen validation metrics:
+  - mAP50: 0.8318
+  - mAP50-95: 0.5296
+  - Precision@0.5: 0.8630
+  - Recall@0.5: 0.8400
+- Training loss at epoch 12: 0.2346.
+- Selection is now frozen for V001. No hyperparameter/model/threshold changes may use official test results.
+- Next gate: explicit one-time test evaluation of the frozen epoch-12 checkpoint.
+
+## Strawberry detector baseline V001 — 2026-10-13
+
+- Workstream: `feat/strawberry-detector-baseline-v001`.
+- Input gate: Strawberry detector data V001 frozen at 247 images / 1,083 boxes / source split train 172, validation 49, test 26.
+- Baseline model: torchvision `fasterrcnn_mobilenet_v3_large_fpn`, single foreground class `strawberry`.
+- Selection policy: validation only. Official test remains `LOCKED_NOT_EVALUATED` during training/model selection.
+- Metrics: mAP50, mAP50-95, precision@0.5, recall@0.5.
+- Training blocks CPU by default when CUDA is unavailable; `--allow-cpu` is explicit override.
+- Best checkpoint selection key: validation mAP50-95 → mAP50 → recall@0.5.
+- Artifacts: `artifacts/detector/fasterrcnn-v001/best.pt`, `metrics.jsonl`, `run.log`, `summary.json`.
+- Test evaluation is a separate explicit command and must not feed back into model selection.
+- Local GPU training is required before any performance PASS claim.
+
 ## Strawberry detector data gate V001 — 2026-10-12
 
 - New workstream: `feat/strawberry-detector-data-v001`.
