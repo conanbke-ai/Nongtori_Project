@@ -26,7 +26,7 @@ def _lazy_imports():
     try:
         import torch
         from PIL import Image
-        from torch.utils.data import DataLoader, Dataset
+        from torch.utils.data import DataLoader
         from torchvision.models.detection import (
             FasterRCNN_MobileNet_V3_Large_FPN_Weights,
             fasterrcnn_mobilenet_v3_large_fpn,
@@ -43,7 +43,6 @@ def _lazy_imports():
         "torch": torch,
         "Image": Image,
         "DataLoader": DataLoader,
-        "Dataset": Dataset,
         "Weights": FasterRCNN_MobileNet_V3_Large_FPN_Weights,
         "builder": fasterrcnn_mobilenet_v3_large_fpn,
         "FastRCNNPredictor": FastRCNNPredictor,
@@ -107,44 +106,54 @@ def _parse_yolo(label_path: Path, width: int, height: int) -> list[list[float]]:
     return boxes
 
 
+class StrawberryDetectionDataset:
+    """Pickle-safe dataset for Windows spawn-based DataLoader workers."""
+
+    def __init__(self, root: Path, split: str):
+        self.root = Path(root)
+        self.split = split
+        self.images = _image_files(self.root, split)
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+        try:
+            import torch
+            from PIL import Image
+            from torchvision.transforms.functional import pil_to_tensor
+        except ImportError as exc:
+            raise DetectorBaselineError(
+                "Dataset loading requires torch, torchvision and Pillow."
+            ) from exc
+
+        image_path = self.images[index]
+        label_path = (
+            self.root / "labels" / self.split / f"{image_path.stem}.txt"
+        )
+        with Image.open(image_path) as pil:
+            pil = pil.convert("RGB")
+            width, height = pil.size
+            image = pil_to_tensor(pil).float().div(255.0)
+
+        boxes = _parse_yolo(label_path, width, height)
+        box_tensor = torch.tensor(boxes, dtype=torch.float32).reshape(-1, 4)
+        target = {
+            "boxes": box_tensor,
+            "labels": torch.ones((len(boxes),), dtype=torch.int64),
+            "image_id": torch.tensor([index], dtype=torch.int64),
+            "area": (
+                (box_tensor[:, 2] - box_tensor[:, 0])
+                * (box_tensor[:, 3] - box_tensor[:, 1])
+            ),
+            "iscrowd": torch.zeros((len(boxes),), dtype=torch.int64),
+        }
+        return image, target
+
+
 def build_dataset_class(mods):
-    torch = mods["torch"]
-    Image = mods["Image"]
-    Dataset = mods["Dataset"]
-    pil_to_tensor = mods["pil_to_tensor"]
-
-    class StrawberryDetectionDataset(Dataset):
-        def __init__(self, root: Path, split: str):
-            self.root = Path(root)
-            self.split = split
-            self.images = _image_files(self.root, split)
-
-        def __len__(self):
-            return len(self.images)
-
-        def __getitem__(self, index):
-            image_path = self.images[index]
-            label_path = (
-                self.root / "labels" / self.split / f"{image_path.stem}.txt"
-            )
-            with Image.open(image_path) as pil:
-                pil = pil.convert("RGB")
-                width, height = pil.size
-                image = pil_to_tensor(pil).float().div(255.0)
-            boxes = _parse_yolo(label_path, width, height)
-            box_tensor = torch.tensor(boxes, dtype=torch.float32).reshape(-1, 4)
-            target = {
-                "boxes": box_tensor,
-                "labels": torch.ones((len(boxes),), dtype=torch.int64),
-                "image_id": torch.tensor([index], dtype=torch.int64),
-                "area": (
-                    (box_tensor[:, 2] - box_tensor[:, 0])
-                    * (box_tensor[:, 3] - box_tensor[:, 1])
-                ),
-                "iscrowd": torch.zeros((len(boxes),), dtype=torch.int64),
-            }
-            return image, target
-
+    # Kept as a compatibility seam for train/eval construction.
+    # The returned class is module-level so Windows multiprocessing can pickle it.
     return StrawberryDetectionDataset
 
 
