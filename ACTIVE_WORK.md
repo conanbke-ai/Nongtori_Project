@@ -1,3 +1,23 @@
+## Mite public snapshots V001 freeze — 2026-10-13
+
+- `MITE-PUBLIC-FIELD-CONTEXT-V001`
+  - source: DATA-PEST-001
+  - 2,844 images
+  - 9,179 valid boxes
+  - 7 invalid zero-width boxes excluded from copied snapshot labels; source annotations remain untouched
+  - source split preserved: train 1,993 / validation 427 / test 424
+  - manifest SHA-256: `cd0ad4b7b960d76aad253c1e58033bcd99f6ef349cd495c46114ccb4e484796f`
+- `MITE-PUBLIC-MORPHOLOGY-V001`
+  - source: DATA-PEST-002 v210
+  - 1,249 images / 17,364 boxes
+  - official Roboflow split is not reused for Nongtori acceptance because source audit found cross-split exact/origin overlap
+  - reassigned by connected origin-key + exact-SHA256 atomic groups using deterministic 70/15/15 policy
+  - resulting split: train 854 / validation 203 / test 192
+  - manifest SHA-256: `ee85788e80c7874fc0ffd5ac3e0b174990172811b5e8c830d42559abe5013143`
+- Public source roles remain separate; they are not merged into one canonical dataset.
+- Public snapshots are development/training assets only. Nongtori field acceptance remains `NOT_ESTABLISHED`.
+- Next gate: baseline detector training on the frozen public snapshots, with field data reserved for later independent acceptance/calibration.
+
 ## Mite public acquisition/audit V001 — 2026-10-13
 
 - Workstream: `feat/mite-public-acquisition-v001`.
