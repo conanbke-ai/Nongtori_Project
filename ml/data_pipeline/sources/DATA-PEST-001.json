@@ -1,0 +1,31 @@
+{
+  "source_id": "DATA-PEST-001",
+  "source_type": "dataset",
+  "provider": "roboflow",
+  "title": "Strawberry Dataset",
+  "original_url": "https://universe.roboflow.com/ditastrawberry-jjmk0/strawberry-7pzfi",
+  "version_or_revision": "1",
+  "license": "CC-BY-4.0",
+  "license_checked_at": "2026-10-13",
+  "redistribution_allowed": "allowed_with_attribution",
+  "commercial_use": "allowed_with_attribution",
+  "status": "REVIEW_REQUIRED",
+  "retrieval": {
+    "workspace": "ditastrawberry-jjmk0",
+    "project": "strawberry-7pzfi",
+    "requires_api_key": true,
+    "env_var": "ROBOFLOW_API_KEY"
+  },
+  "original_labels": [
+    "dry",
+    "gray_mold",
+    "scorch",
+    "Tetranychus Urticae"
+  ],
+  "nongtori_mapping": {
+    "role": "STRAWBERRY_FIELD_CONTEXT_PEST_DETECTION_CANDIDATE",
+    "target_label": "Tetranychus Urticae",
+    "status": "LABEL_AND_SPLIT_AUDIT_REQUIRED"
+  },
+  "notes": "Roboflow Universe reports ~2.8k images and CC BY 4.0. Useful because the target appears in strawberry-context images, but dataset description/provenance is sparse. Do not mark APPROVED until exact version, split, duplicate/augmentation provenance, and class counts are audited."
+}
