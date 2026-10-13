@@ -41,6 +41,7 @@ from .strawberry_detector_acquisition import acquire_and_materialize_strawberry_
 from .field_audit import audit_field_csv
 from .mite_public_source_audit import audit_mite_public_sources
 from .mite_public_acquisition import acquire_and_audit_mite_public_sources, MitePublicAcquisitionError
+from .mite_public_snapshot import build_mite_public_snapshots
 from .incremental import incremental_scan_csv
 from .normalize import normalize_external_csv, normalize_field_csv
 from .registry import DatasetRegistry
@@ -77,6 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("dyson-annotation-join-audit"); p.add_argument("--snapshot-dir", type=Path, default=Path("data/snapshots/DYSON-REFERENCE-V001")); p.add_argument("--annotation-root", type=Path, default=Path("data/external/icra-dyson-annotations/extracted")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson-annotations"))
     p = sub.add_parser("dyson-materialize-berry-crops"); p.add_argument("--snapshot-dir", type=Path, default=Path("data/snapshots/DYSON-REFERENCE-V001")); p.add_argument("--raw-root", type=Path, default=Path("data/external/icra-dyson")); p.add_argument("--join-audit-root", type=Path, default=Path("data/audit/icra-dyson-annotations")); p.add_argument("--output-root", type=Path, default=Path("data/external/icra-dyson-berry-crops")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/icra-dyson-berry-crops"))
     p = sub.add_parser("strawberry-detector-acquire"); p.add_argument("--download-root", type=Path, default=Path("data/external/DATA-RIP-001/1")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/strawberry-detector-v001"))
+    p = sub.add_parser("mite-public-snapshot"); p.add_argument("--audit-summary", type=Path, default=Path("data/audit/mite-public-v001/summary.json")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/mite-public-v001")); p.add_argument("--snapshot-root", type=Path, default=Path("data/snapshots"))
     p = sub.add_parser("mite-public-acquire-audit"); p.add_argument("--raw-root", type=Path, default=Path("data/external")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/mite-public-v001"))
     p = sub.add_parser("mite-public-source-audit"); p.add_argument("--output", type=Path, default=Path("data/audit/mite-public-sources-v001/source-audit.json"))
     p = sub.add_parser("strawberry-detector-prepare"); p.add_argument("--source-root", type=Path, default=Path("data/external/DATA-RIP-001/1/materialized")); p.add_argument("--audit-root", type=Path, default=Path("data/audit/strawberry-detector-v001")); p.add_argument("--seed", default="strawberry-detector-v001"); p.add_argument("--train-ratio", type=float, default=0.80); p.add_argument("--val-ratio", type=float, default=0.10); p.add_argument("--test-ratio", type=float, default=0.10)
@@ -397,6 +399,10 @@ def main(argv: list[str] | None = None) -> int:
         except DysonPipelineError as exc:
             print(json.dumps({"status": "DYSON_BERRY_CROP_MATERIALIZATION_BLOCKED", "error": str(exc)}, ensure_ascii=False, indent=2))
             return 3
+    if args.command == "mite-public-snapshot":
+        report = build_mite_public_snapshots(audit_summary=args.audit_summary, audit_root=args.audit_root, snapshot_root=args.snapshot_root)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0
     if args.command == "mite-public-acquire-audit":
         try:
             report = acquire_and_audit_mite_public_sources(source_dir=args.sources, raw_root=args.raw_root, audit_root=args.audit_root)
