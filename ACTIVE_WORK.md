@@ -1,3 +1,19 @@
+## Mite field detector V001 validation freeze — 2026-10-14
+
+- Training completed locally on CUDA / RTX 4060.
+- Early stopping triggered at epoch 17 after 5 validation non-improvements.
+- Best checkpoint selected at epoch 12 using validation only.
+- Frozen validation metrics:
+  - Tetranychus Urticae mAP50: 0.8536
+  - Tetranychus Urticae mAP50-95: 0.6840
+  - Precision@0.5: 0.8021
+  - Recall@0.5: 0.7973
+  - Macro mAP50-95: 0.7057
+- Selection metric remained mite mAP50-95; test remained locked throughout training.
+- V001 checkpoint is now frozen. No model/hyperparameter/threshold selection may use the official public test split.
+- Next gate: one-time test evaluation of the frozen epoch-12 checkpoint.
+- Field readiness remains NOT_ESTABLISHED; public test remains development evidence only.
+
 ## Mite field detector baseline V001 — 2026-10-13
 
 - Workstream: `feat/mite-detector-baseline-v001`.
