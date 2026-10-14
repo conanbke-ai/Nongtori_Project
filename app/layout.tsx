@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import '@/app/ui/tori/tokens.css';
-import { ToriCatPawCursor } from '@/app/ui/tori/ToriCatPawCursor';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://seolhyang-mite-scout.conanbke.chatgpt.site'),
@@ -25,7 +24,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
-      <body>{children}<ToriCatPawCursor /></body>
+      <body>{children}</body>
     </html>
   );
 }
