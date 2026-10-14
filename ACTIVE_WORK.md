@@ -1,3 +1,17 @@
+## Mite morphology transfer V002 — 2026-10-14
+
+- Workstream: `feat/mite-morphology-transfer-v002`.
+- Purpose: test whether morphology-specific pretraining improves the frozen V001 field-context baseline.
+- Stage 1: pretrain Faster R-CNN on `MITE-PUBLIC-MORPHOLOGY-V001` using only morphology train/validation; morphology test remains locked.
+- Morphology classes are frozen to Gent Lab v210: Adult_female / Immature / Viable_egg.
+- Stage 2: initialize the 4-class field detector from the morphology checkpoint while deliberately reinitializing only `roi_heads.box_predictor.*`; backbone, RPN, ROI feature extractor and box head transfer.
+- Fine-tune on `MITE-PUBLIC-FIELD-CONTEXT-V001` train and select on field validation only.
+- Primary selection metric remains Tetranychus Urticae mAP50-95, then mite mAP50, then mite recall@0.5.
+- Frozen V001 validation reference: mite mAP50-95 0.6840, mite mAP50 0.8536, Precision 0.8021, Recall 0.7973, macro mAP50-95 0.7057.
+- V001 public test is not used for V002 selection. V002 test is not implemented/opened until validation result is reviewed and frozen.
+- Local command: `python -m ml.detector_baseline.mite_morph_transfer_v002 train`.
+- Field readiness remains NOT_ESTABLISHED.
+
 ## Mite field detector V001 test freeze — 2026-10-14
 
 - Frozen checkpoint: epoch 12, selected on validation only.
