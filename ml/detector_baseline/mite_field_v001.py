@@ -6,6 +6,7 @@ import hashlib
 import json
 import random
 import time
+import warnings
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -144,6 +145,7 @@ class MiteFieldContextDataset:
         row = self.rows[index]
         image_path = self.dataset_root / Path(row["image"])
         label_path = self.snapshot_dir / "labels" / Path(row["snapshot_label"])
+        warnings.filterwarnings("ignore", category=Image.DecompressionBombWarning)
         with Image.open(image_path) as pil:
             pil = pil.convert("RGB")
             width, height = pil.size
@@ -436,13 +438,14 @@ def train(args) -> int:
             stale += 1
 
         log(
-            f"EPOCH {epoch:02d}/{args.epochs} loss={row['train_loss']:.4f} "
-            f"mite_mAP50={metrics['mite_map50']:.4f} "
-            f"mite_mAP50-95={metrics['mite_map50_95']:.4f} "
-            f"mite_P={metrics['mite_precision_at_0_5']:.4f} "
-            f"mite_R={metrics['mite_recall_at_0_5']:.4f} "
-            f"macro_mAP50-95={metrics['macro_map50_95']:.4f} "
-            f"best={best_epoch:02d} stale={stale}/{args.patience}"
+            f"E{epoch:02d}/{args.epochs} | "
+            f"loss {row['train_loss']:.4f} | "
+            f"mite AP50 {metrics['mite_map50']:.4f} | "
+            f"AP50-95 {metrics['mite_map50_95']:.4f} | "
+            f"P {metrics['mite_precision_at_0_5']:.4f} | "
+            f"R {metrics['mite_recall_at_0_5']:.4f} | "
+            f"macro {metrics['macro_map50_95']:.4f} | "
+            f"best E{best_epoch:02d} | stale {stale}/{args.patience}"
         )
         if stale >= args.patience:
             log("EARLY_STOP validation metric did not improve")
