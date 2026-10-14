@@ -1,3 +1,60 @@
+## Mite field detector V001 test freeze — 2026-10-14
+
+- Frozen checkpoint: epoch 12, selected on validation only.
+- Official public test evaluated once; selection from test is prohibited.
+- Test cohort: 424 images / 1,423 GT boxes.
+- Frozen mite test metrics:
+  - mAP50: 0.844664
+  - mAP50-95: 0.694272
+  - Precision@0.5: 0.766216
+  - Recall@0.5: 0.803116
+- Macro test metrics across four classes:
+  - macro mAP50: 0.865834
+  - macro mAP50-95: 0.708821
+- Per-class mAP50-95:
+  - Tetranychus Urticae: 0.694272
+  - dry: 0.495859
+  - gray_mold: 0.792435
+  - scorch: 0.852720
+- Validation-to-test change is retained as generalization evidence; V001 must not be retuned from this test.
+- Public test remains development evidence only. Nongtori field readiness remains NOT_ESTABLISHED.
+- Next model gate: morphology-transfer successor experiment against this frozen V001 baseline.
+
+## Mite field detector V001 validation freeze — 2026-10-14
+
+- Training completed locally on CUDA / RTX 4060.
+- Early stopping triggered at epoch 17 after 5 validation non-improvements.
+- Best checkpoint selected at epoch 12 using validation only.
+- Frozen validation metrics:
+  - Tetranychus Urticae mAP50: 0.8536
+  - Tetranychus Urticae mAP50-95: 0.6840
+  - Precision@0.5: 0.8021
+  - Recall@0.5: 0.7973
+  - Macro mAP50-95: 0.7057
+- Selection metric remained mite mAP50-95; test remained locked throughout training.
+- V001 checkpoint is now frozen. No model/hyperparameter/threshold selection may use the official public test split.
+- Next gate: one-time test evaluation of the frozen epoch-12 checkpoint.
+- Field readiness remains NOT_ESTABLISHED; public test remains development evidence only.
+
+## Mite field detector baseline V001 — 2026-10-13
+
+- Workstream: `feat/mite-detector-baseline-v001`.
+- Baseline purpose: establish a fixed public strawberry-context detection reference before any morphology-transfer experiment.
+- Dataset: `MITE-PUBLIC-FIELD-CONTEXT-V001` only.
+- Model: torchvision `fasterrcnn_mobilenet_v3_large_fpn`.
+- Classes remain explicit instead of collapsing non-mite annotations into unlabeled background:
+  - Tetranychus Urticae
+  - dry
+  - gray_mold
+  - scorch
+- Primary checkpoint selection metric: Tetranychus Urticae mAP50-95.
+- Tie-breakers: mite mAP50, then mite recall@0.5.
+- Supporting metric: macro mAP50 / mAP50-95 across all four classes.
+- Test split remains locked during training and is evaluated only after the validation-selected checkpoint is frozen.
+- `MITE-PUBLIC-MORPHOLOGY-V001` is not mixed into V001. A later successor may test morphology pretraining/transfer against this fixed baseline.
+- Public test metrics remain development evidence only and cannot establish Nongtori field readiness.
+- Local GPU command: `python -m ml.detector_baseline.mite_field_v001 train`.
+
 ## Mite public snapshots V001 freeze — 2026-10-13
 
 - `MITE-PUBLIC-FIELD-CONTEXT-V001`
