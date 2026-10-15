@@ -1,0 +1,74 @@
+{
+  "audit_id": "SOURCE-ALIGNMENT-AUDIT-V1",
+  "date": "2026-10-15",
+  "status": "CORRECTIVE_ACTION_REQUIRED",
+  "domains": {
+    "pest": {
+      "source_alignment": "NOT_SOURCE_ALIGNED",
+      "existing_role": "HISTORICAL_ENGINEERING_BASELINE",
+      "source_method": {
+        "project": "miteVision",
+        "model": "YOLO11-Large",
+        "epochs": 100,
+        "patience": 25,
+        "image_size": 1024,
+        "batch_size": 16,
+        "source_version": 210,
+        "classes": [
+          "Adult_female",
+          "Immature",
+          "Viable_egg"
+        ]
+      },
+      "next_gate": "ONE_SOURCE_REFERENCE_YOLO11_TRACK"
+    },
+    "ripeness": {
+      "source_alignment": "PARTIAL_NOT_METHOD_ALIGNED",
+      "existing_role": "DEVELOPMENT_BENCHMARK_ONLY",
+      "source_methods": [
+        {
+          "task": "main_stage_detection",
+          "model": "FasterRCNN-ResNet50-FPN",
+          "epochs": 50,
+          "optimizer": "SGD",
+          "lr": 0.005,
+          "momentum": 0.8,
+          "weight_decay": 0.0005
+        },
+        {
+          "task": "diameter_length_decimal_stage",
+          "model": "DenseNet121",
+          "epochs": 100,
+          "optimizer": "Adam",
+          "head_lr": 0.005,
+          "base_lr_coefficient": 0.01,
+          "lr_decay": 0.98,
+          "batch_size": 32,
+          "image_size": 256
+        }
+      ],
+      "next_gate": "KGCV_SOURCE_ALIGNED_REPRODUCTION"
+    },
+    "grade": {
+      "source_alignment": "PROVENANCE_GAP",
+      "existing_role": "INTERNAL_WEIGHT_BAND_EXPERIMENT_ONLY",
+      "current_internal_thresholds_g": [
+        12,
+        16,
+        22
+      ],
+      "official_size_class_thresholds_g": {
+        "S": "<12",
+        "M": "12-<17",
+        "L": "17-<25",
+        "2L": ">=25"
+      },
+      "official_quality_grade": [
+        "특",
+        "상",
+        "보통"
+      ],
+      "next_gate": "GRADE_POLICY_PROVENANCE_AND_TERMINOLOGY_CORRECTION"
+    }
+  }
+}
