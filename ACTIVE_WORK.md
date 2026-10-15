@@ -12,9 +12,9 @@
   - It is not source-method-aligned to KGCV official Faster R-CNN stage detection or DenseNet121 decimal-stage/trait estimation.
   - No further generic ripeness tuning before a source-aligned KGCV reproduction and field-label policy freeze.
 - Grade:
-  - Existing 12/16/22g rule is reclassified as `NONGTORI_INTERNAL_WEIGHT_BAND`, not official strawberry grade.
-  - Official quality grade and official size class are separate concepts and must be represented separately.
-  - Current historical benchmark artifacts are preserved unchanged; terminology correction applies to new product/design claims.
+  - Existing 12/16/22g rule is confirmed as the Hadong strawberry Nonghyup direct-sales field/business grading policy and remains valid for that operating context.
+  - It must stay distinct from the national official size class and official quality grade.
+  - Historical benchmark artifacts remain valid; this audit corrects provenance labeling rather than discarding the thresholds.
 - Data provenance, immutable snapshots, leakage control, validation-only selection and frozen-test policy remain canonical and are retained.
 
 ## Mite field detector V001 test freeze — 2026-10-14
