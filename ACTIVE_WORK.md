@@ -1,3 +1,30 @@
+## Mite morphology transfer V002 result freeze — 2026-10-15
+
+- Status: REJECTED_AS_IMPROVEMENT / HISTORICAL_EVIDENCE_ONLY.
+- Morphology stage:
+  - snapshot: MITE-PUBLIC-MORPHOLOGY-V001
+  - best epoch: 14/15
+  - best macro mAP50-95: 0.0939
+  - run ended by epoch ceiling, not early stopping (stale 1/5 at M15)
+- Field fine-tuning stage:
+  - snapshot: MITE-PUBLIC-FIELD-CONTEXT-V001
+  - best epoch: F10
+  - best mite mAP50: 0.8498
+  - best mite mAP50-95: 0.6831
+  - Precision@0.5: 0.8112
+  - Recall@0.5: 0.7808
+  - macro mAP50-95: 0.7154
+- Frozen V001 validation reference:
+  - mite mAP50-95: 0.6840
+- Delta V002 - V001 on primary metric:
+  - mite mAP50-95: -0.0009
+- Decision:
+  - V002 does not improve the frozen V001 primary validation metric.
+  - Do not open/evaluate the V002 public test split.
+  - Do not extend the Faster R-CNN morphology-transfer research line.
+  - Preserve V002 as negative/historical evidence only.
+- Corrective next gate remains the source-aligned YOLO11-Large reference track defined by SOURCE_ALIGNMENT_AUDIT_V1.
+
 ## Mite morphology transfer V002 — 2026-10-14
 
 - Workstream: `feat/mite-morphology-transfer-v002`.
