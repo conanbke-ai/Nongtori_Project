@@ -160,6 +160,18 @@ def materialize_yolo_dataset(
     return report
 
 
+def _resolve_trained_batch(results: Any, configured_batch: int | float) -> int | str:
+    # Ultralytics AutoBatch resolves batch=-1 internally. Prefer trainer args when available.
+    trainer = getattr(results, "trainer", None)
+    args = getattr(trainer, "args", None)
+    batch = getattr(args, "batch", None)
+    if isinstance(batch, int) and batch > 0:
+        return batch
+    if configured_batch == -1:
+        return "auto"
+    return int(configured_batch)
+
+
 def _require_ultralytics():
     try:
         import ultralytics
@@ -288,7 +300,7 @@ def train(args) -> int:
         "selection_split": "validation",
         "test_status": "LOCKED_NOT_EVALUATED",
         "source_contract": SOURCE_CONTRACT,
-        "actual_batch": execution_contract["actual_config"]["batch"],
+        "actual_batch": _resolve_trained_batch(results, actual_batch),
         "best_checkpoint": str(best_path),
         "best_checkpoint_sha256": _sha256(best_path),
         "validation_results": metrics,
@@ -301,6 +313,62 @@ def train(args) -> int:
         encoding="utf-8",
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
+
+def evaluate_test(args) -> int:
+    if not args.acknowledge_test_once:
+        raise YoloReferenceError(
+            "Public test is a one-time frozen evaluation. "
+            "Re-run with --acknowledge-test-once after validation freeze review."
+        )
+
+    ultralytics, YOLO = _require_ultralytics()
+    report = materialize_yolo_dataset(args.snapshot, args.output)
+
+    checkpoint = Path(args.checkpoint)
+    if not checkpoint.is_file():
+        raise YoloReferenceError(f"checkpoint missing: {checkpoint}")
+
+    expected_sha = args.expected_checkpoint_sha256.strip().lower()
+    actual_sha = _sha256(checkpoint)
+    if expected_sha and actual_sha != expected_sha:
+        raise YoloReferenceError(
+            f"checkpoint SHA-256 mismatch: expected {expected_sha}, got {actual_sha}"
+        )
+
+    model = YOLO(str(checkpoint))
+    results = model.val(
+        data=str(report["dataset_yaml"]),
+        split="test",
+        imgsz=1024,
+        batch=args.batch,
+        device=0,
+        workers=args.workers,
+        plots=True,
+        verbose=True,
+    )
+    metrics = dict(getattr(results, "results_dict", {}) or {})
+    output = {
+        "status": "MITE_YOLO11_REFERENCE_V001_TEST_EVALUATED",
+        "role": "SOURCE_REFERENCE_PORTFOLIO_ONLY",
+        "checkpoint": str(checkpoint),
+        "checkpoint_sha256": actual_sha,
+        "selection_prohibited": True,
+        "test_split": "public_test_once",
+        "test_results": metrics,
+        "field_readiness": "NOT_ESTABLISHED",
+        "policy": "DO_NOT_TUNE_OR_SELECT_FROM_THIS_TEST_RESULT",
+        "ultralytics_version": getattr(ultralytics, "__version__", "unknown"),
+    }
+    out_path = Path(args.output) / "test-summary.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(output, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(json.dumps(output, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -320,6 +388,15 @@ def build_parser():
     p.add_argument("--batch", default="auto")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--acknowledge-reference-only", action="store_true")
+
+    p = sub.add_parser("test")
+    p.add_argument("--snapshot", type=Path, default=DEFAULT_SNAPSHOT)
+    p.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    p.add_argument("--checkpoint", type=Path, required=True)
+    p.add_argument("--expected-checkpoint-sha256", default="")
+    p.add_argument("--batch", type=int, default=2)
+    p.add_argument("--workers", type=int, default=4)
+    p.add_argument("--acknowledge-test-once", action="store_true")
     return parser
 
 
@@ -330,6 +407,8 @@ def main(argv=None) -> int:
             report = materialize_yolo_dataset(args.snapshot, args.output)
             print(json.dumps(report, ensure_ascii=False, indent=2))
             return 0
+        if args.command == "test":
+            return evaluate_test(args)
         return train(args)
     except (YoloReferenceError, ValueError) as exc:
         print(json.dumps({
