@@ -73,6 +73,9 @@ DISCOVERED
 | DATA-FIELD-001 | NONGTORI_FIELD | 실제 현장 사진/영상 | PRIVATE | IN_USE |
 | MODEL-TRACK-001 | ByteTrack | MOT baseline | 공식 repo/license audit | REVIEW_REQUIRED |
 | MODEL-TRACK-002 | BoT-SORT | moving-camera MOT candidate | 공식 repo/license audit | REVIEW_REQUIRED |
+| MODEL-RIP-001 | DigitalAgUMN / KGCV_Strawberry official implementation | 숙도/phenology source-method reference | license review required | REVIEW_REQUIRED |
+| MODEL-PEST-001 | mswiseman / miteVision official implementation | TSSM source-method reference | license review required | REVIEW_REQUIRED |
+| POLICY-GRADE-001 | NAQS / Korean agricultural standard | 딸기 품질등급·크기구분 reference | official standard | REVIEW_REQUIRED |
 
 실제 기계 판독 가능한 source record는 `ml/data_pipeline/sources/*.json`을 canonical input으로 사용한다. 문서 표와 JSON이 충돌하면 최신 검증 근거를 반영해 둘을 같은 변경에서 정합화한다.
 
@@ -229,3 +232,23 @@ Git에 저장하지 않음:
 - Nongtori may later define an explicit TSSM-positive label-collapse policy, but must not silently collapse labels before an audit snapshot.
 - Host/domain mismatch remains material; this source is not a substitute for strawberry-field acceptance.
 
+
+
+## Source-alignment governance
+
+Model/data source registration is not sufficient by itself. Before a new model family is promoted, Nongtori must record:
+
+- official source architecture;
+- target definition;
+- preprocessing;
+- training recipe;
+- evaluation protocol;
+- every Nongtori deviation and its rationale.
+
+Current corrective classifications:
+
+- `MODEL-PEST-001`: source-method reference is YOLO11-Large v210; Faster R-CNN V001/V002 are historical Nongtori baselines, not source reproductions.
+- `MODEL-RIP-001`: source-method references are KGCV Faster R-CNN stage detection and DenseNet121 trait/decimal-stage estimation; current EfficientNet-B0 is a Nongtori development benchmark.
+- `POLICY-GRADE-001`: official strawberry quality grade and size class are distinct. Nongtori 12/16/22g remains an internal experimental weight-band policy unless a separate farm/business source is registered.
+
+Canonical audit: `docs/SOURCE_ALIGNMENT_AUDIT_V1_20261015.md`.
