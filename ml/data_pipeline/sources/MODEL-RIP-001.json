@@ -1,0 +1,40 @@
+{
+  "source_id": "MODEL-RIP-001",
+  "source_type": "official_implementation",
+  "provider": "github",
+  "title": "KGCV_Strawberry official implementation",
+  "original_url": "https://github.com/DigitalAgUMN/KGCV_Strawberry",
+  "version_or_revision": "main-reviewed-2026-10-15",
+  "license": null,
+  "license_checked_at": "2026-10-15",
+  "redistribution_allowed": "review_required",
+  "commercial_use": "review_required",
+  "status": "REVIEW_REQUIRED",
+  "retrieval": {
+    "repository": "DigitalAgUMN/KGCV_Strawberry",
+    "files": [
+      "KGCV_Strawberry_Train_FasterRCNN.py",
+      "KGCV_Strawberry_Train_CNN.py"
+    ],
+    "paper_doi": "10.1016/j.compag.2024.108911",
+    "dataset_doi": "10.5281/zenodo.10957909"
+  },
+  "original_labels": [
+    "flower",
+    "small g",
+    "green",
+    "white",
+    "turning red",
+    "red",
+    "overripe"
+  ],
+  "nongtori_mapping": {
+    "role": "SOURCE_METHOD_REFERENCE",
+    "methods": {
+      "main_stage_detection": "FasterRCNN-ResNet50-FPN",
+      "trait_decimal_stage": "DenseNet121"
+    },
+    "status": "SOURCE_REPRODUCTION_REQUIRED_BEFORE_NEW_GENERIC_TUNING"
+  },
+  "notes": "Official KGCV source implementation. Current Nongtori EfficientNet-B0 ripeness line is a development benchmark, not a source-method reproduction."
+}
