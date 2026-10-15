@@ -1,0 +1,38 @@
+{
+  "source_id": "MODEL-PEST-001",
+  "source_type": "official_implementation",
+  "provider": "github",
+  "title": "miteVision official implementation",
+  "original_url": "https://github.com/mswiseman/miteVision",
+  "version_or_revision": "main-reviewed-2026-10-15",
+  "license": null,
+  "license_checked_at": "2026-10-15",
+  "redistribution_allowed": "review_required",
+  "commercial_use": "review_required",
+  "status": "REVIEW_REQUIRED",
+  "retrieval": {
+    "repository": "mswiseman/miteVision",
+    "notebook": "v209_v210_v211_train_eval.ipynb",
+    "roboflow_project": "gent-lab/tssm-detection-v2",
+    "reference_version": 210
+  },
+  "original_labels": [
+    "Adult_female",
+    "Immature",
+    "Viable_egg"
+  ],
+  "nongtori_mapping": {
+    "role": "SOURCE_METHOD_REFERENCE",
+    "method": {
+      "architecture": "YOLO11-Large",
+      "epochs": 100,
+      "patience": 25,
+      "image_size": 1024,
+      "batch_size": 16,
+      "seed": 42,
+      "synthetic_data": true
+    },
+    "status": "SOURCE_REFERENCE_TRACK_REQUIRED"
+  },
+  "notes": "Official source-method reference for TSSM v210. Existing Faster R-CNN Nongtori runs remain historical engineering baselines only."
+}
