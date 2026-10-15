@@ -201,9 +201,9 @@ Therefore the current `12/16/22` bands do not match the checked national size-cl
 
 ### Alignment judgment
 
-`PROVENANCE_GAP / TERMINOLOGY_CORRECTION_REQUIRED`
+`FIELD_POLICY_SOURCE_CONFIRMED / TERMINOLOGY_SEPARATION_REQUIRED`
 
-The existing 12/16/22 experiment is useful as a model-boundary analysis, but until its farm/market source is established it must be treated as an **internal weight-band policy**, not an official strawberry grade standard.
+The existing 12/16/22 thresholds are user-confirmed as the real operational classification rule used by the Hadong strawberry Nonghyup direct-sales context. They therefore remain a valid **field/business grade policy** for Nongtori. They are not the same thing as the national official size class or official quality grade.
 
 ### Corrective action
 
@@ -213,10 +213,10 @@ The existing 12/16/22 experiment is useful as a model-boundary analysis, but unt
    - `OFFICIAL_QUALITY_GRADE`
    - `NONGTORI_INTERNAL_WEIGHT_BAND`
    - farm/customer-specific commercial grading rules
-3. Do not map `12/16/22` to official Korean grade names.
-4. Register the national strawberry standard as a source/policy record.
-5. Final product grade logic must combine or explicitly separate weight/size from visual quality attributes.
-6. If the user's farm has its own 12/16/22 rule, capture it as a field/business policy source before restoring it as a product rule.
+3. Preserve `12/16/22` as the Hadong field/business grading rule and name it explicitly as such.
+4. Do not present `12/16/22` as the national official strawberry size or quality standard.
+5. Register both the Hadong field/business policy and the national standard as separate policy sources.
+6. Final product grade logic must keep field-business grade, official size class, and official quality grade distinct.
 
 ---
 
@@ -226,7 +226,7 @@ The existing 12/16/22 experiment is useful as a model-boundary analysis, but unt
 |---|---|---|---|
 | TSSM | Faster R-CNN V001/V002 | Low | historical baseline / correction required |
 | Ripeness | ResNet18 → EfficientNet-B0 | Partial | development benchmark only |
-| Grade | 12/16/22 weight bands | provenance gap | internal experimental band only |
+| Grade | 12/16/22 weight bands | field/business source confirmed | Hadong field-business grade policy |
 | Data governance | snapshots / hashes / leakage controls | Strong | retain |
 | Test-lock policy | validation selection + frozen test | Strong | retain |
 
