@@ -8,6 +8,7 @@ from ml.detector_baseline.mite_yolo11_reference_v001 import (
     EXPECTED_SPLIT,
     SNAPSHOT_ID,
     SOURCE_CONTRACT,
+    _resolve_trained_batch,
 )
 
 
@@ -35,6 +36,22 @@ class MiteYolo11ReferenceV001Tests(unittest.TestCase):
             CLASS_NAMES,
             ["Adult_female", "Immature", "Viable_egg"],
         )
+
+    def test_resolved_batch_prefers_positive_trainer_batch(self):
+        class Args:
+            batch = 2
+        class Trainer:
+            args = Args()
+        class Results:
+            trainer = Trainer()
+
+        self.assertEqual(_resolve_trained_batch(Results(), -1), 2)
+
+    def test_resolved_batch_keeps_auto_when_not_available(self):
+        class Results:
+            trainer = None
+
+        self.assertEqual(_resolve_trained_batch(Results(), -1), "auto")
 
 
 if __name__ == "__main__":
