@@ -1,3 +1,32 @@
+## Mite YOLO11 source-reference V001 validation freeze — 2026-10-15
+
+- Status: SOURCE_REFERENCE_VALIDATION_FROZEN.
+- Model: YOLO11-Large / `yolo11l.pt`.
+- Source reference: Gent Lab miteVision / TSSM Detection v2 v210.
+- Hardware: RTX 4060 8GB.
+- Actual batch: 2 via Ultralytics AutoBatch (source reference used batch 16 on A100 40GB).
+- Training completed: 100/100 epochs.
+- Runtime: 7,968.6 sec (~2.20 h).
+- Snapshot: `MITE-PUBLIC-MORPHOLOGY-V001`.
+- Validation cohort: 203 images / 2,511 instances.
+- Frozen validation metrics:
+  - Precision: 0.930483
+  - Recall: 0.850092
+  - mAP50: 0.932762
+  - mAP50-95: 0.581520
+- Per-class validation mAP50-95:
+  - Adult_female: 0.612
+  - Immature: 0.447
+  - Viable_egg: 0.686
+- Best checkpoint SHA-256:
+  - `eb962a8d879674c9d0fa1cc08ba707ca1f2dc1b094e0e9350baf9e2f2c231529`
+- Source-reference comparison:
+  - official v210 validation mAP50 ~0.939
+  - official v210 validation mAP50-95 ~0.597
+  - Nongtori leakage-safe validation is close despite split and hardware/batch deviations.
+- Public test remains locked until this validation result is frozen in repository.
+- After one-time frozen public test evaluation, stop YOLO morphology research and return to Thermal-first pest-risk modeling.
+
 ## Mite YOLO11 source-reference V001 — 2026-10-15
 
 - Workstream: `feat/mite-yolo11-reference-v001`.
