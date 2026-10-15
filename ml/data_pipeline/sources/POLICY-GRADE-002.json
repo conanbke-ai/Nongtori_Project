@@ -1,0 +1,32 @@
+{
+  "source_id": "POLICY-GRADE-002",
+  "source_type": "field_business_policy",
+  "provider": "user_field_source",
+  "title": "하동딸기 농협직판장 분류 기준",
+  "original_url": "",
+  "version_or_revision": "user-confirmed-2026-10-15",
+  "license": null,
+  "license_checked_at": null,
+  "redistribution_allowed": "private_reference",
+  "commercial_use": "field_policy_reference",
+  "status": "IN_USE",
+  "retrieval": {
+    "evidence_status": "DOCUMENT_OR_IMAGE_EVIDENCE_NOT_YET_ATTACHED"
+  },
+  "original_labels": [
+    "<12g",
+    "12-16g",
+    "16-22g",
+    ">=22g"
+  ],
+  "nongtori_mapping": {
+    "role": "FIELD_BUSINESS_GRADE_POLICY",
+    "thresholds_g": [
+      12,
+      16,
+      22
+    ],
+    "status": "USER_CONFIRMED_FIELD_SOURCE"
+  },
+  "notes": "User-confirmed real operational classification basis from Hadong strawberry Nonghyup direct-sales context. Keep distinct from national official size-class and quality-grade standards."
+}
