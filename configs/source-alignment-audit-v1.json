@@ -50,13 +50,19 @@
       "next_gate": "KGCV_SOURCE_ALIGNED_REPRODUCTION"
     },
     "grade": {
-      "source_alignment": "PROVENANCE_GAP",
-      "existing_role": "INTERNAL_WEIGHT_BAND_EXPERIMENT_ONLY",
+      "source_alignment": "FIELD_POLICY_SOURCE_CONFIRMED",
+      "existing_role": "FIELD_BUSINESS_GRADE_POLICY",
       "current_internal_thresholds_g": [
         12,
         16,
         22
       ],
+      "field_policy_source": {
+        "source_name": "하동딸기 농협직판장 분류 기준",
+        "source_type": "field_business_policy",
+        "provenance_status": "USER_CONFIRMED_FIELD_SOURCE",
+        "evidence_status": "DOCUMENT_OR_IMAGE_EVIDENCE_NOT_YET_ATTACHED"
+      },
       "official_size_class_thresholds_g": {
         "S": "<12",
         "M": "12-<17",
@@ -68,7 +74,12 @@
         "상",
         "보통"
       ],
-      "next_gate": "GRADE_POLICY_PROVENANCE_AND_TERMINOLOGY_CORRECTION"
+      "policy_separation": {
+        "field_business_grade": "12/16/22g 하동딸기 농협직판장 기준",
+        "official_size_class": "국가 표준 크기구분",
+        "official_quality_grade": "국가 표준 품질등급"
+      },
+      "next_gate": "ATTACH_FIELD_POLICY_EVIDENCE_AND_KEEP_POLICY_NAMES_DISTINCT"
     }
   }
 }
