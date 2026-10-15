@@ -1,3 +1,26 @@
+## Mite YOLO11 source-reference V001 — 2026-10-15
+
+- Workstream: `feat/mite-yolo11-reference-v001`.
+- Purpose: correct the TSSM source-method alignment gap without reopening broad architecture search.
+- Source reference: Gent Lab `miteVision` / TSSM Detection v2 model v210.
+- Source-aligned fixed settings:
+  - model: YOLO11-Large / `yolo11l.pt`
+  - epochs: 100
+  - patience: 25
+  - imgsz: 1024
+  - seed: 42
+  - source batch: 16
+  - pretrained: true
+- Nongtori snapshot: `MITE-PUBLIC-MORPHOLOGY-V001`, leakage-safe train 854 / validation 203 / test 192, 17,364 boxes.
+- The original Roboflow split is deliberately not reused because prior audit found cross-split exact/origin overlap.
+- RTX 4060 execution deviation: default batch is Ultralytics auto-batch rather than forcing source batch 16; actual configuration is recorded.
+- Role: `SOURCE_REFERENCE_PORTFOLIO_ONLY`; no automatic production/commercial promotion.
+- Test remains locked during model selection.
+- Commands:
+  - `python -m ml.detector_baseline.mite_yolo11_reference_v001 prepare`
+  - `python -m ml.detector_baseline.mite_yolo11_reference_v001 train --acknowledge-reference-only`
+- After this reference track, stop TSSM architecture search and return effort to product integration/field acceptance unless the result reveals a concrete blocker.
+
 ## Source alignment corrective audit — 2026-10-15
 
 - Canonical audit: `docs/SOURCE_ALIGNMENT_AUDIT_V1_20261015.md`.
