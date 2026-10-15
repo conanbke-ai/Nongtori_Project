@@ -1,0 +1,37 @@
+{
+  "source_id": "POLICY-GRADE-001",
+  "source_type": "standard",
+  "provider": "NAQS",
+  "title": "Korean agricultural standard for fresh strawberry grading/size classes",
+  "original_url": "https://www.naqs.go.kr/",
+  "version_or_revision": "checked-2026-10-15",
+  "license": null,
+  "license_checked_at": "2026-10-15",
+  "redistribution_allowed": "reference_only",
+  "commercial_use": "reference_allowed",
+  "status": "REVIEW_REQUIRED",
+  "retrieval": {
+    "official_site": "https://www.naqs.go.kr/",
+    "note": "Official current page/source should be pinned to a specific document revision before product-rule promotion."
+  },
+  "original_labels": [
+    "특",
+    "상",
+    "보통",
+    "S",
+    "M",
+    "L",
+    "2L"
+  ],
+  "nongtori_mapping": {
+    "role": "OFFICIAL_STRAWBERRY_GRADE_AND_SIZE_REFERENCE",
+    "size_classes_g": {
+      "S": "<12",
+      "M": "12-<17",
+      "L": "17-<25",
+      "2L": ">=25"
+    },
+    "status": "TERMINOLOGY_REFERENCE_ONLY"
+  },
+  "notes": "Used to separate official quality grade from size class. Current Nongtori 12/16/22 thresholds are not treated as this official standard."
+}

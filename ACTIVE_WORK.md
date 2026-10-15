@@ -1,3 +1,22 @@
+## Source alignment corrective audit — 2026-10-15
+
+- Canonical audit: `docs/SOURCE_ALIGNMENT_AUDIT_V1_20261015.md`.
+- Machine-readable decision: `configs/source-alignment-audit-v1.json`.
+- TSSM:
+  - Faster R-CNN V001/V002 remain valid historical engineering evidence.
+  - They are not source-method-aligned to miteVision v210, whose official reference uses YOLO11-Large / 100 epochs / patience 25 / 1024 input / synthetic data.
+  - Do not auto-promote Faster R-CNN V002 to canonical architecture.
+  - Corrective next gate: one source-reference YOLO11 track only; no broad architecture search.
+- Ripeness:
+  - Current ResNet18/EfficientNet-B0 line remains a development benchmark.
+  - It is not source-method-aligned to KGCV official Faster R-CNN stage detection or DenseNet121 decimal-stage/trait estimation.
+  - No further generic ripeness tuning before a source-aligned KGCV reproduction and field-label policy freeze.
+- Grade:
+  - Existing 12/16/22g rule is confirmed as the Hadong strawberry Nonghyup direct-sales field/business grading policy and remains valid for that operating context.
+  - It must stay distinct from the national official size class and official quality grade.
+  - Historical benchmark artifacts remain valid; this audit corrects provenance labeling rather than discarding the thresholds.
+- Data provenance, immutable snapshots, leakage control, validation-only selection and frozen-test policy remain canonical and are retained.
+
 ## Mite field detector V001 test freeze — 2026-10-14
 
 - Frozen checkpoint: epoch 12, selected on validation only.
