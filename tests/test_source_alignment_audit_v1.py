@@ -25,16 +25,28 @@ class SourceAlignmentAuditV1Tests(unittest.TestCase):
         models = {item["model"] for item in ripeness["source_methods"]}
         self.assertEqual(models, {"FasterRCNN-ResNet50-FPN", "DenseNet121"})
 
-    def test_grade_12_16_22_is_internal_not_official(self):
+    def test_grade_12_16_22_is_hadong_field_policy_not_official_standard(self):
         grade = self.payload["domains"]["grade"]
         self.assertEqual(grade["current_internal_thresholds_g"], [12, 16, 22])
         self.assertEqual(
             grade["existing_role"],
-            "INTERNAL_WEIGHT_BAND_EXPERIMENT_ONLY",
+            "FIELD_BUSINESS_GRADE_POLICY",
+        )
+        self.assertEqual(
+            grade["source_alignment"],
+            "FIELD_POLICY_SOURCE_CONFIRMED",
+        )
+        self.assertEqual(
+            grade["field_policy_source"]["source_name"],
+            "하동딸기 농협직판장 분류 기준",
         )
         self.assertEqual(
             grade["official_size_class_thresholds_g"],
             {"S": "<12", "M": "12-<17", "L": "17-<25", "2L": ">=25"},
+        )
+        self.assertNotEqual(
+            grade["policy_separation"]["field_business_grade"],
+            grade["policy_separation"]["official_size_class"],
         )
 
 
