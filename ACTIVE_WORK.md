@@ -1,3 +1,37 @@
+## Mite YOLO11 source-reference V001 public test freeze — 2026-10-16
+
+- Status: SOURCE_REFERENCE_TEST_FROZEN / MORPHOLOGY_RESEARCH_COMPLETE.
+- Frozen checkpoint SHA-256:
+  - `eb962a8d879674c9d0fa1cc08ba707ca1f2dc1b094e0e9350baf9e2f2c231529`
+- Test cohort:
+  - 192 images
+  - 2,722 instances
+- Frozen aggregate test metrics:
+  - Precision: 0.908224
+  - Recall: 0.859457
+  - mAP50: 0.925419
+  - mAP50-95: 0.568616
+- Per-class test metrics:
+  - Adult_female: P 0.835 / R 0.887 / mAP50 0.911 / mAP50-95 0.517
+  - Immature: P 0.944 / R 0.765 / mAP50 0.893 / mAP50-95 0.483
+  - Viable_egg: P 0.945 / R 0.926 / mAP50 0.972 / mAP50-95 0.705
+- Validation → test:
+  - mAP50: 0.932762 → 0.925419
+  - mAP50-95: 0.581520 → 0.568616
+- Source-reference official v210 test reference:
+  - mAP50 ~0.883
+  - mAP50-95 ~0.601
+- Interpretation:
+  - Nongtori leakage-safe test mAP50 exceeds the official reported aggregate while mAP50-95 is lower.
+  - Split reassignment, hardware/batch differences, synthetic-data differences and Ultralytics version differences prevent direct reproduction-equivalence claims.
+  - Test is report-only and selection/tuning from this result is prohibited.
+- Field readiness remains NOT_ESTABLISHED.
+- Product interpretation:
+  - life-stage labels are internal reference diagnostics only;
+  - RGB mite detection is auxiliary corroboration evidence;
+  - Nongtori pest ML priority now returns to Thermal-first risk prediction.
+- No further YOLO morphology architecture search is planned for Portfolio V1.
+
 ## Mite YOLO11 source-reference V001 validation freeze — 2026-10-15
 
 - Status: SOURCE_REFERENCE_VALIDATION_FROZEN.
