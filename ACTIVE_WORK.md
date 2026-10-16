@@ -1,3 +1,29 @@
+## Thermal-first mite risk V1 — 2026-10-16
+
+- Workstream: `feat/thermal-mite-risk-v001`.
+- Product priority reset after YOLO11 source-reference completion:
+  - Thermal/environment risk = primary signal.
+  - RGB mite detection = auxiliary corroboration only.
+- Source alignment:
+  - `PAPER-PEST-001`: Tetranychus thermal-response mechanism reference; thermal direction is context-dependent.
+  - `PAPER-PEST-002`: strawberry/T. urticae physiological early-detection reference; supports time-aware non-destructive sensing but not thermal-threshold transfer.
+- Added `configs/thermal-mite-risk-v001.json`.
+- Added deterministic feature builder:
+  - leaf - ambient temperature
+  - leaf - reference temperature
+  - ambient VPD
+  - leaf VPD
+  - leaf-air VPD delta
+  - absolute reference thermal deviation
+- No warmer-is-riskier or cooler-is-riskier rule is encoded.
+- No fixed thermal threshold is allowed before field calibration.
+- Existing RGB absence remains non-negative evidence.
+- Model fitting gate remains BLOCKED until:
+  1. field label policy freeze;
+  2. field cohort/split audit.
+- Planned first models after the gate: logistic regression baseline, then XGBoost.
+- Sequence deep model remains FUTURE / not required for Portfolio V1.
+
 ## Mite YOLO11 source-reference V001 public test freeze — 2026-10-16
 
 - Status: SOURCE_REFERENCE_TEST_FROZEN / MORPHOLOGY_RESEARCH_COMPLETE.
