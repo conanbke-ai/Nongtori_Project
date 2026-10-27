@@ -1,3 +1,28 @@
+## Dashboard browser-history repair — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `d724cc4a90227c5dd5ded4c664d6c5d3ff4837da`.
+- Implementation SHA: `b48350866666f111cdb9241cc68cf72d925e02e8`.
+- Status: `BROWSER_HISTORY_VERIFIED`.
+- Scope:
+  - explicit dashboard screen changes now add one browser-history entry;
+  - Back/Forward events restore the screen from the URL;
+  - repeated clicks on the active screen do not add duplicate entries;
+  - direct valid screen URLs and reloads retain their screen;
+  - missing or unknown screen values are normalized to `home` with `replaceState`, preserving unrelated query parameters and the hash;
+  - Back before the first dashboard visit continues to leave the dashboard normally.
+- Preserved contracts: no API, DB, authorization, data, notification, style, responsive-layout, training, or error-state behavior changed.
+- Reproduction before implementation: desktop and mobile browser QA both moved from `?screen=capture` to `about:blank` instead of the prior dashboard screen on Back (`/workspace/scratch/nongtori-ui-qa-20261027/report.json`).
+- Validation after implementation:
+  - `node --import ./tests/register.mjs --test tests/dashboard-navigation.test.ts`: PASS (3/3);
+  - `pnpm test:overview`: PASS (6/6);
+  - `pnpm test:workflows`: PASS (30/30);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS;
+  - desktop 1440x900 and mobile 390x844 real Chromium Back/Forward, repeated-click, direct URL/reload, fallback normalization, and pre-dashboard Back QA: PASS (`/workspace/scratch/nongtori-navigation-history-20261027/report.json`).
+- Remaining separate issue: dashboard-load errors still render empty-data zero counts below the alert; this was intentionally not changed in this workstream.
+- Next safe gate: independent review and PR #105 CI. No main merge, deployment, migration, data mutation, external upload, or GPU work was performed.
+
 ## Thermal numeric error-contract follow-up — 2026-10-27
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
