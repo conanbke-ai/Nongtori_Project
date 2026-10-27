@@ -1,3 +1,25 @@
+## Dyson Python quality gate repair — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `df6109164fa703daa23707136c53132ffe57db73`.
+- Repair SHA: `368a62e72d0aa0cdc303aca0dd985ddd7d1e2603`.
+- Status: `QUALITY_GATE_REPAIRED`.
+- Scope: test-only repair in `tests/test_dyson_weight_reference.py`; production audit code, raw data, derived source artifacts, and scientific contracts are unchanged.
+- Contract evidence retained:
+  - the production freeze still requires exactly four excluded 6-column rows;
+  - the synthetic freeze fixture first proves the incomplete 0-row fixture is rejected, then materializes four distinct synthetic exception scenes before freeze;
+  - unresolved multi-column schema review remains higher-priority than invalid-value exception status, as required by `docs/DYSON_WEIGHT_REFERENCE_V1.md`.
+- Validation:
+  - targeted three-test reproduction: PASS (3/3);
+  - `python3 -m unittest discover -s tests -p 'test_*.py'`: PASS (203/203);
+  - `python3 -m compileall -q ml tests`: PASS;
+  - `pnpm test:workflows`: PASS (30/30);
+  - `pnpm test:overview`: PASS (3/3);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS.
+- Known non-blocking observation: pre-existing Python `ResourceWarning` messages for unclosed fixture CSV readers remain outside this repair scope.
+- Next safe gate: review PR #105 with this quality-gate repair included. No main merge, deployment, migration, data replacement, or GPU work was performed.
+
 ## Thermal-first mite risk V1 — 2026-10-16
 
 - Workstream: `feat/thermal-mite-risk-v001`.
