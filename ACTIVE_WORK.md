@@ -1,3 +1,25 @@
+## Thermal numeric error-contract follow-up — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `088335022da23d3b85117d33599ef9457e5595ea`.
+- Implementation SHA: `fa9d2e214711fdae6e32ebd75eb5ae2e5a4c139f`.
+- Status: `NUMERIC_ERROR_CONTRACT_VERIFIED`.
+- Corrected guarantees:
+  - `_finite` converts `TypeError`, `ValueError`, and float-conversion `OverflowError` into `ThermalRiskFeatureError`;
+  - the helper and public `build_thermal_risk_features` paths both reject a `10**400` input through the same feature-error contract;
+  - the derived-finiteness regression now proves branch reachability: saturation pressure for `leaf_temp_c=1e307` is finite, then `leaf_minus_reference_c` alone overflows and is rejected by the derived-feature check.
+- Reproduction before implementation: `python3 -m unittest -v tests.test_thermal_mite_risk_v001` ran 9 tests with 2 raw `OverflowError` subtest errors (helper and builder paths).
+- Validation after implementation:
+  - `python3 -m unittest -v tests.test_thermal_mite_risk_v001`: PASS (9/9);
+  - `python3 -m unittest discover -s tests -p 'test_*.py'`: PASS (208/208);
+  - `python3 -m compileall -q ml tests`: PASS;
+  - `pnpm test:workflows`: PASS (30/30);
+  - `pnpm test:overview`: PASS (3/3);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS.
+- Scope remains numeric error normalization and regression coverage only. No production temperature threshold, thermal direction, model meaning, source/data/snapshot, API, or DB contract changed.
+- Next gate: independent review and PR #105 CI only. No additional implementation, main merge, deployment, training, migration, or data mutation was started.
+
 ## Thermal risk fail-closed gate hardening — 2026-10-27
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
