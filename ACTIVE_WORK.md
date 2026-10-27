@@ -1,3 +1,30 @@
+## Mite public source contract pin gate — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `b3e8a901f9d686a5ed87788956e34b44330d96f9`.
+- Status: `MITE_PUBLIC_SOURCE_CONTRACT_PINS_VERIFIED`.
+- Scope:
+  - `DATA-PEST-001` remains pinned to Roboflow version 1, the strawberry field-context role, and its four ordered source classes;
+  - `DATA-PEST-002` remains pinned to version 210, the separate TSSM morphology/life-stage role, and the ordered `Adult_female / Immature / Viable_egg` class contract;
+  - missing registry pins, registry/retrieval revision mismatch, an unapproved version change, role swaps, and class drift now fail the offline source gate;
+  - existing output keys and CLI exit semantics remain compatible, with additive version evidence and an explicit `REGISTERED_SOURCE_CONTRACT_PRE_ACQUISITION_ONLY` scope.
+- Evidence boundary:
+  - `MITE_PUBLIC_SOURCE_GATE_READY` means only that the registered pre-acquisition source contract passed;
+  - it does not claim download, dataset audit, snapshot readiness, model training, license approval, or Nongtori field acceptance;
+  - both canonical registry records remain `REVIEW_REQUIRED` and no source, snapshot, checkpoint, or split was changed.
+- Reproduction before implementation: `python -m unittest tests.test_mite_public_source_audit -v` ran 5 tests with 4 failures and 1 error because the validator accepted missing/mismatched pins, swapped roles, and class drift, and lacked the explicit gate scope.
+- Validation after implementation:
+  - `python -m unittest tests.test_mite_public_source_audit -v`: PASS (6/6);
+  - related mite source/acquisition/snapshot/reference tests: PASS (16/16);
+  - `python -m compileall -q ml/data_pipeline ml/detector_baseline tests`: PASS;
+  - `python -m unittest discover -s tests -p 'test_*.py'`: PASS (213/213; pre-existing fixture `ResourceWarning` messages remain non-blocking);
+  - `python -m ml.data_pipeline.cli list`: PASS (15 registered records);
+  - canonical offline source audit: `MITE_PUBLIC_SOURCE_GATE_READY`, 0 blocking reasons, registry statuses preserved as `REVIEW_REQUIRED`;
+  - `git diff --check`: PASS.
+- Tool note: `python -m pytest` was NOT RUN because this executor does not have `pytest`; the repository CI uses `unittest`, which passed targeted and full-suite checks.
+- Character work remains a separate `ASSET_TRANSFER_APPROVAL_PENDING` scope. No image was transferred, edited, or committed.
+- Next safe gate: independent review and exact-head Data CI. No download, training, test-set reopening, main merge, deployment, DB migration, destructive action, paid resource, or GPU work was performed.
+
 ## Dashboard data-trust state repair — 2026-10-27
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
