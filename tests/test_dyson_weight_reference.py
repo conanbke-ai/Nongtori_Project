@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import tempfile
 import unittest
 import zipfile
@@ -308,6 +309,34 @@ class DysonWeightReferenceTests(unittest.TestCase):
             for name in ("acquisition-manifest.json","extraction-manifest.json"):
                 (audit / name).write_text("{}", encoding="utf-8")
 
+            with self.assertRaisesRegex(
+                DysonPipelineError,
+                "expected four excluded 6-column exception rows",
+            ):
+                freeze_dyson_reference_snapshot(
+                    raw_root=raw,
+                    audit_root=audit,
+                    snapshot_root=snapshots,
+                    expected_strict_berry_count=1,
+                )
+
+            for index in range(1, 5):
+                exception = (
+                    "strawberry_dyson_fixture_exception_"
+                    f"{chr(ord('a') + index - 1)}"
+                )
+                (raw / f"{exception}_rgb.png").write_bytes(
+                    f"exception-rgb-{index}".encode()
+                )
+                np.save(
+                    raw / f"{exception}_label.npy",
+                    np.array(
+                        [[float(index), 19.0, 30.0, 20.0, 100.0, 80.0]],
+                        dtype=np.float32,
+                    ),
+                )
+            audit_dyson_dataset(raw, audit)
+
             report = freeze_dyson_reference_snapshot(
                 raw_root=raw,
                 audit_root=audit,
@@ -317,6 +346,7 @@ class DysonWeightReferenceTests(unittest.TestCase):
 
             self.assertEqual(report["status"], "DYSON_REFERENCE_SNAPSHOT_FROZEN")
             self.assertEqual(report["strict_berry_count"], 1)
+            self.assertEqual(report["excluded_six_column_row_count"], 4)
             self.assertEqual(report["referenced_unique_rgb_asset_count"], 3)
             self.assertFalse(report["commercial_training_ready"])
             self.assertTrue((snapshots / "DYSON-REFERENCE-V001" / "REFERENCE_SNAPSHOT.json").is_file())
@@ -381,7 +411,11 @@ class DysonWeightReferenceTests(unittest.TestCase):
             summary = report["weight_label_summary"]
             self.assertEqual(summary["invalid_non_finite_values"], 2)
             self.assertEqual(summary["non_positive_numeric_values"], 1)
-            self.assertEqual(report["status"], "DYSON_REFERENCE_AUDIT_WITH_EXCEPTIONS")
+            self.assertEqual(
+                summary["label_schema_status"],
+                "UNRESOLVED_MULTI_COLUMN_LABEL",
+            )
+            self.assertEqual(report["status"], "DYSON_REFERENCE_SCHEMA_REVIEW_REQUIRED")
 
     def test_acquisition_blocks_when_gdown_missing(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch(
