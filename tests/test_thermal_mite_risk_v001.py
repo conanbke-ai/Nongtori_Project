@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import math
 import unittest
 
 from ml.pest_risk.thermal_mite_risk_v001 import (
     ThermalRiskFeatureError,
+    _finite,
     build_thermal_risk_features,
     risk_training_allowed,
     saturation_vapor_pressure_kpa,
@@ -95,10 +97,29 @@ class ThermalMiteRiskV001Tests(unittest.TestCase):
                 saturation_vapor_pressure_kpa(value)
 
     def test_feature_builder_rejects_non_finite_derived_values(self):
-        with self.assertRaises(ThermalRiskFeatureError):
+        leaf_temp_c = 1e307
+        self.assertTrue(math.isfinite(saturation_vapor_pressure_kpa(leaf_temp_c)))
+
+        with self.assertRaisesRegex(
+            ThermalRiskFeatureError,
+            "non-finite derived feature leaf_minus_reference_c",
+        ):
             build_thermal_risk_features(
-                leaf_temp_c=1e308,
-                ambient_temp_c=-1e308,
+                leaf_temp_c=leaf_temp_c,
+                ambient_temp_c=25.0,
+                ambient_rh_pct=50.0,
+                reference_temp_c=-1.75e308,
+            )
+
+    def test_numeric_conversion_overflow_uses_feature_error_contract(self):
+        huge_integer = 10**400
+
+        with self.subTest(path="helper"), self.assertRaises(ThermalRiskFeatureError):
+            _finite("huge_value", huge_integer, required=True)
+        with self.subTest(path="builder"), self.assertRaises(ThermalRiskFeatureError):
+            build_thermal_risk_features(
+                leaf_temp_c=huge_integer,
+                ambient_temp_c=25.0,
                 ambient_rh_pct=50.0,
             )
 

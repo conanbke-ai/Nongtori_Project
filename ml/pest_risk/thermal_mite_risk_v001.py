@@ -36,7 +36,7 @@ def _finite(name: str, value: float | int | None, *, required: bool) -> float | 
         return None
     try:
         number = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ThermalRiskFeatureError(f"invalid {name}: {value!r}") from exc
     if not math.isfinite(number):
         raise ThermalRiskFeatureError(f"non-finite {name}: {value!r}")
