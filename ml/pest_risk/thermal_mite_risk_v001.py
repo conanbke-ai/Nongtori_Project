@@ -45,8 +45,28 @@ def _finite(name: str, value: float | int | None, *, required: bool) -> float | 
 
 def saturation_vapor_pressure_kpa(temp_c: float) -> float:
     """Tetens-style saturation vapor pressure approximation in kPa."""
-    temp_c = float(temp_c)
-    return 0.6108 * math.exp((17.27 * temp_c) / (temp_c + 237.3))
+    temperature = _finite("temp_c", temp_c, required=True)
+    assert temperature is not None
+
+    denominator = temperature + 237.3
+    if denominator == 0.0:
+        raise ThermalRiskFeatureError(
+            "saturation vapor pressure is undefined for temp_c=-237.3"
+        )
+
+    try:
+        pressure = 0.6108 * math.exp(
+            (17.27 * temperature) / denominator
+        )
+    except (OverflowError, ZeroDivisionError) as exc:
+        raise ThermalRiskFeatureError(
+            f"cannot calculate saturation vapor pressure for temp_c={temperature!r}"
+        ) from exc
+    if not math.isfinite(pressure):
+        raise ThermalRiskFeatureError(
+            f"non-finite saturation vapor pressure for temp_c={temperature!r}"
+        )
+    return pressure
 
 
 def build_thermal_risk_features(
@@ -72,14 +92,40 @@ def build_thermal_risk_features(
     if rgb is not None and not 0.0 <= rgb <= 1.0:
         raise ThermalRiskFeatureError("rgb_mite_evidence must be within [0, 1]")
 
-    actual_vapor_pressure = saturation_vapor_pressure_kpa(ambient) * (rh / 100.0)
-    ambient_vpd = max(0.0, saturation_vapor_pressure_kpa(ambient) - actual_vapor_pressure)
-    leaf_vpd = max(0.0, saturation_vapor_pressure_kpa(leaf) - actual_vapor_pressure)
+    ambient_saturation_vapor_pressure = saturation_vapor_pressure_kpa(ambient)
+    leaf_saturation_vapor_pressure = saturation_vapor_pressure_kpa(leaf)
+    actual_vapor_pressure = ambient_saturation_vapor_pressure * (rh / 100.0)
+    ambient_vpd = max(
+        0.0,
+        ambient_saturation_vapor_pressure - actual_vapor_pressure,
+    )
+    leaf_vpd = max(
+        0.0,
+        leaf_saturation_vapor_pressure - actual_vapor_pressure,
+    )
 
+    leaf_minus_ambient = leaf - ambient
     leaf_minus_reference = None if reference is None else leaf - reference
     thermal_abs_reference_delta = (
         None if leaf_minus_reference is None else abs(leaf_minus_reference)
     )
+    leaf_air_vpd_delta = leaf_vpd - ambient_vpd
+
+    derived_values = {
+        "leaf_minus_ambient_c": leaf_minus_ambient,
+        "ambient_vpd_kpa": ambient_vpd,
+        "leaf_vpd_kpa": leaf_vpd,
+        "leaf_air_vpd_delta_kpa": leaf_air_vpd_delta,
+    }
+    if leaf_minus_reference is not None:
+        derived_values["leaf_minus_reference_c"] = leaf_minus_reference
+    if thermal_abs_reference_delta is not None:
+        derived_values["thermal_abs_reference_delta_c"] = (
+            thermal_abs_reference_delta
+        )
+    for name, value in derived_values.items():
+        if not math.isfinite(value):
+            raise ThermalRiskFeatureError(f"non-finite derived feature {name}")
 
     return ThermalRiskFeatures(
         leaf_temp_c=leaf,
@@ -87,11 +133,11 @@ def build_thermal_risk_features(
         ambient_rh_pct=rh,
         reference_temp_c=reference,
         light_level=light,
-        leaf_minus_ambient_c=leaf - ambient,
+        leaf_minus_ambient_c=leaf_minus_ambient,
         leaf_minus_reference_c=leaf_minus_reference,
         ambient_vpd_kpa=ambient_vpd,
         leaf_vpd_kpa=leaf_vpd,
-        leaf_air_vpd_delta_kpa=leaf_vpd - ambient_vpd,
+        leaf_air_vpd_delta_kpa=leaf_air_vpd_delta,
         thermal_abs_reference_delta_c=thermal_abs_reference_delta,
         rgb_mite_evidence=rgb,
     )
@@ -99,4 +145,4 @@ def build_thermal_risk_features(
 
 def risk_training_allowed(*, field_label_policy_frozen: bool, cohort_audited: bool) -> bool:
     """Hard gate: V1 model fitting must wait for field label/cohort evidence."""
-    return bool(field_label_policy_frozen and cohort_audited)
+    return field_label_policy_frozen is True and cohort_audited is True
