@@ -1,3 +1,30 @@
+## Thermal risk fail-closed gate hardening — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `f6c6d535b4be368cdc1d0b1d85016ad583729b63`.
+- Implementation SHA: `2d0aeb33e9e7bb3ebe4477d2de9e60dabfe8ab5a`.
+- Status: `FAIL_CLOSED_BOUNDARIES_VERIFIED`.
+- Scope:
+  - `risk_training_allowed` now opens only when both approvals are actual `True` booleans; truthy strings, integers, and containers remain blocked;
+  - saturation-vapor-pressure non-finite inputs, the `-237.3` denominator singularity, overflow, and non-finite results consistently raise `ThermalRiskFeatureError`;
+  - every derived numeric feature is checked for finiteness before the immutable feature record is returned.
+- Preserved contracts:
+  - the normal 24/25°C, 60% RH calculation and kPa outputs are unchanged;
+  - optional reference/light/RGB inputs still preserve `None`, and RGB evidence `0.0` is retained without conversion to a negative label;
+  - the existing True/False training-gate behavior is unchanged;
+  - no temperature threshold, thermal risk direction, diagnosis, label, model, data source, or snapshot contract was added or changed.
+- Reproduction before implementation: the targeted module ran 8 tests with 12 failing subtests and 2 raw arithmetic errors (`ZeroDivisionError`, `OverflowError`).
+- Validation after implementation:
+  - `python3 -m unittest -v tests.test_thermal_mite_risk_v001`: PASS (8/8);
+  - `python3 -m unittest discover -s tests -p 'test_*.py'`: PASS (207/207);
+  - `python3 -m compileall -q ml tests`: PASS;
+  - `pnpm test:workflows`: PASS (30/30);
+  - `pnpm test:overview`: PASS (3/3);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS.
+- Remaining boundary: finite but agronomically implausible temperatures are not rejected here because field calibration has not established an authoritative physical range. They can only proceed as features; model training remains blocked by the two explicit evidence gates.
+- Next safe gate: review PR #105 and its CI for this incremental change. No main merge, deployment, migration, data/snapshot mutation, or GPU work was performed.
+
 ## Dyson Python quality gate repair — 2026-10-27
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
