@@ -23,8 +23,9 @@ import { PwaInstallButton } from './PwaInstallButton';
 import { RevenueForecast, type ForecastJobRecord, type RevenueForecastRecord } from './RevenueForecast';
 import { VideoUploadForm } from './VideoUploadForm';
 import { asLanguage, languageNames, languages, localeForLanguage, translate, type Language } from '@/app/lib/i18n';
+import { dashboardScreenFromSearch, writeDashboardScreen, type DashboardScreen } from '@/app/lib/dashboard-navigation';
 
-type Screen = 'home' | 'alerts' | 'history' | 'capture' | 'guide' | 'management' | 'account';
+type Screen = DashboardScreen;
 type Farm = { id: string; name: string; timezone: string };
 type FarmItem = { id: string; crop_code: string; crop_name: string; cultivar_code: string | null; cultivar_name: string | null; display_name: string; crop_image_uri: string | null; crop_description: string | null };
 type Camera = {
@@ -161,11 +162,27 @@ export function FarmerDashboard() {
   const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const value = new URLSearchParams(window.location.search).get('screen');
-      if ([...menu.map((item) => item.id), 'account'].includes(value as Screen)) setScreen(value as Screen);
-    }, 0);
-    return () => window.clearTimeout(timer);
+    function syncScreenFromLocation() {
+      const requestedScreen = dashboardScreenFromSearch(window.location.search);
+      const nextScreen = requestedScreen ?? 'home';
+      if (!requestedScreen) {
+        writeDashboardScreen({
+          currentScreen: nextScreen,
+          nextScreen,
+          href: window.location.href,
+          history: window.history,
+          mode: 'replace',
+        });
+      }
+      setScreen(nextScreen);
+    }
+
+    const timer = window.setTimeout(syncScreenFromLocation, 0);
+    window.addEventListener('popstate', syncScreenFromLocation);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('popstate', syncScreenFromLocation);
+    };
   }, []);
 
   useEffect(() => {
@@ -296,10 +313,15 @@ export function FarmerDashboard() {
   }, [screen, farmId, selectedItemId]);
 
   function open(next: Screen) {
-    setScreen(next);
-    const url = new URL(window.location.href);
-    url.searchParams.set('screen', next);
-    window.history.replaceState(null, '', url);
+    if (screen !== next) {
+      setScreen(next);
+      writeDashboardScreen({
+        currentScreen: screen,
+        nextScreen: next,
+        href: window.location.href,
+        history: window.history,
+      });
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
