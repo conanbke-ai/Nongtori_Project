@@ -24,6 +24,7 @@ import { RevenueForecast, type ForecastJobRecord, type RevenueForecastRecord } f
 import { VideoUploadForm } from './VideoUploadForm';
 import { asLanguage, languageNames, languages, localeForLanguage, translate, type Language } from '@/app/lib/i18n';
 import { dashboardScreenFromSearch, writeDashboardScreen, type DashboardScreen } from '@/app/lib/dashboard-navigation';
+import { dashboardDataState } from '@/app/lib/dashboard-data-state';
 
 type Screen = DashboardScreen;
 type Farm = { id: string; name: string; timezone: string };
@@ -149,7 +150,7 @@ export function FarmerDashboard() {
   const dashboardRequestSequence = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [loaded, setLoaded] = useState(false);
+  const [hasSuccessfulData, setHasSuccessfulData] = useState(false);
   const [historyFrom, setHistoryFrom] = useState(() => dateDaysAgo(30));
   const [historyTo, setHistoryTo] = useState(() => localDateKey());
   const [historySource, setHistorySource] = useState('');
@@ -202,7 +203,7 @@ export function FarmerDashboard() {
 
   function apply(next: DashboardData) {
     setData(next);
-    setLoaded(true);
+    setHasSuccessfulData(true);
     const storedLanguage = typeof window !== 'undefined' ? window.localStorage.getItem('farm-language') : null;
     setLanguage(asLanguage(storedLanguage || next.account.preferredLanguage));
     if (next.selectedFarm) setFarmId(next.selectedFarm.id);
@@ -226,7 +227,7 @@ export function FarmerDashboard() {
   useEffect(() => {
     void requestDashboard().then((next) => {
       setData(next);
-      setLoaded(true);
+      setHasSuccessfulData(true);
       const storedLanguage = window.localStorage.getItem('farm-language');
       setLanguage(asLanguage(storedLanguage || next.account.preferredLanguage));
       if (next.selectedFarm) setFarmId(next.selectedFarm.id);
@@ -235,7 +236,6 @@ export function FarmerDashboard() {
     }).catch((caught) => {
       setError(caught instanceof Error ? caught.message : '화면을 새로고침해 주세요.');
       setLoading(false);
-      setLoaded(true);
     });
   }, []);
 
@@ -264,7 +264,11 @@ export function FarmerDashboard() {
       : translate(language, 'scout.readyTitle');
   const scoutDescription = scoutMode === 'alert' ? pestText(language, 'alertHelp')
     : translate(language, scoutMode === 'pending' ? 'scout.pendingDesc' : 'scout.readyDesc');
-  const pestOverviewState: OverviewState = loading ? 'loading' : error ? 'error' : !data.selectedFarm ? 'unlinked' : 'ready';
+  const dataState = dashboardDataState({ hasSuccessfulData, loading, error });
+  const pestOverviewState: OverviewState = !hasSuccessfulData
+    ? dataState === 'initial-loading' ? 'loading' : 'error'
+    : !data.selectedFarm ? 'unlinked' : 'ready';
+  const unavailableSelectorState = dataState === 'initial-loading' ? '확인 중' : '확인 불가';
   const scoutAction = translate(language, scoutMode === 'alert'
     ? 'scout.openAlerts' : scoutMode === 'pending' ? 'scout.openHistory' : 'scout.startAnalysis');
   const selectedItemId = selectedItem?.id ?? '';
@@ -379,7 +383,7 @@ export function FarmerDashboard() {
     </nav>
   );
 
-  if (loaded && !data.account.authenticated) {
+  if (hasSuccessfulData && !data.account.authenticated) {
     return <AuthGateway />;
   }
 
@@ -388,9 +392,9 @@ export function FarmerDashboard() {
       <header className="app-topbar">
         <button className="app-brand" onClick={() => open('home')} type="button"><span aria-hidden="true" className="app-brand-mark"><Image alt="" fill priority sizes="48px" src="/nongtori-app-icon-512.png" /></span><span className="app-brand-copy"><strong>농토리 운영센터</strong><span>재배 · 수확 · 예찰을 한곳에서</span></span></button>
         <div className="app-context-selectors">
-          <label className="farm-select-wrap"><span>{translate(language, 'common.farm')}</span><select disabled={data.farms.length === 0} onChange={(event) => { setFarmId(event.target.value); setItemId(''); reload(event.target.value); }} value={farmId}>{data.farms.length === 0 && <option value="">연결된 농장 없음</option>}{data.farms.map((farm) => <option key={farm.id} value={farm.id}>{farm.name}</option>)}</select></label>
-          <label className="crop-select-wrap"><span>{translate(language, 'common.crop')}</span><select disabled={cropOptions.length === 0} onChange={(event) => { const nextItem = data.items.find((item) => item.crop_code === event.target.value); if (nextItem) setItemId(nextItem.id); }} value={selectedItem?.crop_code ?? ''}>{cropOptions.length === 0 && <option value="">작물 없음</option>}{cropOptions.map((crop) => <option key={crop.code} value={crop.code}>{crop.name}</option>)}</select></label>
-          <label className="item-select-wrap"><span>{translate(language, 'common.cultivar')}</span><select disabled={cultivarOptions.length === 0} onChange={(event) => setItemId(event.target.value)} value={selectedItem?.id ?? ''}>{cultivarOptions.length === 0 && <option value="">품종 없음</option>}{cultivarOptions.map((item) => <option key={item.id} value={item.id}>{item.cultivar_name ?? item.display_name}</option>)}</select></label>
+          <label className="farm-select-wrap"><span>{translate(language, 'common.farm')}</span><select disabled={data.farms.length === 0} onChange={(event) => { setFarmId(event.target.value); setItemId(''); reload(event.target.value); }} value={farmId}>{data.farms.length === 0 && <option value="">{hasSuccessfulData ? '연결된 농장 없음' : `농장 ${unavailableSelectorState}`}</option>}{data.farms.map((farm) => <option key={farm.id} value={farm.id}>{farm.name}</option>)}</select></label>
+          <label className="crop-select-wrap"><span>{translate(language, 'common.crop')}</span><select disabled={cropOptions.length === 0} onChange={(event) => { const nextItem = data.items.find((item) => item.crop_code === event.target.value); if (nextItem) setItemId(nextItem.id); }} value={selectedItem?.crop_code ?? ''}>{cropOptions.length === 0 && <option value="">{hasSuccessfulData ? '작물 없음' : `작물 ${unavailableSelectorState}`}</option>}{cropOptions.map((crop) => <option key={crop.code} value={crop.code}>{crop.name}</option>)}</select></label>
+          <label className="item-select-wrap"><span>{translate(language, 'common.cultivar')}</span><select disabled={cultivarOptions.length === 0} onChange={(event) => setItemId(event.target.value)} value={selectedItem?.id ?? ''}>{cultivarOptions.length === 0 && <option value="">{hasSuccessfulData ? '품종 없음' : `품종 ${unavailableSelectorState}`}</option>}{cultivarOptions.map((item) => <option key={item.id} value={item.id}>{item.cultivar_name ?? item.display_name}</option>)}</select></label>
         </div>
         <label className="language-select"><span>{translate(language, 'common.language')}</span><select aria-label={translate(language, 'common.language')} onChange={(event) => changeLanguage(asLanguage(event.target.value))} value={language}>{languages.map((item) => <option key={item} value={item}>{languageNames[item]}</option>)}</select></label>
         <button className="refresh-button" disabled={loading} onClick={() => reload()} type="button">{loading ? translate(language, 'common.loading') : translate(language, 'common.refresh')}</button>
@@ -400,16 +404,25 @@ export function FarmerDashboard() {
 
       <aside className="app-sidebar">
         {navigation()}
-        <button className="sidebar-chat-entry" disabled={!farmId} onClick={openChat} type="button"><span aria-hidden="true">•••</span><div><strong>{translate(language, 'chat.open')}</strong><small>{farmId ? translate(language, 'chat.sidebarHelp') : translate(language, 'chat.unavailable')}</small></div></button>
+        <button className="sidebar-chat-entry" disabled={!farmId} onClick={openChat} type="button"><span aria-hidden="true">•••</span><div><strong>{translate(language, 'chat.open')}</strong><small>{farmId ? translate(language, 'chat.sidebarHelp') : hasSuccessfulData ? translate(language, 'chat.unavailable') : '농장 정보를 확인한 뒤 사용할 수 있습니다'}</small></div></button>
         <div className="sidebar-device"><i className="online" /><div><strong>저장 영상 판독</strong><span>일반·열화상 영상 지원</span></div></div>
       </aside>
 
       <div className="app-content">
-        {error && <div className="error-banner" role="alert"><strong>{error}</strong><button onClick={() => reload()} type="button">다시 시도</button></div>}
-        {loaded && data.membershipRequired && data.farms.length === 0 && (
+        {error && <div className="error-banner" role="alert"><div><strong>{error}</strong>{dataState === 'stale' && <span>마지막으로 불러온 정보를 표시합니다. 최신 상태가 아닐 수 있습니다.</span>}</div><button onClick={() => reload()} type="button">다시 시도</button></div>}
+        {dataState === 'refreshing' && <div className="data-refresh-banner" role="status">새 정보를 확인하는 동안 마지막 조회 결과를 표시합니다.</div>}
+        {hasSuccessfulData && data.membershipRequired && data.farms.length === 0 && (
           <div className="account-link-banner"><strong>계약 농장 연결 대기</strong><span>이 로그인 계정에 농장 정보가 등록되면 자동으로 표시됩니다.</span></div>
         )}
-        <>
+        {!hasSuccessfulData ? (
+          <section className="app-screen" aria-busy={dataState === 'initial-loading'}>
+            <div className="module-workspace screen-empty dashboard-state-panel" role="status">
+              <span aria-hidden="true">{dataState === 'initial-loading' ? '…' : '!'}</span>
+              <strong>{dataState === 'initial-loading' ? '농장 현황을 불러오는 중입니다.' : '농장 현황을 표시할 수 없습니다.'}</strong>
+              <p>{dataState === 'initial-loading' ? '연결 상태와 운영 수치는 조회가 끝난 뒤 표시합니다.' : '운영 수치는 확인되지 않았습니다. 다시 시도해 주세요.'}</p>
+            </div>
+          </section>
+        ) : <>
             {screen === 'home' && (
               <section className="app-screen home-screen">
                 <div className="screen-heading overview-heading"><div><p>{formatDate(language)}</p><h1>{translate(language, 'home.title')}</h1><span>{data.selectedFarm?.name ?? '농장 연결 대기'} · {selectedItem?.display_name ?? '재배 품목 연결 대기'}</span></div><button className="primary-action" onClick={() => open('capture')} type="button">{translate(language, 'upload.savedVideo')}</button></div>
@@ -506,7 +519,7 @@ export function FarmerDashboard() {
                 {farmId ? <AccountCenter account={data.account} farmId={farmId} key={`${farmId}:${data.account.displayName ?? ''}:${data.account.phone ?? ''}`} language={language} onChanged={() => reload()} /> : <div className="module-workspace screen-empty"><strong>계약 농장 연결을 기다리고 있습니다.</strong><p>농장 정보가 계정에 연결되면 사용자와 알림 설정을 관리할 수 있습니다.</p></div>}
               </section>
             )}
-        </>
+        </>}
       </div>
       {farmId && <FarmMiniChat farmId={farmId} farmName={data.selectedFarm?.name ?? translate(language, 'common.farm')} key={farmId} language={language} onOpenChange={setChatOpen} open={chatOpen} />}
       <nav aria-label={translate(language, 'common.pageMove')} className="page-jump-buttons">
