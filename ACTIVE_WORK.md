@@ -1,3 +1,27 @@
+## Dashboard data-trust state repair — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `250120b9bae07aaa4c76f055213b79c798d6e73d`.
+- Implementation SHA: `b3215c6824d9a9ecf1ae2def28191448b24f93c4`.
+- Status: `DASHBOARD_DATA_TRUST_STATES_VERIFIED`.
+- Scope:
+  - initial loading and initial request failure no longer render default zero metrics or claim that the account has no connected farm;
+  - an initial failure reports that operating values are unverified and retains the existing retry action;
+  - a successful zero-data response still renders the existing setup/empty state and actual zero values;
+  - a failure after a successful response preserves the last successful values and labels them as potentially stale;
+  - refresh-in-progress with prior data identifies that the last successful response is still being displayed.
+- Preserved contracts: the existing successful-data payload, empty-state meaning, last-successful-data retention, retry behavior, tab history, API, DB, authorization, data, notification, training, and responsive-layout contracts are unchanged.
+- Reproduction before implementation: the isolated initial 503 browser fixture rendered the error alert together with setup-required copy and default `0` metrics (`/workspace/scratch/nongtori-ui-qa-20261027/desktop-error-fixture.png`).
+- Validation after implementation:
+  - `node --import ./tests/register.mjs --test tests/dashboard-data-state.test.ts`: PASS (1/1);
+  - `pnpm test:overview`: PASS (7/7);
+  - `pnpm test:workflows`: PASS (30/30);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS;
+  - desktop 1440x900 and mobile 390x844 isolated-browser checks for initial loading, initial 503, retry success, actual zero success, prior-success refresh failure, and Back/Forward regression: PASS (`/workspace/scratch/nongtori-dashboard-data-state-20261027/report.json`).
+- Evidence limit: request failures were deterministic browser-route fixtures; no live backend outage, DB write, source-data change, or external upload was used.
+- Next safe gate: independent review and PR #105 CI. No main merge, deployment, migration, destructive action, or GPU work was performed.
+
 ## Dashboard browser-history repair — 2026-10-27
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
