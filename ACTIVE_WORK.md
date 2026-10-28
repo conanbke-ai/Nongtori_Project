@@ -1,3 +1,30 @@
+## Mutating API authorization matrix — 2026-10-28
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`.
+- Status: `API_AUTHORIZATION_NEGATIVE_PATHS_VERIFIED` (local diff; not committed or pushed).
+- Scope:
+  - all 33 exported `POST / PUT / PATCH / DELETE` handlers are classified as `FARM_MEMBER`, `FARM_PERMISSION`, `MEMBER_SELF`, or `SERVICE_TOKEN`;
+  - a source-scanning regression fails when a new mutating handler is not assigned to an authorization boundary;
+  - isolated in-memory D1/R2 fixtures prove that unauthenticated users, workers without `manageMembers`, and owners from another farm cannot add a farm member or create an audit row;
+  - unauthenticated and cross-farm identities cannot update another farm member's profile;
+  - unauthenticated and cross-farm identities are rejected before video R2/session writes;
+  - wrong forecast, robot-ingest, notification, and vendor tokens are rejected before database mutation or external delivery;
+  - representative authorized success paths cover active-member chat ownership, member-self profile updates, `manageMembers`, `uploadMedia`, and all four service-token families;
+  - 14 handlers have a direct successful route call; the remaining 19 are explicitly marked `NOT_RUN` rather than inferred from their shared permission type.
+- Validation:
+  - `node --import ./tests/register.mjs --test tests/api-authorization.test.ts`: PASS (8/8);
+  - `pnpm test:workflows`: PASS (38/38);
+  - `pnpm test:overview`: PASS (7/7);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS.
+- Evidence boundary:
+  - no real DB, R2, SMS, worker endpoint, or user field data was used;
+  - no production authorization code or runtime authentication setting changed;
+  - localhost/127.0.0.1 classification and non-local anonymous denial were unit-tested, but the development fallback's production hosting boundary remains unverified;
+  - the matrix records every unexecuted successful route and does not claim every role combination for every handler.
+- Character status correction: the four user-approved character assets were applied at `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`; existing icon and social-card assets remain intentionally unchanged.
+
 ## Mite public source contract pin gate — 2026-10-27
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
@@ -22,7 +49,7 @@
   - canonical offline source audit: `MITE_PUBLIC_SOURCE_GATE_READY`, 0 blocking reasons, registry statuses preserved as `REVIEW_REQUIRED`;
   - `git diff --check`: PASS.
 - Tool note: `python -m pytest` was NOT RUN because this executor does not have `pytest`; the repository CI uses `unittest`, which passed targeted and full-suite checks.
-- Character work remains a separate `ASSET_TRANSFER_APPROVAL_PENDING` scope. No image was transferred, edited, or committed.
+- Character work completed separately at `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`; it does not change this public-source gate's evidence boundary.
 - Next safe gate: independent review and exact-head Data CI. No download, training, test-set reopening, main merge, deployment, DB migration, destructive action, paid resource, or GPU work was performed.
 
 ## Dashboard data-trust state repair — 2026-10-27
