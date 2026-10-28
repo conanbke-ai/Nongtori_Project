@@ -37,7 +37,7 @@ Cloudflare 바인딩은 [`.openai/hosting.json`](../.openai/hosting.json)에 정
 
 세부 다농가 원칙은 [`MULTI_FARM_DATA_MODEL.md`](MULTI_FARM_DATA_MODEL.md)를 참고하세요.
 
-캐릭터 외형·의상·활용 범위는 [`TORI_CHARACTER_STANDARD.md`](TORI_CHARACTER_STANDARD.md)를 따릅니다. 화면에서 사용하는 canonical 자산은 [`../assets/nongtori-tori.webp`](../assets/nongtori-tori.webp)이며, 이 서비스에는 농토리만 사용합니다.
+캐릭터 외형·의상·활용 범위는 [`TORI_CHARACTER_STANDARD.md`](TORI_CHARACTER_STANDARD.md)를 따릅니다. 화면의 기본 canonical 자산은 [`../assets/nongtori-character-open-eyes.png`](../assets/nongtori-character-open-eyes.png)이며 로그인 환영 영역만 승인된 윙크 변형을 사용합니다. 이 서비스에는 농토리만 사용합니다.
 
 ## 데이터베이스 구조
 

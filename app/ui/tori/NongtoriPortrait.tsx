@@ -1,7 +1,14 @@
 import Image from 'next/image';
 import './portrait.css';
 
-/** Full-size standard artwork; the 192px identity thumbnail is not a hero image. */
-export function NongtoriPortrait({ alt }: { alt: string }) {
-  return <Image alt={alt} className="nongtori-portrait" width={720} height={1080} priority unoptimized src="/nongtori-focus-v1.jpg" />;
+const portraitSources = {
+  default: '/nongtori-character-open-eyes.png',
+  wink: '/nongtori-character-wink.png',
+} as const;
+
+type NongtoriPortraitVariant = keyof typeof portraitSources;
+
+/** Full-size approved artwork; identity thumbnails and face crops are separate assets. */
+export function NongtoriPortrait({ alt, variant = 'default' }: { alt: string; variant?: NongtoriPortraitVariant }) {
+  return <Image alt={alt} className="nongtori-portrait" width={1254} height={1254} priority unoptimized src={portraitSources[variant]} />;
 }

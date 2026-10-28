@@ -13,6 +13,7 @@
     "db:generate": "drizzle-kit generate",
     "test:workflows": "node --import ./tests/register.mjs --test tests/pest-records.test.ts tests/scouting-state.test.ts tests/scouting-ui.test.tsx tests/scouting-hardening.test.ts tests/notification-center.test.ts tests/weight-source.test.ts",
     "test:overview": "node --import ./tests/register.mjs --test tests/overview.test.tsx tests/dashboard-navigation.test.ts tests/dashboard-data-state.test.ts",
+    "test:assets": "node --import ./tests/register.mjs --test tests/nongtori-assets.test.ts",
     "verify:cursor": "node scripts/verify-tori-cursor.mjs"
   },
   "dependencies": {
