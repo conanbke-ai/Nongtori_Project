@@ -1,8 +1,9 @@
-## Mutating API authorization matrix — 2026-10-28
+## Mutating API authorization matrix — 2026-10-29
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
 - Base SHA: `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`.
-- Status: `API_AUTHORIZATION_NEGATIVE_PATHS_VERIFIED` (local diff; not committed or pushed).
+- PR HEAD: `0cd52f3ea1e4c0b76aeff6625c1769050b68865d`.
+- Status: `API_AUTHORIZATION_MATRIX_VERIFIED` (N-06/N-07 committed and pushed; not merged to `main`).
 - Scope:
   - all 33 exported `POST / PUT / PATCH / DELETE` handlers are classified as `FARM_MEMBER`, `FARM_PERMISSION`, `MEMBER_SELF`, or `SERVICE_TOKEN`;
   - a source-scanning regression fails when a new mutating handler is not assigned to an authorization boundary;
@@ -11,17 +12,20 @@
   - unauthenticated and cross-farm identities are rejected before video R2/session writes;
   - wrong forecast, robot-ingest, notification, and vendor tokens are rejected before database mutation or external delivery;
   - representative authorized success paths cover active-member chat ownership, member-self profile updates, `manageMembers`, `uploadMedia`, and all four service-token families;
-  - 14 handlers have a direct successful route call; the remaining 19 are explicitly marked `NOT_RUN` rather than inferred from their shared permission type.
+  - direct isolated success calls also cover scouting observation, field check, append-only correction, action, and resolution state transitions;
+  - 19 of 33 handlers have a direct successful route call; the remaining 14 are explicitly marked `NOT_RUN` rather than inferred from their shared permission type.
 - Validation:
-  - `node --import ./tests/register.mjs --test tests/api-authorization.test.ts`: PASS (8/8);
-  - `pnpm test:workflows`: PASS (38/38);
-  - `pnpm test:overview`: PASS (7/7);
+  - `node --import ./tests/register.mjs --test tests/api-authorization.test.ts`: PASS (9/9);
+  - `pnpm test:workflows`: PASS (39/39);
+  - `pnpm test:overview`: PASS (7/7 before N-07; not rerun for the test-and-document-only N-07 change);
   - `pnpm lint`: PASS;
-  - `pnpm build`: PASS.
+  - `pnpm build`: NOT RUN for N-07; the previous build passed before N-07, and this is not an exact-head local build claim;
+  - exact-head CI confirmed externally: Data CI `40813720666` SUCCESS, App CI `40813720709` SUCCESS.
 - Evidence boundary:
   - no real DB, R2, SMS, worker endpoint, or user field data was used;
   - no production authorization code or runtime authentication setting changed;
   - localhost/127.0.0.1 classification and non-local anonymous denial were unit-tested, but the development fallback's production hosting boundary remains unverified;
+  - staging and live hosting were not exercised;
   - the matrix records every unexecuted successful route and does not claim every role combination for every handler.
 - Character status correction: the four user-approved character assets were applied at `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`; existing icon and social-card assets remain intentionally unchanged.
 
