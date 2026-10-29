@@ -84,17 +84,17 @@
 | `record-notes#POST` | record farm의 `viewHistory`/`reviewAlerts` 구성원 | EXECUTED | `pest-records`: owner/worker note·reply |
 | `record-notes#PATCH` | 작성자이며 `reviewAlerts` 구성원 | EXECUTED | `pest-records`: 작성자 수정 |
 | `record-notes#DELETE` | 작성자 또는 `manageMembers` 구성원 | NOT_RUN | route 성공 호출 미실행 |
-| `scouting-actions#POST` | `reviewAlerts` 구성원 | NOT_RUN | service 성공 검증만 존재, route 미실행 |
-| `scouting-field-check-corrections#POST` | `reviewAlerts` 구성원 | NOT_RUN | service 성공 검증만 존재, route 미실행 |
-| `scouting-field-checks#POST` | `reviewAlerts` 구성원 | NOT_RUN | service 성공 검증만 존재, route 미실행 |
-| `scouting-observations#POST` | `manageFarm` 구성원 | NOT_RUN | service 성공 검증만 존재, route 미실행 |
-| `scouting-resolve#POST` | `reviewAlerts` 구성원 | NOT_RUN | service 성공 검증만 존재, route 미실행 |
+| `scouting-actions#POST` | `reviewAlerts` 구성원 | EXECUTED | `api-authorization`: 처리 조치·상태 전이 |
+| `scouting-field-check-corrections#POST` | `reviewAlerts` 구성원 | EXECUTED | `api-authorization`: append-only 확인 정정 |
+| `scouting-field-checks#POST` | `reviewAlerts` 구성원 | EXECUTED | `api-authorization`: 현장 확인 row 생성 |
+| `scouting-observations#POST` | `manageFarm` 구성원 | EXECUTED | `api-authorization`: ADMIN 관측·case 생성 |
+| `scouting-resolve#POST` | `reviewAlerts` 구성원 | EXECUTED | `api-authorization`: 진행 case 종료 |
 | `vendor/farm-import#POST` | `VENDOR_IMPORT_TOKEN` | EXECUTED | `api-authorization`: read-only fixture import |
 | `video-sessions#POST` | `uploadMedia` 구성원 | NOT_RUN | route 성공 호출 미실행 |
 | `video-upload#POST` | `uploadMedia`, 같은 farm zone/item | EXECUTED | `api-authorization`: fake R2·session 생성 |
 
 ## 남은 검증 범위
 
-- 위 표의 `NOT_RUN` route와 모든 역할 조합은 아직 각각 실행하지 않았다.
+- 위 표에서 19개 handler는 성공 route를 직접 실행했고, `NOT_RUN` 14개와 모든 역할 조합은 아직 각각 실행하지 않았다.
 - `localhost`와 `127.0.0.1` 분류 및 non-local 익명 차단은 단위 검증했다. URL hostname에 따른 개발 fallback이 실제 운영 hosting에서 활성화되지 않는지는 여전히 미확인이다.
 - 실제 D1/R2, 실제 SMS·worker endpoint, 사용자 실데이터는 이 테스트에서 사용하지 않는다.

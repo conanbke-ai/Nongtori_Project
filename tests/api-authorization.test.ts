@@ -130,6 +130,11 @@ const farmMembers = await import('../app/api/farm-members/route');
 const forecastWorker = await import('../app/api/forecast-worker/route');
 const harvestCompletion = await import('../app/api/harvest-completion/route');
 const notificationWorker = await import('../app/api/notification-worker/route');
+const scoutingActions = await import('../app/api/scouting-actions/route');
+const scoutingFieldCheckCorrections = await import('../app/api/scouting-field-check-corrections/route');
+const scoutingFieldChecks = await import('../app/api/scouting-field-checks/route');
+const scoutingObservations = await import('../app/api/scouting-observations/route');
+const scoutingResolve = await import('../app/api/scouting-resolve/route');
 const vendorImport = await import('../app/api/vendor/farm-import/route');
 const videoUpload = await import('../app/api/video-upload/route');
 
@@ -164,6 +169,7 @@ for (const farmId of ['farm-a', 'farm-b']) {
   });
 }
 for (const [id, farmId, role] of [
+  ['admin-a', 'farm-a', 'ADMIN'],
   ['owner-a', 'farm-a', 'OWNER'],
   ['worker-a', 'farm-a', 'WORKER'],
   ['owner-b', 'farm-b', 'OWNER'],
@@ -321,7 +327,7 @@ test('non-local requests require identity while localhost classification stays d
     new Request('http://localhost/api/account-profile'),
     'farm-a',
   );
-  assert.equal(localMember?.id, 'owner-a');
+  assert.equal(localMember?.id, 'admin-a');
 });
 
 test('authorized user boundaries perform only their scoped fixture writes', async () => {
@@ -422,4 +428,113 @@ test('valid service tokens reach isolated domain work without external delivery'
     globalThis.fetch = originalFetch;
   }
   assert.equal(externalCalls, 0);
+});
+
+test('authorized scouting routes persist observation, review, correction, action, and resolution', async () => {
+  const observationCount = count('scouting_observations');
+  const fieldCheckCount = count('scouting_field_checks');
+  const correctionCount = count('scouting_field_check_corrections');
+  const actionCount = count('scouting_actions');
+
+  const observed = await scoutingObservations.POST(jsonRequest(
+    'scouting-observations',
+    'POST',
+    'admin-a',
+    {
+      farmId: 'farm-a', houseId: 'house-a', bedId: 'bed-a', zoneId: 'zone-a',
+      observedAt: '2026-10-28T03:00:00.000Z', sourceType: 'FUSION',
+      issueFamily: 'PEST', issueCode: 'SPIDER_MITE',
+      signals: { hasMeaningfulAnomaly: true, hasMeaningfulNewEvidence: true },
+      patternFingerprint: 'authz-scouting-route-fixture',
+    },
+  ));
+  assert.equal(observed.status, 201);
+  const observation = await observed.json() as {
+    observationId: string;
+    locationStateId: string;
+    caseId: string;
+    nextState: string;
+  };
+  assert.equal(observation.nextState, 'FIELD_CHECK_REQUIRED');
+  assert.equal(count('scouting_observations'), observationCount + 1);
+  assert.ok(sqlite.prepare(
+    'SELECT id FROM scouting_observations WHERE id = ? AND farm_id = ? AND location_state_id = ?',
+  ).get(observation.observationId, 'farm-a', observation.locationStateId));
+
+  const checked = await scoutingFieldChecks.POST(jsonRequest(
+    'scouting-field-checks',
+    'POST',
+    'worker-a',
+    {
+      farmId: 'farm-a', locationStateId: observation.locationStateId,
+      observationId: observation.observationId,
+      evidenceCode: 'WEBBING_OR_MITE_TRACE_SUSPECTED',
+      checkedAt: '2026-10-28T03:05:00.000Z', note: 'fixture field check',
+    },
+  ));
+  assert.equal(checked.status, 201);
+  const fieldCheck = await checked.json() as { fieldCheckId: string; nextState: string };
+  assert.equal(fieldCheck.nextState, 'SUSPECTED');
+  assert.equal(count('scouting_field_checks'), fieldCheckCount + 1);
+  const originalEvidence = (sqlite.prepare(
+    'SELECT primary_evidence_code FROM scouting_field_checks WHERE id = ?',
+  ).get(fieldCheck.fieldCheckId) as { primary_evidence_code: string }).primary_evidence_code;
+  assert.equal(originalEvidence, 'WEBBING_OR_MITE_TRACE_SUSPECTED');
+
+  const corrected = await scoutingFieldCheckCorrections.POST(jsonRequest(
+    'scouting-field-check-corrections',
+    'POST',
+    'worker-a',
+    {
+      farmId: 'farm-a', fieldCheckId: fieldCheck.fieldCheckId, correctionKind: 'REPLACE',
+      replacementEvidenceCode: 'DIRECT_MITE_OR_EGG_CONFIRMED', reasonCode: 'MISCLICK',
+      correctedAt: '2026-10-28T03:06:00.000Z', note: 'fixture correction',
+    },
+  ));
+  assert.equal(corrected.status, 201);
+  const correction = await corrected.json() as { correctionId: string; nextState: string };
+  assert.equal(correction.nextState, 'CONFIRMED');
+  assert.equal(count('scouting_field_check_corrections'), correctionCount + 1);
+  assert.equal(
+    (sqlite.prepare('SELECT primary_evidence_code FROM scouting_field_checks WHERE id = ?')
+      .get(fieldCheck.fieldCheckId) as { primary_evidence_code: string }).primary_evidence_code,
+    originalEvidence,
+    'the correction must not rewrite the original field check',
+  );
+
+  const acted = await scoutingActions.POST(jsonRequest(
+    'scouting-actions',
+    'POST',
+    'worker-a',
+    {
+      farmId: 'farm-a', locationStateId: observation.locationStateId,
+      actionCode: 'TREATMENT_APPLIED', actionAt: '2026-10-28T03:10:00.000Z',
+      note: 'fixture action',
+    },
+  ));
+  assert.equal(acted.status, 201);
+  assert.equal((await acted.json() as { nextState: string }).nextState, 'POST_TREATMENT');
+  assert.equal(count('scouting_actions'), actionCount + 1);
+
+  const resolved = await scoutingResolve.POST(jsonRequest(
+    'scouting-resolve',
+    'POST',
+    'worker-a',
+    {
+      farmId: 'farm-a', locationStateId: observation.locationStateId,
+      reasonCode: 'TREATMENT_COMPLETED', resolvedAt: '2026-10-28T03:15:00.000Z',
+    },
+  ));
+  assert.equal(resolved.status, 200);
+  assert.equal((await resolved.json() as { state: string }).state, 'RESOLVED');
+  const closedCase = sqlite.prepare(
+    'SELECT status, close_reason FROM scouting_cases WHERE id = ?',
+  ).get(observation.caseId) as { status: string; close_reason: string };
+  assert.equal(closedCase.status, 'RESOLVED');
+  assert.equal(closedCase.close_reason, 'TREATMENT_COMPLETED');
+  assert.equal(
+    (sqlite.prepare('SELECT current_state FROM scouting_location_states WHERE id = ?')
+      .get(observation.locationStateId) as { current_state: string }).current_state,
+    'RESOLVED',
+  );
 });
