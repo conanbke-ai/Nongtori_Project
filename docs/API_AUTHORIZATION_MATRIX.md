@@ -55,46 +55,47 @@
 
 ## 성공 계약 실행 현황
 
-`EXECUTED`는 해당 route를 isolated fixture에서 실제 호출한 경우만 뜻한다. 같은 권한 유형의 대표 경계가 통과했더라도 route 자체를 호출하지 않았으면 `NOT_RUN`이다.
+`EXECUTED`는 해당 route를 isolated fixture에서 실제 호출한 경우만 뜻한다. 같은 권한 유형의 대표 경계가 통과했더라도 route 자체를 호출하지 않았으면 `NOT_RUN`이다. 이는 handler당 정상 권한 분기 1개의 smoke/contract 실행 상태이며 모든 action·role 분기나 전체 제품 acceptance를 뜻하지 않는다.
 
 | Handler | 허용 주체 | 상태 | 증거 |
 |---|---|---|---|
 | `account-profile#PATCH` | 대상 farm의 현재 구성원 본인 | EXECUTED | `api-authorization`: 별명·언어 row 갱신 |
 | `alert-reviews#POST` | `reviewAlerts` 구성원 | EXECUTED | `pest-records`: worker review 생성 |
-| `community-chat-messages#POST` | 승인된 활성 구성원 | NOT_RUN | route 성공 호출 미실행 |
-| `community-chat-messages#DELETE` | 작성자 또는 ADMIN | NOT_RUN | route 성공 호출 미실행 |
+| `community-chat-messages#POST` | 승인된 활성 구성원 | EXECUTED | `api-authorization`: 승인 worker 메시지 생성 |
+| `community-chat-messages#DELETE` | 작성자 또는 ADMIN | EXECUTED | `api-authorization`: 작성자 soft delete |
 | `farm-chat-messages#POST` | 활성 구성원 | EXECUTED | `api-authorization`: worker 메시지 생성 |
 | `farm-chat-messages#DELETE` | 작성자 또는 `manageMembers` 구성원 | EXECUTED | `api-authorization`: 작성자 soft delete |
 | `farm-members#POST` | `manageMembers`; OWNER는 WORKER만 | EXECUTED | `api-authorization`: 구성원·audit row 생성 |
-| `farm-members#PATCH` | `manageMembers`와 대상 역할 제한 | NOT_RUN | route 성공 호출 미실행 |
-| `farm-members#DELETE` | `manageMembers`와 대상 역할 제한 | NOT_RUN | route 성공 호출 미실행 |
+| `farm-members#PATCH` | `manageMembers`와 대상 역할 제한 | EXECUTED | `api-authorization`: ADMIN의 격리 구성원 이름·역할 변경과 audit 생성 |
+| `farm-members#DELETE` | `manageMembers`와 대상 역할 제한 | EXECUTED | `api-authorization`: ADMIN의 격리 구성원 삭제·대기 알림 취소·audit 보존 |
 | `forecast-worker#POST` | `FORECAST_WORKER_TOKEN` | EXECUTED | `api-authorization`: 204 idle 후 job claim |
-| `forecast-worker#PUT` | `FORECAST_WORKER_TOKEN` | NOT_RUN | 결과 저장 성공 호출 미실행 |
-| `fruit-assessments#POST` | `uploadMedia` 구성원 | NOT_RUN | route 성공 호출 미실행 |
+| `forecast-worker#PUT` | `FORECAST_WORKER_TOKEN` | EXECUTED | `api-authorization`: 공급된 fixture 예측 저장·job 완료, 모델 미실행 |
+| `fruit-assessments#POST` | `uploadMedia` 구성원 | EXECUTED | `api-authorization`: memory FILES stub과 과실 평가·세션 저장 |
 | `fruit-weights#POST` | `uploadMedia`, 같은 farm assessment | EXECUTED | `weight-source`: 수동 계측 저장 |
 | `harvest-completion#POST` | `ROBOT_INGEST_TOKEN` | EXECUTED | `api-authorization`: run·grade·forecast job 생성 |
-| `harvest-runs#POST` | `uploadMedia` 구성원 | NOT_RUN | route 성공 호출 미실행 |
-| `harvest-runs#PATCH` | `uploadMedia` 구성원 | NOT_RUN | route 성공 호출 미실행 |
-| `mite-capture#POST` | `uploadMedia` 구성원 | NOT_RUN | wrapper route 성공 호출 미실행 |
+| `harvest-runs#POST` | `uploadMedia` 구성원 | EXECUTED | `api-authorization`: worker 수확 작업 시작 |
+| `harvest-runs#PATCH` | `uploadMedia` 구성원 | EXECUTED | `api-authorization`: worker 수확 작업 완료 |
+| `mite-capture#POST` | `uploadMedia` 구성원 | EXECUTED | `api-authorization`: legacy MITE wrapper 접수·추론 미생성 |
 | `notification-worker#POST` | `NOTIFICATION_WORKER_TOKEN` | EXECUTED | `api-authorization`: 빈 queue 200, 외부 호출 0 |
-| `notifications#POST` | `viewHistory` 구성원 본인 | NOT_RUN | route 성공 호출 미실행 |
-| `observations#POST` | `uploadMedia`, 같은 farm assessment | NOT_RUN | route 성공 호출 미실행 |
+| `notifications#POST` | `viewHistory` 구성원 본인 | EXECUTED | `api-authorization`: 본인 알림 read 상태 갱신 |
+| `observations#POST` | `uploadMedia`, 같은 farm assessment | EXECUTED | `api-authorization`: memory FILES stub과 RGB·열화상 관측·asset 저장 |
 | `pest-capture#POST` | `uploadMedia` 구성원 | EXECUTED | `pest-records`: catalog target별 접수 |
-| `phone-notifications#POST` | 대상 farm의 현재 구성원 본인 | NOT_RUN | 외부 SMS 없는 toggle 성공도 미실행 |
+| `phone-notifications#POST` | 대상 farm의 현재 구성원 본인 | EXECUTED | `api-authorization`: 외부 SMS 없이 본인 알림 toggle 비활성화 |
 | `record-notes#POST` | record farm의 `viewHistory`/`reviewAlerts` 구성원 | EXECUTED | `pest-records`: owner/worker note·reply |
 | `record-notes#PATCH` | 작성자이며 `reviewAlerts` 구성원 | EXECUTED | `pest-records`: 작성자 수정 |
-| `record-notes#DELETE` | 작성자 또는 `manageMembers` 구성원 | NOT_RUN | route 성공 호출 미실행 |
+| `record-notes#DELETE` | 작성자 또는 `manageMembers` 구성원 | EXECUTED | `api-authorization`: 작성자 메모 soft delete |
 | `scouting-actions#POST` | `reviewAlerts` 구성원 | EXECUTED | `api-authorization`: 처리 조치·상태 전이 |
 | `scouting-field-check-corrections#POST` | `reviewAlerts` 구성원 | EXECUTED | `api-authorization`: append-only 확인 정정 |
 | `scouting-field-checks#POST` | `reviewAlerts` 구성원 | EXECUTED | `api-authorization`: 현장 확인 row 생성 |
 | `scouting-observations#POST` | `manageFarm` 구성원 | EXECUTED | `api-authorization`: ADMIN 관측·case 생성 |
 | `scouting-resolve#POST` | `reviewAlerts` 구성원 | EXECUTED | `api-authorization`: 진행 case 종료 |
-| `vendor/farm-import#POST` | `VENDOR_IMPORT_TOKEN` | EXECUTED | `api-authorization`: read-only fixture import |
-| `video-sessions#POST` | `uploadMedia` 구성원 | NOT_RUN | route 성공 호출 미실행 |
+| `vendor/farm-import#POST` | `VENDOR_IMPORT_TOKEN` | EXECUTED | `api-authorization`: fixture source를 in-memory DB에 import하여 farm 생성 |
+| `video-sessions#POST` | `uploadMedia` 구성원 | EXECUTED | `api-authorization`: worker 개인 촬영 세션 등록 |
 | `video-upload#POST` | `uploadMedia`, 같은 farm zone/item | EXECUTED | `api-authorization`: fake R2·session 생성 |
 
 ## 남은 검증 범위
 
-- 위 표에서 19개 handler는 성공 route를 직접 실행했고, `NOT_RUN` 14개와 모든 역할 조합은 아직 각각 실행하지 않았다.
+- 위 표의 33개 handler 모두 isolated fixture에서 정상 권한 분기 1개 이상을 직접 실행했다(`EXECUTED` 33/33, `NOT_RUN` 0/33). 이는 전체 기능 완성이나 제품 acceptance가 아니다.
+- 33/33 제한: `phone-notifications`는 외부 SMS 없는 알림 비활성화만, `forecast-worker#PUT`은 모델 실행 없이 공급된 fixture 예측의 저장만, 파일 route는 in-memory `FILES` stub만 검증했다. 실제 SMS·모델 연동·R2·production D1과 각 handler의 나머지 action·role 분기는 별도 branch-level `NOT_RUN`이며 handler-row `NOT_RUN` 0/33 집계에는 포함되지 않는다.
 - `localhost`와 `127.0.0.1` 분류 및 non-local 익명 차단은 단위 검증했다. URL hostname에 따른 개발 fallback이 실제 운영 hosting에서 활성화되지 않는지는 여전히 미확인이다.
-- 실제 D1/R2, 실제 SMS·worker endpoint, 사용자 실데이터는 이 테스트에서 사용하지 않는다.
+- 실제 D1/R2, 실제 SMS·worker endpoint, 사용자 실데이터는 이 테스트에서 사용하지 않는다. 파일 route는 in-memory `FILES` stub만 사용하고, 외부 `fetch`는 호출 시 실패하도록 막아 0건을 확인한다.

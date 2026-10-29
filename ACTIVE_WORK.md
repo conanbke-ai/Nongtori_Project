@@ -2,31 +2,35 @@
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
 - Base SHA: `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`.
-- PR HEAD: `0cd52f3ea1e4c0b76aeff6625c1769050b68865d`.
-- Status: `API_AUTHORIZATION_MATRIX_VERIFIED` (N-06/N-07 committed and pushed; not merged to `main`).
+- PR HEAD: `9770b29ef7ea3dbca6fa4c04240166a7218bfb18`.
+- Status: `API_AUTHORIZATION_MATRIX_VERIFIED` (N-06/N-07 committed and pushed; all-handler success-path expansion is a local diff, not committed or pushed; not merged to `main`).
 - Scope:
   - all 33 exported `POST / PUT / PATCH / DELETE` handlers are classified as `FARM_MEMBER`, `FARM_PERMISSION`, `MEMBER_SELF`, or `SERVICE_TOKEN`;
   - a source-scanning regression fails when a new mutating handler is not assigned to an authorization boundary;
-  - isolated in-memory D1/R2 fixtures prove that unauthenticated users, workers without `manageMembers`, and owners from another farm cannot add a farm member or create an audit row;
+  - an isolated in-memory SQLite/D1 adapter and `FILES` stub prove that unauthenticated users, workers without `manageMembers`, and owners from another farm cannot add a farm member or create an audit row;
   - unauthenticated and cross-farm identities cannot update another farm member's profile;
-  - unauthenticated and cross-farm identities are rejected before video R2/session writes;
+  - unauthenticated and cross-farm identities are rejected before video `FILES` stub/session writes;
   - wrong forecast, robot-ingest, notification, and vendor tokens are rejected before database mutation or external delivery;
   - representative authorized success paths cover active-member chat ownership, member-self profile updates, `manageMembers`, `uploadMedia`, and all four service-token families;
   - direct isolated success calls also cover scouting observation, field check, append-only correction, action, and resolution state transitions;
-  - 19 of 33 handlers have a direct successful route call; the remaining 14 are explicitly marked `NOT_RUN` rather than inferred from their shared permission type.
+  - direct isolated success calls now cover an ADMIN changing and deleting one scoped fixture member, with audit rows and pending-notification cancellation verified;
+  - all remaining community chat, forecast result, fruit assessment, harvest run, legacy mite capture, app notification, paired observation, phone-toggle, record-note deletion, and video-session routes execute their production handlers against isolated fixtures;
+  - all 33 handlers have a direct successful route call; no handler remains `NOT_RUN`, while untested role combinations remain explicitly outside this claim.
+  - Coverage meaning: 33/33 is one authorized success-branch smoke/contract check per handler, not full product acceptance. Phone coverage is notification-disable only, forecast coverage persists supplied fixture predictions without running a model, and file coverage uses only the in-memory `FILES` stub; actual SMS, model integration, R2, production D1, hosting, and every action/role branch remain unverified.
 - Validation:
-  - `node --import ./tests/register.mjs --test tests/api-authorization.test.ts`: PASS (9/9);
-  - `pnpm test:workflows`: PASS (39/39);
+  - `node --import ./tests/register.mjs --test tests/api-authorization.test.ts`: PASS (13/13);
+  - `pnpm test:workflows`: PASS (43/43);
   - `pnpm test:overview`: PASS (7/7 before N-07; not rerun for the test-and-document-only N-07 change);
   - `pnpm lint`: PASS;
-  - `pnpm build`: NOT RUN for N-07; the previous build passed before N-07, and this is not an exact-head local build claim;
-  - exact-head CI confirmed externally: Data CI `40813720666` SUCCESS, App CI `40813720709` SUCCESS.
+  - `pnpm build`: NOT RUN for the current test-and-document-only expansion; the previous build passed before N-07, and this is not an exact-head local build claim;
+  - N-07 code SHA `0cd52f3ea1e4c0b76aeff6625c1769050b68865d` CI was confirmed externally: Data CI `40813720666` SUCCESS, App CI `40813720709` SUCCESS; the current local diff has no CI evidence.
 - Evidence boundary:
   - no real DB, R2, SMS, worker endpoint, or user field data was used;
+  - file writes use the in-memory `FILES` stub; external `fetch` is replaced with a fail-on-call stub and remained at 0 calls;
   - no production authorization code or runtime authentication setting changed;
   - localhost/127.0.0.1 classification and non-local anonymous denial were unit-tested, but the development fallback's production hosting boundary remains unverified;
   - staging and live hosting were not exercised;
-  - the matrix records every unexecuted successful route and does not claim every role combination for every handler.
+  - the matrix records handler-level authorized success coverage and does not claim every action or role combination for every handler.
 - Character status correction: the four user-approved character assets were applied at `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`; existing icon and social-card assets remain intentionally unchanged.
 
 ## Mite public source contract pin gate — 2026-10-27

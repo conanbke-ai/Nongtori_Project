@@ -123,19 +123,28 @@ for (const file of readdirSync('drizzle').filter((name) => name.endsWith('.sql')
 }
 
 const accountProfile = await import('../app/api/account-profile/route');
+const communityChat = await import('../app/api/community-chat-messages/route');
 const farmAccess = await import('../app/api/_lib/farm-access');
 const farmAuth = await import('../app/lib/farm-auth');
 const farmChat = await import('../app/api/farm-chat-messages/route');
 const farmMembers = await import('../app/api/farm-members/route');
 const forecastWorker = await import('../app/api/forecast-worker/route');
+const fruitAssessments = await import('../app/api/fruit-assessments/route');
 const harvestCompletion = await import('../app/api/harvest-completion/route');
+const harvestRuns = await import('../app/api/harvest-runs/route');
+const miteCapture = await import('../app/api/mite-capture/route');
 const notificationWorker = await import('../app/api/notification-worker/route');
+const notifications = await import('../app/api/notifications/route');
+const observationsRoute = await import('../app/api/observations/route');
+const phoneNotifications = await import('../app/api/phone-notifications/route');
+const recordNotes = await import('../app/api/record-notes/route');
 const scoutingActions = await import('../app/api/scouting-actions/route');
 const scoutingFieldCheckCorrections = await import('../app/api/scouting-field-check-corrections/route');
 const scoutingFieldChecks = await import('../app/api/scouting-field-checks/route');
 const scoutingObservations = await import('../app/api/scouting-observations/route');
 const scoutingResolve = await import('../app/api/scouting-resolve/route');
 const vendorImport = await import('../app/api/vendor/farm-import/route');
+const videoSessions = await import('../app/api/video-sessions/route');
 const videoUpload = await import('../app/api/video-upload/route');
 
 const stamp = '2026-10-28T00:00:00.000Z';
@@ -183,6 +192,7 @@ for (const [id, farmId, role] of [
     display_name: id,
     role,
     status: 'ACTIVE',
+    approved_at: stamp,
     created_at: stamp,
     updated_at: stamp,
     joined_at: stamp,
@@ -201,7 +211,8 @@ insert('zones', {
   created_at: stamp, updated_at: stamp,
 });
 insert('farm_items', {
-  id: 'item-a', farm_id: 'farm-a', crop_code: 'STRAWBERRY', display_name: 'fixture item',
+  id: 'item-a', farm_id: 'farm-a', crop_code: 'STRAWBERRY', cultivar_code: 'SEOLHYANG',
+  display_name: 'fixture item',
   status: 'ACTIVE', created_at: stamp, updated_at: stamp,
 });
 insert('forecast_model_registry', {
@@ -260,6 +271,74 @@ test('member administration rejects unauthenticated, worker, and cross-farm owne
   }
   assert.equal(count('farm_members'), memberCount);
   assert.equal(count('farm_member_events'), eventCount);
+});
+
+test('authorized member administration updates and deletes one scoped fixture member', async () => {
+  const eventsBefore = count('farm_member_events');
+  const invited = await farmMembers.POST(jsonRequest('farm-members', 'POST', 'admin-a', {
+    farmId: 'farm-a',
+    email: 'managed-member@example.test',
+    displayName: 'managed member',
+    role: 'WORKER',
+  }));
+  assert.equal(invited.status, 201);
+  const memberId = (await invited.json() as { id: string }).id;
+
+  const updated = await farmMembers.PATCH(jsonRequest('farm-members', 'PATCH', 'admin-a', {
+    farmId: 'farm-a',
+    memberId,
+    displayName: 'managed owner',
+    role: 'OWNER',
+  }));
+  assert.equal(updated.status, 200);
+  const updatedMember = sqlite.prepare(
+    'SELECT display_name, role, status FROM farm_members WHERE id = ?',
+  ).get(memberId) as { display_name: string; role: string; status: string };
+  assert.equal(updatedMember.display_name, 'managed owner');
+  assert.equal(updatedMember.role, 'OWNER');
+  assert.equal(updatedMember.status, 'ACTIVE');
+  const updatedEvent = sqlite.prepare(`SELECT event_type, actor_member_id, target_member_id
+    FROM farm_member_events WHERE event_type = 'MEMBER_UPDATED' AND target_member_id = ?`)
+    .get(memberId) as { event_type: string; actor_member_id: string; target_member_id: string };
+  assert.equal(updatedEvent.event_type, 'MEMBER_UPDATED');
+  assert.equal(updatedEvent.actor_member_id, 'admin-a');
+  assert.equal(updatedEvent.target_member_id, memberId);
+
+  insert('notification_outbox', {
+    id: 'managed-member-pending-notification',
+    farm_id: 'farm-a',
+    recipient_member_id: memberId,
+    recipient_phone: '01000000000',
+    notification_type: 'TEST_ONLY',
+    status: 'PENDING',
+    created_at: stamp,
+  });
+  const deleted = await farmMembers.DELETE(new Request(
+    `https://nongtori.test/api/farm-members?farmId=farm-a&memberId=${memberId}`,
+    { method: 'DELETE', headers: { 'oai-authenticated-user-id': 'admin-a' } },
+  ));
+  assert.equal(deleted.status, 200);
+  assert.equal(sqlite.prepare('SELECT id FROM farm_members WHERE id = ?').get(memberId), undefined);
+  const canceledNotification = sqlite.prepare(`SELECT status, last_error, recipient_member_id
+    FROM notification_outbox WHERE id = 'managed-member-pending-notification'`).get() as {
+      status: string;
+      last_error: string;
+      recipient_member_id: string | null;
+    };
+  assert.equal(canceledNotification.status, 'CANCELED');
+  assert.equal(canceledNotification.last_error, '사용자 계정 삭제로 발송 취소');
+  assert.equal(canceledNotification.recipient_member_id, null);
+  const deletedEvent = sqlite.prepare(`SELECT event_type, actor_member_id, target_name_snapshot
+    FROM farm_member_events WHERE event_type = 'MEMBER_DELETED'
+    AND target_name_snapshot = 'managed owner'`).get() as {
+      event_type: string;
+      actor_member_id: string;
+      target_name_snapshot: string;
+    };
+  assert.equal(deletedEvent.event_type, 'MEMBER_DELETED');
+  assert.equal(deletedEvent.actor_member_id, 'admin-a');
+  assert.equal(deletedEvent.target_name_snapshot, 'managed owner');
+  assert.equal(count('farm_member_events'), eventsBefore + 3);
 });
 
 test('profile updates cannot cross farm or run without a member identity', async () => {
@@ -377,6 +456,215 @@ test('authorized user boundaries perform only their scoped fixture writes', asyn
   assert.equal(storedObjects.size, objectsBefore + 1);
 });
 
+test('authorized community and notification routes persist only member-scoped fixture state', async () => {
+  let externalCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    externalCalls += 1;
+    throw new Error('external delivery must not run in authorization tests');
+  }) as typeof fetch;
+  try {
+    const posted = await communityChat.POST(jsonRequest(
+      'community-chat-messages',
+      'POST',
+      'worker-a',
+      { farmId: 'farm-a', content: 'fixture community message', languageHint: 'ko' },
+    ));
+    assert.equal(posted.status, 201);
+    const communityMessageId = (await posted.json() as { row: { id: string } }).row.id;
+    assert.equal(
+      (sqlite.prepare('SELECT status FROM community_chat_messages WHERE id = ?')
+        .get(communityMessageId) as { status: string }).status,
+      'ACTIVE',
+    );
+    const removed = await communityChat.DELETE(new Request(
+      `https://nongtori.test/api/community-chat-messages?farmId=farm-a&messageId=${communityMessageId}`,
+      { method: 'DELETE', headers: { 'oai-authenticated-user-id': 'worker-a' } },
+    ));
+    assert.equal(removed.status, 200);
+    assert.equal(
+      (sqlite.prepare('SELECT status FROM community_chat_messages WHERE id = ?')
+        .get(communityMessageId) as { status: string }).status,
+      'DELETED',
+    );
+
+    insert('app_notifications', {
+      id: 'member-notification-a',
+      farm_id: 'farm-a',
+      category: 'SYSTEM',
+      notification_type: 'TEST_ONLY',
+      severity: 'INFO',
+      title: 'fixture notification',
+      body: 'fixture notification body',
+      created_at: stamp,
+    });
+    insert('app_notification_recipients', {
+      id: 'member-notification-recipient-a',
+      notification_id: 'member-notification-a',
+      recipient_member_id: 'worker-a',
+      created_at: stamp,
+    });
+    const read = await notifications.POST(jsonRequest('notifications', 'POST', 'worker-a', {
+      farmId: 'farm-a', action: 'READ', notificationId: 'member-notification-a',
+    }));
+    assert.equal(read.status, 200);
+    assert.ok((sqlite.prepare(`SELECT read_at FROM app_notification_recipients
+      WHERE id = 'member-notification-recipient-a'`).get() as { read_at: string | null }).read_at);
+
+    sqlite.prepare("UPDATE farm_members SET notifications_enabled = 1 WHERE id = 'worker-a'").run();
+    const toggled = await phoneNotifications.POST(jsonRequest('phone-notifications', 'POST', 'worker-a', {
+      farmId: 'farm-a', action: 'toggle', enabled: false,
+    }));
+    assert.equal(toggled.status, 200);
+    assert.equal(
+      (sqlite.prepare("SELECT notifications_enabled FROM farm_members WHERE id = 'worker-a'")
+        .get() as { notifications_enabled: number }).notifications_enabled,
+      0,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(externalCalls, 0);
+});
+
+test('authorized media routes use only in-memory object storage and persist fixture records', async () => {
+  let externalCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    externalCalls += 1;
+    throw new Error('external delivery must not run in authorization tests');
+  }) as typeof fetch;
+  try {
+    const assessmentForm = new FormData();
+    assessmentForm.set('farmId', 'farm-a');
+    assessmentForm.set('cultivar', 'SEOLHYANG');
+    assessmentForm.set('image', new File(['TEST_ONLY'], 'fruit.png', { type: 'image/png' }));
+    const assessment = await fruitAssessments.POST(new Request(
+      'https://nongtori.test/api/fruit-assessments',
+      { method: 'POST', headers: { 'oai-authenticated-user-id': 'worker-a' }, body: assessmentForm },
+    ));
+    assert.equal(assessment.status, 201);
+    const assessmentId = (await assessment.json() as { assessmentId: string }).assessmentId;
+    const assessmentRow = sqlite.prepare(`SELECT object_key, processing_status
+      FROM fruit_assessments WHERE id = ?`).get(assessmentId) as {
+        object_key: string;
+        processing_status: string;
+      };
+    assert.equal(assessmentRow.processing_status, 'UPLOADED_AWAITING_MODEL');
+    assert.equal(storedObjects.has(assessmentRow.object_key), true);
+
+    const observationForm = new FormData();
+    for (const [key, value] of [
+      ['farmId', 'farm-a'], ['cultivar', 'SEOLHYANG'], ['houseId', 'house-a'],
+      ['bedId', 'bed-a'], ['zoneId', 'zone-a'], ['captureMethod', 'PAIRED_STILL'],
+      ['pairingId', 'fixture-observation-pair'],
+    ]) observationForm.set(key, value);
+    observationForm.set('rgb', new File(['RGB_TEST_ONLY'], 'rgb.png', { type: 'image/png' }));
+    observationForm.set('thermal', new File(['THERMAL_TEST_ONLY'], 'thermal.tiff', { type: 'image/tiff' }));
+    const observation = await observationsRoute.POST(new Request(
+      'https://nongtori.test/api/observations',
+      { method: 'POST', headers: { 'oai-authenticated-user-id': 'worker-a' }, body: observationForm },
+    ));
+    assert.equal(observation.status, 201);
+    const observationBody = await observation.json() as { observationId: string; assetCount: number };
+    assert.equal(observationBody.assetCount, 2);
+    assert.equal(
+      (sqlite.prepare('SELECT processing_status FROM observations WHERE id = ?')
+        .get(observationBody.observationId) as { processing_status: string }).processing_status,
+      'UPLOADED',
+    );
+    const observationAssets = sqlite.prepare(
+      'SELECT object_key FROM assets WHERE observation_id = ?',
+    ).all(observationBody.observationId) as { object_key: string }[];
+    assert.equal(observationAssets.length, 2);
+    assert.equal(observationAssets.every((asset) => storedObjects.has(asset.object_key)), true);
+
+    const miteForm = new FormData();
+    miteForm.set('farmId', 'farm-a');
+    miteForm.set('itemId', 'item-a');
+    miteForm.set('rgbImage', new File(['MITE_TEST_ONLY'], 'mite.png', { type: 'image/png' }));
+    const captured = await miteCapture.POST(new Request(
+      'https://nongtori.test/api/mite-capture',
+      { method: 'POST', headers: { 'oai-authenticated-user-id': 'worker-a' }, body: miteForm },
+    ));
+    assert.equal(captured.status, 201);
+    const captureSessionId = (await captured.json() as { sessionId: string }).sessionId;
+    const capturedSession = sqlite.prepare(`SELECT pest_code, processing_status
+      FROM capture_sessions WHERE id = ?`).get(captureSessionId) as {
+        pest_code: string;
+        processing_status: string;
+      };
+    assert.equal(capturedSession.pest_code, 'MITE');
+    assert.equal(capturedSession.processing_status, 'UPLOADED_AWAITING_MODEL');
+    assert.equal(
+      (sqlite.prepare('SELECT COUNT(*) AS count FROM inference_runs WHERE capture_session_id = ?')
+        .get(captureSessionId) as { count: number }).count,
+      0,
+    );
+
+    const session = await videoSessions.POST(jsonRequest('video-sessions', 'POST', 'worker-a', {
+      farmId: 'farm-a', sourceType: 'PERSONAL_CAPTURE', videos: [],
+    }));
+    assert.equal(session.status, 201);
+    const noteSessionId = (await session.json() as { sessionId: string }).sessionId;
+    assert.equal(
+      (sqlite.prepare('SELECT processing_status FROM capture_sessions WHERE id = ?')
+        .get(noteSessionId) as { processing_status: string }).processing_status,
+      'REGISTERED',
+    );
+    const note = await recordNotes.POST(jsonRequest('record-notes', 'POST', 'worker-a', {
+      farmId: 'farm-a', sessionId: noteSessionId, content: 'fixture note for delete', languageHint: 'ko',
+    }));
+    assert.equal(note.status, 201);
+    const noteId = (await note.json() as { id: string }).id;
+    const deletedNote = await recordNotes.DELETE(new Request(
+      `https://nongtori.test/api/record-notes?farmId=farm-a&sessionId=${noteSessionId}&noteId=${noteId}`,
+      { method: 'DELETE', headers: { 'oai-authenticated-user-id': 'worker-a' } },
+    ));
+    assert.equal(deletedNote.status, 200);
+    assert.equal(
+      (sqlite.prepare('SELECT status FROM mite_record_notes WHERE id = ?').get(noteId) as { status: string }).status,
+      'DELETED',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(externalCalls, 0);
+});
+
+test('authorized harvest run routes persist start and completion state without external work', async () => {
+  const started = await harvestRuns.POST(jsonRequest('harvest-runs', 'POST', 'worker-a', {
+    farmId: 'farm-a', itemId: 'item-a', note: 'fixture harvest start',
+  }));
+  assert.equal(started.status, 201);
+  const runId = (await started.json() as { id: string }).id;
+  const activeRun = sqlite.prepare(`SELECT status, started_by_member_id, note
+    FROM harvest_runs WHERE id = ?`).get(runId) as {
+      status: string;
+      started_by_member_id: string;
+      note: string;
+    };
+  assert.equal(activeRun.status, 'IN_PROGRESS');
+  assert.equal(activeRun.started_by_member_id, 'worker-a');
+  assert.equal(activeRun.note, 'fixture harvest start');
+
+  const completed = await harvestRuns.PATCH(jsonRequest('harvest-runs', 'PATCH', 'worker-a', {
+    farmId: 'farm-a', runId, note: 'fixture harvest complete',
+  }));
+  assert.equal(completed.status, 200);
+  const completedRun = sqlite.prepare(`SELECT status, completed_at, completed_by_member_id, note
+    FROM harvest_runs WHERE id = ?`).get(runId) as {
+      status: string;
+      completed_at: string | null;
+      completed_by_member_id: string;
+      note: string;
+    };
+  assert.equal(completedRun.status, 'COMPLETED');
+  assert.ok(completedRun.completed_at);
+  assert.equal(completedRun.completed_by_member_id, 'worker-a');
+  assert.equal(completedRun.note, 'fixture harvest complete');
+});
+
 test('valid service tokens reach isolated domain work without external delivery', async () => {
   let externalCalls = 0;
   const originalFetch = globalThis.fetch;
@@ -414,9 +702,39 @@ test('valid service tokens reach isolated domain work without external delivery'
       bearerRequest('forecast-worker', 'POST', 'forecast-secret'),
     );
     assert.equal(claimed.status, 200);
+    const claimedJob = await claimed.json() as { job: { id: string } };
     assert.equal(
       (sqlite.prepare("SELECT status FROM forecast_jobs WHERE harvest_run_id = 'authz-run-a'").get() as { status: string }).status,
       'PROCESSING',
+    );
+
+    const completedForecast = await forecastWorker.PUT(bearerRequest(
+      'forecast-worker',
+      'PUT',
+      'forecast-secret',
+      {
+        jobId: claimedJob.job.id,
+        harvestRunId: 'authz-run-a',
+        targetDate: '2026-10-29',
+        horizonDays: 7,
+        modelName: 'fixture-model',
+        modelVersion: 'v1',
+        predictions: [{ gradeCode: 'A', p10: 9000, p50: 10000, p90: 11000 }],
+      },
+    ));
+    assert.equal(completedForecast.status, 200);
+    assert.deepEqual(await completedForecast.json(), { harvestRunId: 'authz-run-a', status: 'PRICE_ONLY' });
+    assert.equal(
+      (sqlite.prepare("SELECT status FROM forecast_jobs WHERE harvest_run_id = 'authz-run-a'").get() as { status: string }).status,
+      'COMPLETED',
+    );
+    assert.equal(
+      (sqlite.prepare("SELECT COUNT(*) AS count FROM price_forecasts WHERE model_name = 'fixture-model'").get() as { count: number }).count,
+      1,
+    );
+    assert.equal(
+      (sqlite.prepare("SELECT status FROM revenue_forecasts WHERE harvest_run_id = 'authz-run-a'").get() as { status: string }).status,
+      'PRICE_ONLY',
     );
 
     const notification = await notificationWorker.POST(
