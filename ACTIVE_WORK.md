@@ -1,3 +1,17 @@
+## Notification panel load states — 2026-10-30
+
+- Validation base: `399e1a21282e3bf7786aa5176bd0e89bc0f1c0cf`. N-13 approved; notification implementation is recorded in this separate commit. Publication SHA and CI results are reported separately.
+- Fixed initial failure displaying successful empty-inbox copy. Added explicit loading, error/retry, successful empty, and stale-list states. Snapshots are farm-scoped; superseded GET responses cannot replace the current farm snapshot. Authorization, notification delivery, consent, API, and database contracts are unchanged.
+- Reproduction: `node --import ./tests/register.mjs --test tests/notification-center.test.ts` initially FAIL (4/5); after implementation PASS (5/5).
+- Final gates: `pnpm test:workflows` PASS (50/50), `pnpm lint` PASS, `pnpm build` PASS; `git diff --check` PASS.
+- Real Chromium isolated fixture: mobile 390x844 loading/error/empty/retry/stale/farm-switch with delayed old response PASS; desktop 1440x900 error and delayed response PASS. No horizontal overflow. Local screenshots: `/tmp/nongtori-scouting-qa-qY2gOK/notification-*.png`. Fixture empty response used an inconsistent unreadCount=1; empty-copy behavior was checked, but badge consistency is not acceptance evidence.
+- NOT_RUN: live hosting/identity, production DB, real delivery, consent changes, complete product browser acceptance. Browser fixture uses only the production presentation component and deterministic mock GET responses.
+- Approved commit split (N-11/N-12/N-13; shared document sections are staged separately):
+  1. Auth harness: `tests/support/test-identity-provider.ts`, `tests/test-identity-provider.test.ts`, `tests/api-authorization.test.ts`, `package.json` test:auth-harness script, `docs/TEST_AUTHENTICATION_HARNESS.md`, `docs/DEVELOPMENT.md` test-auth section; ACTIVE_WORK only the test-auth section plus N-10 publication/CI synchronization.
+  2. Scouting load states: `app/features/pests/presentation/ScoutingQueue.tsx`, `app/features/pests/presentation/scouting.css`, `tests/scouting-ui.test.tsx`; ACTIVE_WORK only the scouting data-trust section.
+  3. Notification load states: `app/features/notifications/presentation/NotificationCenter.tsx`, `app/features/notifications/presentation/notification-load-state.ts`, `app/features/notifications/presentation/notification-center.css`, `tests/notification-center.test.ts`; ACTIVE_WORK only this notification section.
+- Publication approval: N-11/N-12/N-13 confirmed on 2026-10-30 for the above three separate commits, normal push to existing PR #105 after remote comparison, and CI verification. Main merge/deployment and runtime settings remain excluded.
+
 ## Scouting queue data-trust states — 2026-10-30
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
