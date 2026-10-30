@@ -1,3 +1,15 @@
+## Paired pest photo upload failure cleanup — 2026-10-30
+
+- Base: `39db0b10750e1b3c3b8122a6717a8a480c3f8ec2`; independent local repair, uncommitted/unpushed. Correction-entry four-file unit and response-loss investigation three-file unit preserved.
+- Confirmed gap: `receivePestCapture` used fail-fast Promise.all for RGB/thermal object writes. When thermal rejected before a delayed RGB put completed, catch deleted the scheduled keys too early; RGB later finished and left an orphan despite a failed response. Existing tests covered accepted catalog targets and authorization, not this failure ordering.
+- Before fix: `node --import ./tests/register.mjs --test tests/pest-records.test.ts` FAIL (5/6); new deterministic delayed-put fixture found 1 leftover object, expected 0.
+- Minimal fix: await all put outcomes with Promise.allSettled, then throw a rejected outcome into existing cleanup. Only after every put has settled may failure cleanup run. Existing 400/201 responses, authorization, catalog and DB schema remain unchanged.
+- After fix: same target PASS (6/6). Failed paired upload leaves 0 isolated objects and no new session/assets; explicit retry after the injected storage failure saves exactly 1 session and 2 assets. `pnpm test:workflows` PASS (52/52), `pnpm lint` PASS, `pnpm build` PASS (existing proxy warning), `git diff --check` PASS.
+- Owned files/hunk: `app/api/pest-capture/route.ts` upload-await hunk; `tests/pest-records.test.ts` new delayed-sibling cleanup/retry scenario; only this ACTIVE_WORK section. No new API/storage abstraction or migration introduced.
+- Evidence uses a separate in-memory object Map and existing SQLite fixture; no server/browser, actual R2/DB, user data, external delivery, model or account action. No real source file was deleted.
+- NOT_RUN: hosted R2 transport, never-settling uploads, delete failures, database commit ambiguity, worker termination and full browser upload. This does not solve response-loss idempotency; that design remains HOLD. Cleanup cannot be guaranteed if the worker dies or deletion fails.
+- Next safe gate: separately reproduce the analogous fail-fast paired-video path in `app/api/video-upload/route.ts`; do not assume photo evidence proves video behavior. Publication of this three-file unit needs its own approval.
+
 ## Notification panel load states — 2026-10-30
 
 - Validation base: `399e1a21282e3bf7786aa5176bd0e89bc0f1c0cf`. N-13 approved; notification implementation is recorded in this separate commit. Publication SHA and CI results are reported separately.

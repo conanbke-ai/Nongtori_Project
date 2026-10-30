@@ -68,6 +68,56 @@ function request(path: string, actor = 'owner', method = 'GET', body?: object) {
 }
 const repo = new PestRepository(db);
 
+test('paired photo failure waits for the delayed sibling upload before cleanup and allows a clean retry', async () => {
+  const env = (globalThis as unknown as { nongtoriTestEnv: { FILES: unknown } }).nongtoriTestEnv;
+  const originalFiles = env.FILES;
+  const isolatedObjects = new Map<string, unknown>();
+  let release!: () => void;
+  let bothStarted!: () => void;
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { bothStarted = resolve; });
+  let puts = 0;
+  let fail = true;
+  env.FILES = {
+    async put(key: string, body: unknown) {
+      if (++puts === 2) bothStarted();
+      if (fail && key.includes('LEAF_THERMAL')) throw new Error('TEST_ONLY thermal storage failure');
+      if (fail) await delayed;
+      isolatedObjects.set(key, body);
+    },
+    async delete(key: string) { isolatedObjects.delete(key); },
+  };
+  const sessionsBefore = Number(sqlite.prepare('SELECT COUNT(*) AS n FROM capture_sessions').get()?.n);
+  const assetsBefore = Number(sqlite.prepare('SELECT COUNT(*) AS n FROM capture_assets').get()?.n);
+  const submit = () => {
+    const body = new FormData();
+    body.set('farmId', 'test-a'); body.set('pestCode', 'APHID');
+    body.set('rgbImage', new File(['RGB_TEST_ONLY'], 'rgb.png', { type: 'image/png' }));
+    body.set('thermalImage', new File(['THERMAL_TEST_ONLY'], 'thermal.png', { type: 'image/png' }));
+    return capture.POST(new Request('https://nongtori.test/api/pest-capture', {
+      method: 'POST', headers: { 'oai-authenticated-user-id': 'worker' }, body,
+    }));
+  };
+  try {
+    const pending = submit();
+    await started;
+    // Let the rejected sibling enter the catch path before completing RGB.
+    await new Promise(resolve => setImmediate(resolve));
+    release();
+    assert.equal((await pending).status, 400);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(isolatedObjects.size, 0, 'late upload must not survive failure cleanup');
+    assert.equal(Number(sqlite.prepare('SELECT COUNT(*) AS n FROM capture_sessions').get()?.n), sessionsBefore);
+    assert.equal(Number(sqlite.prepare('SELECT COUNT(*) AS n FROM capture_assets').get()?.n), assetsBefore);
+    fail = false;
+    const retry = await submit();
+    assert.equal(retry.status, 201);
+    assert.equal(isolatedObjects.size, 2);
+    assert.equal(Number(sqlite.prepare('SELECT COUNT(*) AS n FROM capture_sessions').get()?.n), sessionsBefore + 1);
+    assert.equal(Number(sqlite.prepare('SELECT COUNT(*) AS n FROM capture_assets').get()?.n), assetsBefore + 2);
+  } finally { release(); env.FILES = originalFiles; }
+});
+
 test('multiple pests have independent counts, filtering, deduplication and pagination', async () => {
   const all = await loadPestDashboard(repo, 'test-a', '', 'OPEN', 1);
   assert.equal(all.totalOpen, 4); assert.equal(all.rows.length, 4);
