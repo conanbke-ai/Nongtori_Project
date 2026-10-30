@@ -1,3 +1,15 @@
+## Paired video upload failure cleanup — 2026-10-30
+
+- Base: `39db0b10750e1b3c3b8122a6717a8a480c3f8ec2`; local uncommitted/unpushed repair, independent of the photo cleanup and prior correction/audit changes.
+- Reproduction: the real video POST handler with isolated FILES Map and SQLite left one late RGB object after thermal failed and catch deleted keys early. Target command `node --import ./tests/register.mjs --test --test-name-pattern='paired video storage failure' tests/api-authorization.test.ts`: before FAIL (0/1), expected 0 objects but observed 1.
+- Minimal repair: `app/api/video-upload/route.ts` waits for all put outcomes via Promise.allSettled, then throws a rejected outcome into existing cleanup before any session/video-asset DB batch. Existing upload size/type/location validation, permission, 400/201 response and schema remain unchanged.
+- After: target PASS (1/1, both RGB-first-failure and thermal-first-failure permutations). Each failed attempt leaves 0 fixture objects and no session/video-asset row delta. Explicit clean retry returns 201, saves exactly one session and two videos, preserves zone and UPLOADED_AWAITING_FRAME_EXTRACTION, and every stored asset key exists in the fixture Map. `pnpm test:workflows` PASS (53/53), `pnpm lint` PASS, `pnpm build` PASS, `git diff --check` PASS.
+- This unit owns `app/api/video-upload/route.ts` upload-await hunk; `tests/api-authorization.test.ts` only the final test named `paired video storage failure cleans up delayed sibling puts and permits a clean retry`; and only this ACTIVE_WORK section.
+- Photo unit still separately owns `app/api/pest-capture/route.ts`, the paired-photo test in `tests/pest-records.test.ts`, and its ACTIVE_WORK section. The correction-entry unit owns the separate no-visible-evidence scenario in `tests/api-authorization.test.ts`; staging that entire shared file would mix two units. ACTIVE_WORK must also be staged by section.
+- No server, actual R2/DB/source data, external delivery, model, schema/API/permission change, commit/push/deployment. Idempotency design remains HOLD.
+- NOT_RUN: real storage transport/late remote commit after a rejected put, delete failures, never-settling put, worker termination and ambiguous DB commit. Fixture completion and successful delete do not establish recovery guarantees for those cases.
+- Next gate: review this three-file/hunk unit alongside the independent photo unit; obtain publication approval before commit/push. No additional storage or API redesign is included.
+
 ## Paired pest photo upload failure cleanup — 2026-10-30
 
 - Base: `39db0b10750e1b3c3b8122a6717a8a480c3f8ec2`; independent local repair, uncommitted/unpushed. Correction-entry four-file unit and response-loss investigation three-file unit preserved.

@@ -1031,3 +1031,61 @@ test('authorized scouting routes persist observation, review, correction, action
     'RESOLVED',
   );
 });
+
+test('paired video storage failure cleans up delayed sibling puts and permits a clean retry', async () => {
+  const originalFiles = testEnv.FILES;
+  for (const failedModality of ['THERMAL_VIDEO', 'RGB_VIDEO']) {
+    const objects = new Map<string, unknown>();
+    let release!: () => void;
+    let bothStarted!: () => void;
+    const delayed = new Promise<void>(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { bothStarted = resolve; });
+    let puts = 0;
+    let fail = true;
+    testEnv.FILES = {
+      async put(key: string, value: unknown) {
+        if (++puts === 2) bothStarted();
+        if (fail && key.includes(failedModality)) throw new Error('TEST_ONLY video storage failure');
+        if (fail) await delayed;
+        objects.set(key, value);
+      },
+      async delete(key: string) { objects.delete(key); },
+    };
+    const sessionsBefore = count('capture_sessions');
+    const videosBefore = count('video_assets');
+    const submit = () => {
+      const body = new FormData();
+      body.set('farmId', 'farm-a'); body.set('zoneId', 'zone-a'); body.set('itemId', 'item-a');
+      body.set('rgbVideo', new File(['RGB_TEST_ONLY'], 'rgb.mp4', { type: 'video/mp4' }));
+      body.set('thermalVideo', new File(['THERMAL_TEST_ONLY'], 'thermal.mp4', { type: 'video/mp4' }));
+      return videoUpload.POST(authenticatedRequest('worker-a', 'https://nongtori.test/api/video-upload', { method: 'POST', body }));
+    };
+    try {
+      const pending = submit();
+      await started;
+      await new Promise(resolve => setImmediate(resolve));
+      release();
+      const failed = await pending;
+      assert.equal(failed.status, 400);
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(objects.size, 0, `${failedModality}: late sibling must not survive cleanup`);
+      assert.equal(count('capture_sessions'), sessionsBefore);
+      assert.equal(count('video_assets'), videosBefore);
+      fail = false;
+      const retry = await submit();
+      assert.equal(retry.status, 201);
+      const result = await retry.json() as { sessionId: string; processingStatus: string; pairedModalities: string[] };
+      assert.equal(result.processingStatus, 'UPLOADED_AWAITING_FRAME_EXTRACTION');
+      assert.deepEqual(result.pairedModalities, ['RGB_VIDEO', 'THERMAL_VIDEO']);
+      assert.equal(objects.size, 2);
+      assert.equal(count('capture_sessions'), sessionsBefore + 1);
+      assert.equal(count('video_assets'), videosBefore + 2);
+      const session = sqlite.prepare('SELECT zone_id, processing_status FROM capture_sessions WHERE id = ?').get(result.sessionId);
+      assert.equal(session?.zone_id, 'zone-a');
+      assert.equal(session?.processing_status, 'UPLOADED_AWAITING_FRAME_EXTRACTION');
+      const assets = sqlite.prepare('SELECT object_key FROM video_assets WHERE capture_session_id = ?').all(result.sessionId) as { object_key: string }[];
+      assert.equal(assets.length, 2);
+      assert.ok(assets.every(asset => objects.has(asset.object_key)));
+    } finally { release(); testEnv.FILES = originalFiles; }
+  }
+});
