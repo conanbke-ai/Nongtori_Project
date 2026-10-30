@@ -3,6 +3,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import {
+  FIXED_TEST_IDENTITIES,
+  testIdentityProvider,
+  type TestIdentitySubject,
+} from './support/test-identity-provider';
 
 type AuthBoundary =
   | 'FARM_MEMBER'
@@ -178,20 +183,15 @@ for (const farmId of ['farm-a', 'farm-b']) {
     updated_at: stamp,
   });
 }
-for (const [id, farmId, role] of [
-  ['admin-a', 'farm-a', 'ADMIN'],
-  ['owner-a', 'farm-a', 'OWNER'],
-  ['worker-a', 'farm-a', 'WORKER'],
-  ['owner-b', 'farm-b', 'OWNER'],
-]) {
+for (const identity of Object.values(FIXED_TEST_IDENTITIES)) {
   insert('farm_members', {
-    id,
-    farm_id: farmId,
-    login_id: id,
+    id: identity.subject,
+    farm_id: identity.farmId,
+    login_id: identity.subject,
     identity_provider: 'SITES',
-    identity_subject: id,
-    display_name: id,
-    role,
+    identity_subject: identity.subject,
+    display_name: identity.displayName,
+    role: identity.role,
     status: 'ACTIVE',
     approved_at: stamp,
     created_at: stamp,
@@ -221,12 +221,23 @@ insert('forecast_model_registry', {
   algorithm: 'FIXTURE_ONLY', status: 'ACTIVE', deployed_at: stamp, created_at: stamp,
 });
 
-function jsonRequest(pathname: string, method: string, actor: string | null, body: object) {
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (actor) headers['oai-authenticated-user-id'] = actor;
-  return new Request(`https://nongtori.test/api/${pathname}`, {
+function authenticatedRequest(
+  actor: TestIdentitySubject | null,
+  input: string,
+  init: RequestInit = {},
+) {
+  return testIdentityProvider.authenticate(actor, new Request(input, init));
+}
+
+function jsonRequest(
+  pathname: string,
+  method: string,
+  actor: TestIdentitySubject | null,
+  body: object,
+) {
+  return testIdentityProvider.requestAs(actor, `/api/${pathname}`, {
     method,
-    headers,
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
 }
@@ -247,14 +258,12 @@ function loopbackRequest(
   return new Request(`http://localhost/api/${pathname}`, { method, headers });
 }
 
-function uploadRequest(actor: string | null) {
+function uploadRequest(actor: TestIdentitySubject | null) {
   const body = new FormData();
   body.set('farmId', 'farm-a');
   body.set('zoneId', 'zone-a');
   body.set('rgbVideo', new File(['TEST_ONLY'], 'fixture.mp4', { type: 'video/mp4' }));
-  const headers: Record<string, string> = {};
-  if (actor) headers['oai-authenticated-user-id'] = actor;
-  return new Request('https://nongtori.test/api/video-upload', { method: 'POST', headers, body });
+  return testIdentityProvider.requestAs(actor, '/api/video-upload', { method: 'POST', body });
 }
 
 function count(table: string) {
@@ -322,9 +331,10 @@ test('authorized member administration updates and deletes one scoped fixture me
     status: 'PENDING',
     created_at: stamp,
   });
-  const deleted = await farmMembers.DELETE(new Request(
+  const deleted = await farmMembers.DELETE(authenticatedRequest(
+    'admin-a',
     `https://nongtori.test/api/farm-members?farmId=farm-a&memberId=${memberId}`,
-    { method: 'DELETE', headers: { 'oai-authenticated-user-id': 'admin-a' } },
+    { method: 'DELETE' },
   ));
   assert.equal(deleted.status, 200);
   assert.equal(sqlite.prepare('SELECT id FROM farm_members WHERE id = ?').get(memberId), undefined);
@@ -495,9 +505,10 @@ test('loopback URLs require real identity and preserve farm scope', async () => 
     assert.equal(await farmAuth.getFarmMember(anonymous, 'farm-a'), null);
   }
 
-  const localOwner = loopbackRequest('farmer-dashboard', 'GET', {
-    'oai-authenticated-user-id': 'owner-a',
-  });
+  const localOwner = authenticatedRequest(
+    'owner-a',
+    'http://localhost/api/farmer-dashboard',
+  );
   assert.deepEqual((await farmAccess.getAccessibleFarms(localOwner)).map((farm) => farm.id), ['farm-a']);
   assert.equal((await farmAuth.getFarmMember(localOwner, 'farm-a'))?.id, 'owner-a');
   assert.equal(await farmAuth.getFarmMember(localOwner, 'farm-b'), null);
@@ -596,9 +607,10 @@ test('authorized user boundaries perform only their scoped fixture writes', asyn
     (sqlite.prepare('SELECT status FROM farm_chat_messages WHERE id = ?').get(chatId) as { status: string }).status,
     'ACTIVE',
   );
-  const deleted = await farmChat.DELETE(new Request(
+  const deleted = await farmChat.DELETE(authenticatedRequest(
+    'worker-a',
     `https://nongtori.test/api/farm-chat-messages?farmId=farm-a&messageId=${chatId}`,
-    { method: 'DELETE', headers: { 'oai-authenticated-user-id': 'worker-a' } },
+    { method: 'DELETE' },
   ));
   assert.equal(deleted.status, 200);
   assert.equal(
@@ -635,9 +647,10 @@ test('authorized community and notification routes persist only member-scoped fi
         .get(communityMessageId) as { status: string }).status,
       'ACTIVE',
     );
-    const removed = await communityChat.DELETE(new Request(
+    const removed = await communityChat.DELETE(authenticatedRequest(
+      'worker-a',
       `https://nongtori.test/api/community-chat-messages?farmId=farm-a&messageId=${communityMessageId}`,
-      { method: 'DELETE', headers: { 'oai-authenticated-user-id': 'worker-a' } },
+      { method: 'DELETE' },
     ));
     assert.equal(removed.status, 200);
     assert.equal(
@@ -697,9 +710,10 @@ test('authorized media routes use only in-memory object storage and persist fixt
     assessmentForm.set('farmId', 'farm-a');
     assessmentForm.set('cultivar', 'SEOLHYANG');
     assessmentForm.set('image', new File(['TEST_ONLY'], 'fruit.png', { type: 'image/png' }));
-    const assessment = await fruitAssessments.POST(new Request(
+    const assessment = await fruitAssessments.POST(authenticatedRequest(
+      'worker-a',
       'https://nongtori.test/api/fruit-assessments',
-      { method: 'POST', headers: { 'oai-authenticated-user-id': 'worker-a' }, body: assessmentForm },
+      { method: 'POST', body: assessmentForm },
     ));
     assert.equal(assessment.status, 201);
     const assessmentId = (await assessment.json() as { assessmentId: string }).assessmentId;
@@ -719,9 +733,10 @@ test('authorized media routes use only in-memory object storage and persist fixt
     ]) observationForm.set(key, value);
     observationForm.set('rgb', new File(['RGB_TEST_ONLY'], 'rgb.png', { type: 'image/png' }));
     observationForm.set('thermal', new File(['THERMAL_TEST_ONLY'], 'thermal.tiff', { type: 'image/tiff' }));
-    const observation = await observationsRoute.POST(new Request(
+    const observation = await observationsRoute.POST(authenticatedRequest(
+      'worker-a',
       'https://nongtori.test/api/observations',
-      { method: 'POST', headers: { 'oai-authenticated-user-id': 'worker-a' }, body: observationForm },
+      { method: 'POST', body: observationForm },
     ));
     assert.equal(observation.status, 201);
     const observationBody = await observation.json() as { observationId: string; assetCount: number };
@@ -741,9 +756,10 @@ test('authorized media routes use only in-memory object storage and persist fixt
     miteForm.set('farmId', 'farm-a');
     miteForm.set('itemId', 'item-a');
     miteForm.set('rgbImage', new File(['MITE_TEST_ONLY'], 'mite.png', { type: 'image/png' }));
-    const captured = await miteCapture.POST(new Request(
+    const captured = await miteCapture.POST(authenticatedRequest(
+      'worker-a',
       'https://nongtori.test/api/mite-capture',
-      { method: 'POST', headers: { 'oai-authenticated-user-id': 'worker-a' }, body: miteForm },
+      { method: 'POST', body: miteForm },
     ));
     assert.equal(captured.status, 201);
     const captureSessionId = (await captured.json() as { sessionId: string }).sessionId;
@@ -775,9 +791,10 @@ test('authorized media routes use only in-memory object storage and persist fixt
     }));
     assert.equal(note.status, 201);
     const noteId = (await note.json() as { id: string }).id;
-    const deletedNote = await recordNotes.DELETE(new Request(
+    const deletedNote = await recordNotes.DELETE(authenticatedRequest(
+      'worker-a',
       `https://nongtori.test/api/record-notes?farmId=farm-a&sessionId=${noteSessionId}&noteId=${noteId}`,
-      { method: 'DELETE', headers: { 'oai-authenticated-user-id': 'worker-a' } },
+      { method: 'DELETE' },
     ));
     assert.equal(deletedNote.status, 200);
     assert.equal(

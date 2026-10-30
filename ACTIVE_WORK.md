@@ -1,8 +1,31 @@
+## Test-only fixed identity harness — 2026-10-30
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base / current PR HEAD: `399e1a21282e3bf7786aa5176bd0e89bc0f1c0cf`.
+- Status: `TEST_AUTH_HARNESS_VERIFIED` (N-11 approved; implementation recorded in this separate commit; publication SHA and CI reported separately; not merged or deployed).
+- Scope:
+  - a `tests/`-only identity provider supplies four fixed fixture subjects (`admin-a`, `owner-a`, `worker-a`, `owner-b`) explicitly per direct handler request;
+  - farm and role metadata seed only the isolated `farm_members` table; requests carry no farm, role, permission, or administrator header, so production membership and permission checks remain authoritative;
+  - caller-supplied Sites identity headers are removed before the selected fixture subject is applied, and neither query parameters nor hostnames select an identity;
+  - the existing authorization suite now uses the provider for member identities while preserving anonymous, cross-farm, insufficient-role, and service-token paths;
+  - a source-isolation regression fails if the provider or its fixed identities enter `app/`, or if `tests/register.mjs` starts injecting an identity automatically.
+- Usage: `pnpm test:auth-harness`; select an identity with `testIdentityProvider.requestAs(...)` or `authenticate(...)`, and use `null` for anonymous requests.
+- Runtime boundary: no application route, middleware, production flag, secret, environment value, authentication setting, server, account, database, or network configuration was added or changed.
+- Validation:
+  - `pnpm test:auth-harness`: PASS (19/19);
+  - `pnpm test:workflows`: PASS (46/46);
+  - `pnpm test:overview`: PASS (7/7);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS (the existing proxy-environment warning was non-blocking);
+  - `git diff --check`: PASS.
+- `NOT_RUN`: browser role switching, real login/logout, session expiry, hosted Sites identity-header provenance, deployed-host behavior, production D1/R2, and external delivery. No browser/query/header runtime test-auth entry point was introduced because a trusted isolated browser boundary is not present.
+
 ## Deployment authentication boundary hardening — 2026-10-29
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
-- Base / PR HEAD: `d3f6a1f279ffc4cc658149d13d23af0045d5504b`.
-- Status: `LOCAL_AUTH_HOSTNAME_BYPASS_REMOVED` (N-10 approved PR #105 publication candidate; not merged to `main` or deployed).
+- Base SHA: `d3f6a1f279ffc4cc658149d13d23af0045d5504b`.
+- Implementation / PR HEAD: `399e1a21282e3bf7786aa5176bd0e89bc0f1c0cf`.
+- Status: `AUTH_HOSTNAME_BYPASS_REMOVED_AND_PUBLISHED_TO_PR` (N-10 committed and pushed to PR #105; not merged to `main` or deployed).
 - Implemented boundary:
   - request hostname, `Host`, and forwarded headers no longer grant farm identity or service access;
   - `requestIdentity` accepts only the Sites identity headers, and `getFarmMember` always requires a matching active membership; first-member selection and the synthetic preview ADMIN were removed;
@@ -24,7 +47,8 @@
   - `pnpm test:workflows`: PASS (46/46);
   - `pnpm test:overview`: PASS (7/7);
   - `pnpm lint`: PASS;
-  - `pnpm build`: PASS.
+  - `pnpm build`: PASS;
+  - exact N-10 SHA `399e1a21282e3bf7786aa5176bd0e89bc0f1c0cf`: Data Pipeline run `40979626448` SUCCESS and App run `40979626455` SUCCESS (confirmed externally on 2026-10-30).
 - Evidence boundary: all writes and object storage are isolated fixtures; no external host probing, live deployment, production DB/R2, token issuance, secret-value read, actual environment mutation, or network-setting change was performed.
 
 ## Mutating API authorization matrix — 2026-10-29
