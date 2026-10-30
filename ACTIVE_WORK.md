@@ -1,9 +1,38 @@
+## Deployment authentication boundary hardening — 2026-10-29
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base / PR HEAD: `d3f6a1f279ffc4cc658149d13d23af0045d5504b`.
+- Status: `LOCAL_AUTH_HOSTNAME_BYPASS_REMOVED` (N-10 approved PR #105 publication candidate; not merged to `main` or deployed).
+- Implemented boundary:
+  - request hostname, `Host`, and forwarded headers no longer grant farm identity or service access;
+  - `requestIdentity` accepts only the Sites identity headers, and `getFarmMember` always requires a matching active membership; first-member selection and the synthetic preview ADMIN were removed;
+  - farm listing and the dashboard use the same membership-scoped `getAccessibleFarms` query, including on `localhost` / `127.0.0.1`;
+  - forecast, notification, robot-ingest, and vendor routes share a hostname-independent service-token decision helper while preserving their existing `401` / capability-unconfigured `503` response contracts;
+  - no boolean local-preview capability was added. Because this application cannot verify the client's network origin, a flag plus loopback hostname would leave shared preview Host spoofing possible.
+- Local preview impact:
+  - local UI requests now require the Sites local identity to match an active farm membership; automatic first-member/synthetic-ADMIN access is gone;
+  - local worker/vendor calls require their normal service tokens;
+  - tests use explicit fixture Sites identities and service tokens, not a test-only production authorization bypass.
+- Security review:
+  - the Advisor transport was unavailable because this executor exposes no installed, verified launcher root; root-owned implementation continued under the skill's unavailable route;
+  - an independent read-only review found no established production remote ADMIN exploit, confirmed the external-development/shared-preview Host boundary as conditional P2, and recommended removing the runtime local bypass; that recommendation was accepted;
+  - static inspection still shows the installed Cloudflare/vinext production path preserving `request.url`, but the upstream OpenAI hosting edge and live hosting behavior remain `NOT_RUN`.
+- Validation:
+  - before implementation, `node --import ./tests/register.mjs --test tests/api-authorization.test.ts tests/scouting-hardening.test.ts`: expected FAIL (18/23 passed, 5 failed on hostname-derived access);
+  - after implementation, the same targeted command: PASS (23/23);
+  - final `node --import ./tests/register.mjs --test tests/api-authorization.test.ts`: PASS (16/16), including loopback missing/wrong/valid token branches through production handlers;
+  - `pnpm test:workflows`: PASS (46/46);
+  - `pnpm test:overview`: PASS (7/7);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS.
+- Evidence boundary: all writes and object storage are isolated fixtures; no external host probing, live deployment, production DB/R2, token issuance, secret-value read, actual environment mutation, or network-setting change was performed.
+
 ## Mutating API authorization matrix — 2026-10-29
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
 - Base SHA: `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`.
-- PR HEAD: `9770b29ef7ea3dbca6fa4c04240166a7218bfb18`.
-- Status: `API_AUTHORIZATION_MATRIX_VERIFIED` (N-06/N-07 committed and pushed; all-handler success-path expansion is a local diff, not committed or pushed; not merged to `main`).
+- PR HEAD: `d3f6a1f279ffc4cc658149d13d23af0045d5504b`.
+- Status: `API_AUTHORIZATION_MATRIX_VERIFIED` (N-06/N-07/N-08 committed and pushed; not merged to `main`).
 - Scope:
   - all 33 exported `POST / PUT / PATCH / DELETE` handlers are classified as `FARM_MEMBER`, `FARM_PERMISSION`, `MEMBER_SELF`, or `SERVICE_TOKEN`;
   - a source-scanning regression fails when a new mutating handler is not assigned to an authorization boundary;
@@ -18,17 +47,17 @@
   - all 33 handlers have a direct successful route call; no handler remains `NOT_RUN`, while untested role combinations remain explicitly outside this claim.
   - Coverage meaning: 33/33 is one authorized success-branch smoke/contract check per handler, not full product acceptance. Phone coverage is notification-disable only, forecast coverage persists supplied fixture predictions without running a model, and file coverage uses only the in-memory `FILES` stub; actual SMS, model integration, R2, production D1, hosting, and every action/role branch remain unverified.
 - Validation:
-  - `node --import ./tests/register.mjs --test tests/api-authorization.test.ts`: PASS (13/13);
-  - `pnpm test:workflows`: PASS (43/43);
-  - `pnpm test:overview`: PASS (7/7 before N-07; not rerun for the test-and-document-only N-07 change);
+  - `node --import ./tests/register.mjs --test tests/api-authorization.test.ts`: PASS (16/16 with N-09 hostname-independent authorization tests);
+  - `pnpm test:workflows`: PASS (46/46);
+  - `pnpm test:overview`: PASS (7/7);
   - `pnpm lint`: PASS;
-  - `pnpm build`: NOT RUN for the current test-and-document-only expansion; the previous build passed before N-07, and this is not an exact-head local build claim;
-  - N-07 code SHA `0cd52f3ea1e4c0b76aeff6625c1769050b68865d` CI was confirmed externally: Data CI `40813720666` SUCCESS, App CI `40813720709` SUCCESS; the current local diff has no CI evidence.
+  - `pnpm build`: PASS for the current local application-code diff;
+  - exact N-08 SHA `d3f6a1f279ffc4cc658149d13d23af0045d5504b`: Data Pipeline run `40829683506` SUCCESS, App run `40829683340` SUCCESS (confirmed externally at 2026-10-29 06:34:41 UTC); the current local diff has no CI evidence.
 - Evidence boundary:
   - no real DB, R2, SMS, worker endpoint, or user field data was used;
   - file writes use the in-memory `FILES` stub; external `fetch` is replaced with a fail-on-call stub and remained at 0 calls;
-  - no production authorization code or runtime authentication setting changed;
-  - localhost/127.0.0.1 classification and non-local anonymous denial were unit-tested, but the development fallback's production hosting boundary remains unverified;
+  - production authorization code removed hostname-derived bypasses and centralized service-token decisions; no actual runtime environment value, secret, or network setting changed;
+  - loopback and non-local anonymous denial, proxy-header non-promotion, missing/wrong service-token denial, and valid-token success were unit-tested; no hostname-based development fallback remains;
   - staging and live hosting were not exercised;
   - the matrix records handler-level authorized success coverage and does not claim every action or role combination for every handler.
 - Character status correction: the four user-approved character assets were applied at `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`; existing icon and social-card assets remain intentionally unchanged.

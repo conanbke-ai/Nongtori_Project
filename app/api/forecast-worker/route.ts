@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { NextResponse } from 'next/server';
 import { ensureSchema } from '@/db';
-import { isLocalRequest } from '@/app/api/_lib/farm-access';
+import { serviceTokenDecision } from '@/app/api/_lib/service-token-auth';
 
 export const runtime = 'edge';
 
@@ -19,10 +19,8 @@ type GradeRow = { grade_code: string; fruit_count: number; total_weight_g: numbe
 type Prediction = { gradeCode?: unknown; p10?: unknown; p50?: unknown; p90?: unknown };
 
 function workerAuthorized(request: Request) {
-  if (isLocalRequest(request)) return true;
   const bindings = env as typeof env & { FORECAST_WORKER_TOKEN?: string };
-  return Boolean(bindings.FORECAST_WORKER_TOKEN)
-    && request.headers.get('authorization') === `Bearer ${bindings.FORECAST_WORKER_TOKEN}`;
+  return serviceTokenDecision(request, bindings.FORECAST_WORKER_TOKEN) === 'AUTHORIZED';
 }
 
 export async function POST(request: Request) {

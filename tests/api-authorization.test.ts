@@ -127,6 +127,7 @@ const communityChat = await import('../app/api/community-chat-messages/route');
 const farmAccess = await import('../app/api/_lib/farm-access');
 const farmAuth = await import('../app/lib/farm-auth');
 const farmChat = await import('../app/api/farm-chat-messages/route');
+const farmerDashboard = await import('../app/api/farmer-dashboard/route');
 const farmMembers = await import('../app/api/farm-members/route');
 const forecastWorker = await import('../app/api/forecast-worker/route');
 const fruitAssessments = await import('../app/api/fruit-assessments/route');
@@ -236,6 +237,14 @@ function bearerRequest(pathname: string, method: string, token = 'wrong-secret',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+function loopbackRequest(
+  pathname: string,
+  method = 'GET',
+  headers: Record<string, string> = {},
+) {
+  return new Request(`http://localhost/api/${pathname}`, { method, headers });
 }
 
 function uploadRequest(actor: string | null) {
@@ -381,6 +390,18 @@ test('service workers reject wrong tokens before database mutation or external d
     assert.equal((await harvestCompletion.POST(bearerRequest('harvest-completion', 'POST'))).status, 401);
     assert.equal((await notificationWorker.POST(bearerRequest('notification-worker', 'POST'))).status, 401);
     assert.equal((await vendorImport.POST(bearerRequest('vendor/farm-import', 'POST'))).status, 401);
+    assert.equal((await forecastWorker.POST(loopbackRequest('forecast-worker', 'POST', {
+      authorization: 'Bearer wrong-secret',
+    }))).status, 401);
+    assert.equal((await harvestCompletion.POST(loopbackRequest('harvest-completion', 'POST', {
+      authorization: 'Bearer wrong-secret',
+    }))).status, 401);
+    assert.equal((await notificationWorker.POST(loopbackRequest('notification-worker', 'POST', {
+      authorization: 'Bearer wrong-secret',
+    }))).status, 401);
+    assert.equal((await vendorImport.POST(loopbackRequest('vendor/farm-import', 'POST', {
+      authorization: 'Bearer wrong-secret',
+    }))).status, 401);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -389,24 +410,161 @@ test('service workers reject wrong tokens before database mutation or external d
   assert.equal(count('notification_outbox'), outboxCount);
 });
 
-test('non-local requests require identity while localhost classification stays development-only', async () => {
-  assert.equal(farmAccess.isLocalRequest(new Request('http://localhost/api/farmer-dashboard')), true);
-  assert.equal(farmAccess.isLocalRequest(new Request('http://127.0.0.1/api/farmer-dashboard')), true);
-  assert.equal(farmAccess.isLocalRequest(new Request('https://nongtori.test/api/farmer-dashboard')), false);
+test('missing service-token bindings fail closed before writes or external delivery', async () => {
+  const bindings = testEnv as unknown as Record<string, unknown>;
+  const tokenNames = [
+    'FORECAST_WORKER_TOKEN',
+    'NOTIFICATION_WORKER_TOKEN',
+    'ROBOT_INGEST_TOKEN',
+    'VENDOR_IMPORT_TOKEN',
+  ];
+  const saved = Object.fromEntries(tokenNames.map((name) => [name, bindings[name]]));
+  const farmCount = count('farms');
+  const harvestCount = count('harvest_runs');
+  const outboxCount = count('notification_outbox');
+  let externalCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    externalCalls += 1;
+    throw new Error('external delivery must not run in authorization tests');
+  }) as typeof fetch;
+  try {
+    for (const name of tokenNames) bindings[name] = undefined;
+    assert.equal(
+      (await forecastWorker.POST(bearerRequest('forecast-worker', 'POST', 'forecast-secret'))).status,
+      401,
+    );
+    assert.equal(
+      (await forecastWorker.PUT(bearerRequest('forecast-worker', 'PUT', 'forecast-secret'))).status,
+      401,
+    );
+    assert.equal(
+      (await harvestCompletion.POST(bearerRequest('harvest-completion', 'POST', 'robot-secret'))).status,
+      503,
+    );
+    assert.equal(
+      (await notificationWorker.POST(bearerRequest('notification-worker', 'POST', 'notification-secret'))).status,
+      401,
+    );
+    assert.equal(
+      (await vendorImport.POST(bearerRequest('vendor/farm-import', 'POST', 'vendor-secret'))).status,
+      503,
+    );
+    assert.equal(
+      (await forecastWorker.POST(loopbackRequest('forecast-worker', 'POST', {
+        authorization: 'Bearer forecast-secret',
+      }))).status,
+      401,
+    );
+    assert.equal(
+      (await harvestCompletion.POST(loopbackRequest('harvest-completion', 'POST', {
+        authorization: 'Bearer robot-secret',
+      }))).status,
+      503,
+    );
+    assert.equal(
+      (await notificationWorker.POST(loopbackRequest('notification-worker', 'POST', {
+        authorization: 'Bearer notification-secret',
+      }))).status,
+      401,
+    );
+    assert.equal(
+      (await vendorImport.POST(loopbackRequest('vendor/farm-import', 'POST', {
+        authorization: 'Bearer vendor-secret',
+      }))).status,
+      503,
+    );
+  } finally {
+    for (const name of tokenNames) bindings[name] = saved[name];
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(externalCalls, 0);
+  assert.equal(count('farms'), farmCount);
+  assert.equal(count('harvest_runs'), harvestCount);
+  assert.equal(count('notification_outbox'), outboxCount);
+});
 
+test('loopback URLs require real identity and preserve farm scope', async () => {
   const remoteAnonymous = await farmAccess.getAccessibleFarms(
     new Request('https://nongtori.test/api/farmer-dashboard'),
   );
   assert.deepEqual(remoteAnonymous, []);
-  const localFarms = await farmAccess.getAccessibleFarms(
-    new Request('http://localhost/api/farmer-dashboard'),
-  );
-  assert.ok(localFarms.some((farm) => farm.id === 'farm-a'));
-  const localMember = await farmAuth.getFarmMember(
-    new Request('http://localhost/api/account-profile'),
-    'farm-a',
-  );
-  assert.equal(localMember?.id, 'admin-a');
+  for (const origin of ['http://localhost', 'http://127.0.0.1']) {
+    const anonymous = new Request(`${origin}/api/farmer-dashboard`);
+    assert.deepEqual(await farmAccess.getAccessibleFarms(anonymous), []);
+    assert.equal(await farmAuth.getFarmMember(anonymous, 'farm-a'), null);
+  }
+
+  const localOwner = loopbackRequest('farmer-dashboard', 'GET', {
+    'oai-authenticated-user-id': 'owner-a',
+  });
+  assert.deepEqual((await farmAccess.getAccessibleFarms(localOwner)).map((farm) => farm.id), ['farm-a']);
+  assert.equal((await farmAuth.getFarmMember(localOwner, 'farm-a'))?.id, 'owner-a');
+  assert.equal(await farmAuth.getFarmMember(localOwner, 'farm-b'), null);
+
+  const dashboardResponse = await farmerDashboard.GET(loopbackRequest('farmer-dashboard'));
+  assert.equal(dashboardResponse.status, 200);
+  const dashboard = await dashboardResponse.json() as {
+    farms: unknown[];
+    account: { authenticated: boolean };
+    selectedFarm: unknown;
+  };
+  assert.deepEqual(dashboard.farms, []);
+  assert.equal(dashboard.account.authenticated, false);
+  assert.equal(dashboard.selectedFarm, null);
+});
+
+test('request host and proxy headers never grant farm or worker authorization', async () => {
+  const requests = [
+    new Request('https://nongtori.test/api/farmer-dashboard', {
+      headers: { host: 'localhost' },
+    }),
+    new Request('https://nongtori.test/api/farmer-dashboard', {
+      headers: { 'x-forwarded-host': 'localhost', 'x-forwarded-proto': 'http' },
+    }),
+    new Request('https://nongtori.test/api/farmer-dashboard', {
+      headers: { forwarded: 'for=127.0.0.1;host=localhost;proto=http' },
+    }),
+    new Request('http://localhost/api/farmer-dashboard', {
+      headers: { 'x-forwarded-host': 'nongtori.test', 'x-forwarded-proto': 'https' },
+    }),
+  ];
+  for (const request of requests) {
+    assert.deepEqual(await farmAccess.getAccessibleFarms(request), []);
+    assert.equal(await farmAuth.getFarmMember(request, 'farm-a'), null);
+  }
+  assert.equal((await forecastWorker.POST(loopbackRequest('forecast-worker', 'POST'))).status, 401);
+  assert.equal((await harvestCompletion.POST(loopbackRequest('harvest-completion', 'POST'))).status, 401);
+  assert.equal((await notificationWorker.POST(loopbackRequest('notification-worker', 'POST'))).status, 401);
+  assert.equal((await vendorImport.POST(loopbackRequest('vendor/farm-import', 'POST'))).status, 401);
+  assert.equal((await forecastWorker.POST(loopbackRequest('forecast-worker', 'POST', {
+    authorization: 'Bearer forecast-secret',
+  }))).status, 204);
+  assert.equal((await notificationWorker.POST(loopbackRequest('notification-worker', 'POST', {
+    authorization: 'Bearer notification-secret',
+  }))).status, 200);
+  assert.equal((await harvestCompletion.POST(loopbackRequest('harvest-completion', 'POST', {
+    authorization: 'Bearer robot-secret',
+  }))).status, 400);
+  assert.equal((await vendorImport.POST(loopbackRequest('vendor/farm-import', 'POST', {
+    authorization: 'Bearer vendor-secret',
+  }))).status, 400);
+});
+
+test('authorization sources do not derive trust from loopback hostnames', () => {
+  for (const file of [
+    'app/lib/farm-auth.ts',
+    'app/api/_lib/farm-access.ts',
+    'app/api/_lib/service-token-auth.ts',
+    'app/api/farmer-dashboard/route.ts',
+    'app/api/forecast-worker/route.ts',
+    'app/api/harvest-completion/route.ts',
+    'app/api/notification-worker/route.ts',
+    'app/api/vendor/farm-import/route.ts',
+  ]) {
+    const source = readFileSync(file, 'utf8');
+    assert.doesNotMatch(source, /localhost|127\.0\.0\.1|isLocalRequest/);
+  }
 });
 
 test('authorized user boundaries perform only their scoped fixture writes', async () => {

@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { NextResponse } from 'next/server';
 import { ensureSchema } from '@/db';
+import { serviceTokenDecision } from '@/app/api/_lib/service-token-auth';
 
 export const runtime = 'edge';
 
@@ -38,7 +39,7 @@ function alertMessage(language: string, farmName: string, locationParts: Array<s
 export async function POST(request: Request) {
   await ensureSchema();
   const bindings = env as NotificationBindings;
-  if (!bindings.NOTIFICATION_WORKER_TOKEN || request.headers.get('authorization') !== `Bearer ${bindings.NOTIFICATION_WORKER_TOKEN}`) {
+  if (serviceTokenDecision(request, bindings.NOTIFICATION_WORKER_TOKEN) !== 'AUTHORIZED') {
     return NextResponse.json({ error: '알림 발송 작업 인증에 실패했습니다.' }, { status: 401 });
   }
   if (!bindings.SMS_ALERT_URL || !bindings.SMS_ALERT_TOKEN) {

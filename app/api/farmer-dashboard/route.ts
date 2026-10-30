@@ -6,7 +6,9 @@ import {
   publicMemberAccountCode,
   publicMemberName,
   publicSnapshotName,
+  requestIdentity,
 } from '@/app/lib/farm-auth';
+import { getAccessibleFarms } from '@/app/api/_lib/farm-access';
 import { pestTargets, findPestTarget } from '@/app/features/pests/domain/catalog';
 import { PestRepository } from '@/app/features/pests/infrastructure/pest-repository';
 import { loadPestDashboard } from '@/app/features/pests/application/pest-service';
@@ -14,7 +16,6 @@ import type { FarmPermissions } from '@/app/lib/farm-permissions';
 
 export const runtime = 'edge';
 
-type FarmRow = { id: string; name: string; timezone: string };
 const noPermissions: FarmPermissions = {
   viewRevenue: false,
   manageMembers: false,
@@ -35,9 +36,7 @@ const guideQuery = `SELECT cg.id, cg.crop_code,
 export async function GET(request: Request) {
   await ensureSchema();
   const url = new URL(request.url);
-  const isLocal = ['localhost', '127.0.0.1'].includes(url.hostname);
-  const authUserId = request.headers.get('oai-authenticated-user-id')?.trim() ?? '';
-  const authEmail = request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase() ?? '';
+  const identity = requestIdentity(request);
   const requestedFarmId = url.searchParams.get('farmId')?.trim() ?? '';
   const localDate = url.searchParams.get('date')?.trim() ?? '';
   const alertStatus = url.searchParams.get('alertStatus') === 'DONE' ? 'DONE' : 'OPEN';
@@ -47,29 +46,20 @@ export async function GET(request: Request) {
   const pestCode = url.searchParams.get('pestCode')?.trim() ?? '';
   if (pestCode && !findPestTarget(pestCode)) return NextResponse.json({ error: '병해충 종류를 확인해 주세요.' }, { status: 422 });
 
-  const farms = isLocal
-    ? await env.DB.prepare(`SELECT id, name, timezone FROM farms WHERE status = 'ACTIVE' ORDER BY name`).all<FarmRow>()
-    : await env.DB.prepare(`SELECT DISTINCT f.id, f.name, f.timezone
-        FROM farms f JOIN farm_members fm ON fm.farm_id = f.id
-        WHERE f.status = 'ACTIVE' AND fm.status = 'ACTIVE'
-          AND ((fm.identity_provider = 'SITES'
-            AND (fm.identity_subject = ? OR fm.identity_subject = fm.farm_id || ':' || ?))
-            OR (fm.email IS NOT NULL AND lower(fm.email) = ?))
-        ORDER BY f.name`)
-      .bind(authUserId, authUserId, authEmail).all<FarmRow>();
+  const farms = await getAccessibleFarms(request);
   const selectedFarm = requestedFarmId
-    ? farms.results.find((farm) => farm.id === requestedFarmId)
-    : farms.results[0];
+    ? farms.find((farm) => farm.id === requestedFarmId)
+    : farms[0];
 
   if (!selectedFarm) {
     const guideCatalog = await env.DB.prepare(`${guideQuery}
       WHERE cg.status = 'ACTIVE' ORDER BY ct.display_name_ko, cg.display_order, cg.title`).all();
     return NextResponse.json({
-      farms: farms.results,
+      farms,
       account: {
-        authenticated: isLocal || Boolean(authUserId || authEmail),
+        authenticated: Boolean(identity.userId || identity.email),
         loginId: null,
-        email: authEmail || null,
+        email: identity.email || null,
         displayName: null,
         publicName: null,
         accountCode: null,
@@ -95,7 +85,7 @@ export async function GET(request: Request) {
       pendingSessionsByItem: [],
       cameras: [], alerts: [], recentSessions: [], items: [], guides: guideCatalog.results,
       setupRequired: true,
-      membershipRequired: !isLocal && Boolean(authUserId || authEmail),
+      membershipRequired: Boolean(identity.userId || identity.email),
     });
   }
 
@@ -199,11 +189,11 @@ export async function GET(request: Request) {
   });
 
   const response: Record<string, unknown> = {
-    farms: farms.results,
+    farms,
     account: {
       authenticated: true,
       loginId: member.loginId,
-      email: member.email ?? (authEmail || null),
+      email: member.email ?? (identity.email || null),
       displayName: member.displayName,
       publicName: publicMemberName(member),
       accountCode: publicMemberAccountCode(member),

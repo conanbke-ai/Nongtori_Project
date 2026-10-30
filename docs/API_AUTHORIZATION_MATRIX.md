@@ -51,7 +51,18 @@
 - 잘못된 worker/vendor token은 forecast, harvest ingest, notification, farm import 변경이나 외부 발송 전에 거부된다.
 - 승인된 농장 구성원은 자신의 프로필과 대화를 변경하고, 허용된 역할은 구성원 초대와 영상 접수를 수행한다.
 - 올바른 service token은 fixture vendor import, robot harvest ingest, forecast claim, 빈 notification queue까지 도달한다.
-- non-local 익명 요청은 농장 목록을 받지 못하고, localhost/127.0.0.1 분류는 개발용 코드 경계로만 확인한다.
+- 익명 요청은 URL이 non-local, `localhost`, `127.0.0.1` 중 무엇이든 농장 목록이나 구성원 권한을 받지 못한다.
+- loopback URL도 실제 Sites identity가 가리키는 활성 membership 범위에서만 접근하며 다른 농장으로 확장되지 않는다.
+- `Host`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `Forwarded`와 request hostname은 농장 또는 worker/vendor 권한 근거로 사용하지 않는다.
+- 필수 worker/vendor token binding이 없거나 token이 틀린 요청은 loopback URL에서도 DB 쓰기나 외부 호출 전에 `401` 또는 capability-unconfigured `503`으로 닫힌다. 유효 token은 같은 production handler 정상 경로에 도달한다.
+
+## Hostname-independent authentication boundary
+
+- Farm identity는 Sites가 전달한 identity header와 활성 `farm_members` row의 일치로만 성립한다. loopback hostname은 첫 구성원 선택이나 synthetic ADMIN을 만들지 않는다.
+- Dashboard farm selection은 공통 `getAccessibleFarms`를 사용하므로 별도의 localhost 전체-farm query가 없다.
+- Forecast, notification, robot-ingest, vendor import는 공통 service-token decision을 사용하고 hostname을 입력으로 받지 않는다. 각 route의 기존 missing-token `401`/`503` 계약은 유지한다.
+- 신뢰 가능한 client/network marker가 없으므로 production 코드에 local-preview auth flag나 test-only 우회를 추가하지 않았다. local preview도 Sites identity와 실제 membership 또는 정상 service token이 필요하다.
+- 설치된 production 경로의 정적 검토에서는 Cloudflare router와 vinext가 `request.url`을 보존한다. 운영 원격 ADMIN 우회는 입증되지 않았으며, OpenAI hosting upstream/live behavior는 계속 `NOT_RUN`이다.
 
 ## 성공 계약 실행 현황
 
@@ -97,5 +108,5 @@
 
 - 위 표의 33개 handler 모두 isolated fixture에서 정상 권한 분기 1개 이상을 직접 실행했다(`EXECUTED` 33/33, `NOT_RUN` 0/33). 이는 전체 기능 완성이나 제품 acceptance가 아니다.
 - 33/33 제한: `phone-notifications`는 외부 SMS 없는 알림 비활성화만, `forecast-worker#PUT`은 모델 실행 없이 공급된 fixture 예측의 저장만, 파일 route는 in-memory `FILES` stub만 검증했다. 실제 SMS·모델 연동·R2·production D1과 각 handler의 나머지 action·role 분기는 별도 branch-level `NOT_RUN`이며 handler-row `NOT_RUN` 0/33 집계에는 포함되지 않는다.
-- `localhost`와 `127.0.0.1` 분류 및 non-local 익명 차단은 단위 검증했다. URL hostname에 따른 개발 fallback이 실제 운영 hosting에서 활성화되지 않는지는 여전히 미확인이다.
+- loopback/non-local 익명 차단, loopback의 실제 membership scope, proxy-header 비승격, 필수 token binding 부재와 잘못된 token의 fail-closed 동작, 유효 token 정상 경로를 production handler로 단위 검증했다. Source regression은 권한 코드에 loopback hostname 신뢰가 다시 추가되면 실패한다. OpenAI hosting upstream/live behavior는 branch-level `NOT_RUN`이다.
 - 실제 D1/R2, 실제 SMS·worker endpoint, 사용자 실데이터는 이 테스트에서 사용하지 않는다. 파일 route는 in-memory `FILES` stub만 사용하고, 외부 `fetch`는 호출 시 실패하도록 막아 0건을 확인한다.
