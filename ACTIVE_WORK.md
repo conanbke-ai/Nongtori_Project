@@ -1,3 +1,29 @@
+## Scouting queue data-trust states — 2026-10-30
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base / current PR HEAD: `399e1a21282e3bf7786aa5176bd0e89bc0f1c0cf`.
+- Status: `SCOUTING_LOAD_STATES_VERIFIED` (N-12 approved; implementation recorded in this separate commit; publication SHA and CI reported separately; not merged or deployed).
+- Selection reason: pest scouting is a Portfolio V1 MUST workflow, but its initial request failure rendered the successful zero-row all-clear copy at the same time. A farm switch could also retain an older farm snapshot, and a superseded response could overwrite the newer farm load state.
+- Scope:
+  - a connected farm starts in an explicit loading state rather than briefly appearing empty;
+  - an initial load failure renders an error, recovery guidance, and a 44px retry action without claiming that no zones need attention;
+  - only a successful zero-row response renders the existing all-clear state;
+  - a same-farm refresh failure preserves the last successful rows and labels them as the last loaded list;
+  - stored rows are projected only when their farm ID matches the current farm, and a monotonically increasing request ID prevents an older response from overwriting a newer load;
+  - normal list/detail/actions, role checks, API payloads, persistence, and scouting domain policy are unchanged.
+- Changed product files: `app/features/pests/presentation/ScoutingQueue.tsx`, `app/features/pests/presentation/scouting.css`, and `tests/scouting-ui.test.tsx`.
+- Validation:
+  - `node --import ./tests/register.mjs --test tests/scouting-ui.test.tsx`: PASS (9/9);
+  - `pnpm test:workflows`: PASS (49/49);
+  - `pnpm test:overview`: PASS (7/7);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS (existing proxy-environment warning only);
+  - `git diff --check`: PASS;
+  - isolated real Chromium fixture: PASS for initial 503, successful empty, retry success, and prior-success refresh failure at desktop `1440x900` and affected mobile `390x844`; no horizontal overflow (`/tmp/nongtori-scouting-qa-qY2gOK/*-final.png`).
+- Evidence boundary: browser requests used deterministic in-memory network fixtures and the production presentation component; no live account, production D1/R2, field data, external delivery, deployment, or environment setting was used or changed.
+- `NOT_RUN`: live hosted identity/backend behavior, offline service-worker behavior, and production-device field acceptance.
+- Next safe unit: apply the same error-versus-empty and retry contract to the notification panel, which currently renders its empty copy beside an initial load error; keep this as a separate reviewable change.
+
 ## Test-only fixed identity harness — 2026-10-30
 
 - Workstream: `feat/thermal-mite-risk-v001` / PR #105.
