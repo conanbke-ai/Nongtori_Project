@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { localeForLanguage, type Language } from '@/app/lib/i18n';
 
 export type ScoutingLocation = {
@@ -95,12 +95,12 @@ const copy: Record<Language, {
   eyebrow: string; title: string; description: string; refresh: string; loading: string; emptyTitle: string; emptyHelp: string;
   candidate: string; recentDetection: string; recentCheck: string; recentAction: string; details: string; closeDetails: string;
   fieldCheck: string; action: string; resolve: string; correctionTitle: string; correctionHelp: string; voidInput: string;
-  noteLabel: string; noteText: string; loadError: string; saveError: string; saved: string;
+  noteLabel: string; noteText: string; loadError: string; retryHelp: string; staleNotice: string; saveError: string; saved: string;
 }> = {
-  ko: { eyebrow: '병해충 예찰', title: '오늘 확인할 구역', description: '반복 알림은 묶고, 확인 가치가 높은 구역만 우선 보여줍니다.', refresh: '새로고침', loading: '예찰 구역을 불러오는 중입니다.', emptyTitle: '지금 바로 확인할 구역이 없습니다.', emptyHelp: '관측은 계속되고 새로운 변화가 생기면 목록에 표시됩니다.', candidate: '탐지 후보', recentDetection: '최근 감지', recentCheck: '최근 현장 확인', recentAction: '최근 조치', details: '상세보기', closeDetails: '상세 닫기', fieldCheck: '현장 확인 결과 기록', action: '조치 기록', resolve: '예찰 건 종료', correctionTitle: '방금 입력 수정', correctionHelp: '잘못 눌렀다면 원본을 지우지 않고 수정 이력으로 남깁니다.', voidInput: '입력 무효화', noteLabel: '기록 원칙', noteText: '“특별한 이상 못 찾음”은 확정 정상 판정이 아니라 당시 관찰 결과로 저장됩니다.', loadError: '예찰 구역을 불러오지 못했습니다.', saveError: '기록을 저장하지 못했습니다.', saved: '기록했습니다.' },
-  vi: { eyebrow: 'Theo dõi sâu bệnh', title: 'Khu vực cần kiểm tra hôm nay', description: 'Gộp cảnh báo lặp lại và ưu tiên khu vực cần kiểm tra.', refresh: 'Làm mới', loading: 'Đang tải khu vực theo dõi.', emptyTitle: 'Hiện không có khu vực cần kiểm tra ngay.', emptyHelp: 'Hệ thống vẫn tiếp tục quan sát và sẽ hiển thị khi có thay đổi mới.', candidate: 'Đối tượng nghi ngờ', recentDetection: 'Phát hiện gần nhất', recentCheck: 'Kiểm tra gần nhất', recentAction: 'Xử lý gần nhất', details: 'Chi tiết', closeDetails: 'Đóng chi tiết', fieldCheck: 'Ghi kết quả kiểm tra', action: 'Ghi nhận xử lý', resolve: 'Kết thúc vụ việc', correctionTitle: 'Sửa dữ liệu vừa nhập', correctionHelp: 'Bản gốc được giữ lại và thay đổi được lưu thành lịch sử sửa.', voidInput: 'Hủy hiệu lực nhập', noteLabel: 'Nguyên tắc ghi nhận', noteText: '“Không thấy bất thường rõ ràng” được lưu như một quan sát, không phải xác nhận hoàn toàn bình thường.', loadError: 'Không tải được khu vực theo dõi.', saveError: 'Không lưu được bản ghi.', saved: 'Đã ghi nhận.' },
-  th: { eyebrow: 'เฝ้าระวังโรคและศัตรูพืช', title: 'พื้นที่ที่ต้องตรวจวันนี้', description: 'รวมการแจ้งเตือนซ้ำและแสดงพื้นที่ที่ควรตรวจเป็นอันดับแรก', refresh: 'รีเฟรช', loading: 'กำลังโหลดพื้นที่เฝ้าระวัง', emptyTitle: 'ขณะนี้ไม่มีพื้นที่ที่ต้องตรวจทันที', emptyHelp: 'ระบบยังคงสังเกตและจะแสดงเมื่อมีการเปลี่ยนแปลงใหม่', candidate: 'สิ่งที่สงสัย', recentDetection: 'ตรวจพบล่าสุด', recentCheck: 'ตรวจหน้างานล่าสุด', recentAction: 'การจัดการล่าสุด', details: 'รายละเอียด', closeDetails: 'ปิดรายละเอียด', fieldCheck: 'บันทึกผลตรวจหน้างาน', action: 'บันทึกการจัดการ', resolve: 'ปิดกรณีเฝ้าระวัง', correctionTitle: 'แก้ไขข้อมูลที่เพิ่งบันทึก', correctionHelp: 'ข้อมูลเดิมจะยังคงอยู่และบันทึกการแก้ไขเป็นประวัติ', voidInput: 'ยกเลิกรายการ', noteLabel: 'หลักการบันทึก', noteText: '“ไม่พบความผิดปกติชัดเจน” เป็นเพียงผลการสังเกต ไม่ใช่การยืนยันว่าปกติทั้งหมด', loadError: 'ไม่สามารถโหลดพื้นที่เฝ้าระวังได้', saveError: 'ไม่สามารถบันทึกได้', saved: 'บันทึกแล้ว' },
-  'zh-CN': { eyebrow: '病虫害巡检', title: '今天需要确认的区域', description: '合并重复提醒，仅优先显示值得检查的区域。', refresh: '刷新', loading: '正在加载巡检区域。', emptyTitle: '目前没有需要立即确认的区域。', emptyHelp: '系统会持续观测，出现新的变化时会显示在列表中。', candidate: '检测候选', recentDetection: '最近检测', recentCheck: '最近现场检查', recentAction: '最近处理', details: '查看详情', closeDetails: '关闭详情', fieldCheck: '记录现场确认结果', action: '记录处理', resolve: '结束本次巡检事件', correctionTitle: '修改刚才的输入', correctionHelp: '不会删除原记录，而是追加修正历史。', voidInput: '作废本次输入', noteLabel: '记录原则', noteText: '“未发现明显异常”只作为当时的观察结果保存，并不等于确认完全正常。', loadError: '无法加载巡检区域。', saveError: '无法保存记录。', saved: '已记录。' },
+  ko: { eyebrow: '병해충 예찰', title: '오늘 확인할 구역', description: '반복 알림은 묶고, 확인 가치가 높은 구역만 우선 보여줍니다.', refresh: '새로고침', loading: '예찰 구역을 불러오는 중입니다.', emptyTitle: '지금 바로 확인할 구역이 없습니다.', emptyHelp: '관측은 계속되고 새로운 변화가 생기면 목록에 표시됩니다.', candidate: '탐지 후보', recentDetection: '최근 감지', recentCheck: '최근 현장 확인', recentAction: '최근 조치', details: '상세보기', closeDetails: '상세 닫기', fieldCheck: '현장 확인 결과 기록', action: '조치 기록', resolve: '예찰 건 종료', correctionTitle: '방금 입력 수정', correctionHelp: '잘못 눌렀다면 원본을 지우지 않고 수정 이력으로 남깁니다.', voidInput: '입력 무효화', noteLabel: '기록 원칙', noteText: '“특별한 이상 못 찾음”은 확정 정상 판정이 아니라 당시 관찰 결과로 저장됩니다.', loadError: '예찰 구역을 불러오지 못했습니다.', retryHelp: '연결을 확인한 뒤 다시 시도해 주세요.', staleNotice: '마지막으로 불러온 예찰 목록을 표시합니다.', saveError: '기록을 저장하지 못했습니다.', saved: '기록했습니다.' },
+  vi: { eyebrow: 'Theo dõi sâu bệnh', title: 'Khu vực cần kiểm tra hôm nay', description: 'Gộp cảnh báo lặp lại và ưu tiên khu vực cần kiểm tra.', refresh: 'Làm mới', loading: 'Đang tải khu vực theo dõi.', emptyTitle: 'Hiện không có khu vực cần kiểm tra ngay.', emptyHelp: 'Hệ thống vẫn tiếp tục quan sát và sẽ hiển thị khi có thay đổi mới.', candidate: 'Đối tượng nghi ngờ', recentDetection: 'Phát hiện gần nhất', recentCheck: 'Kiểm tra gần nhất', recentAction: 'Xử lý gần nhất', details: 'Chi tiết', closeDetails: 'Đóng chi tiết', fieldCheck: 'Ghi kết quả kiểm tra', action: 'Ghi nhận xử lý', resolve: 'Kết thúc vụ việc', correctionTitle: 'Sửa dữ liệu vừa nhập', correctionHelp: 'Bản gốc được giữ lại và thay đổi được lưu thành lịch sử sửa.', voidInput: 'Hủy hiệu lực nhập', noteLabel: 'Nguyên tắc ghi nhận', noteText: '“Không thấy bất thường rõ ràng” được lưu như một quan sát, không phải xác nhận hoàn toàn bình thường.', loadError: 'Không tải được khu vực theo dõi.', retryHelp: 'Kiểm tra kết nối rồi thử lại.', staleNotice: 'Đang hiển thị danh sách theo dõi được tải gần nhất.', saveError: 'Không lưu được bản ghi.', saved: 'Đã ghi nhận.' },
+  th: { eyebrow: 'เฝ้าระวังโรคและศัตรูพืช', title: 'พื้นที่ที่ต้องตรวจวันนี้', description: 'รวมการแจ้งเตือนซ้ำและแสดงพื้นที่ที่ควรตรวจเป็นอันดับแรก', refresh: 'รีเฟรช', loading: 'กำลังโหลดพื้นที่เฝ้าระวัง', emptyTitle: 'ขณะนี้ไม่มีพื้นที่ที่ต้องตรวจทันที', emptyHelp: 'ระบบยังคงสังเกตและจะแสดงเมื่อมีการเปลี่ยนแปลงใหม่', candidate: 'สิ่งที่สงสัย', recentDetection: 'ตรวจพบล่าสุด', recentCheck: 'ตรวจหน้างานล่าสุด', recentAction: 'การจัดการล่าสุด', details: 'รายละเอียด', closeDetails: 'ปิดรายละเอียด', fieldCheck: 'บันทึกผลตรวจหน้างาน', action: 'บันทึกการจัดการ', resolve: 'ปิดกรณีเฝ้าระวัง', correctionTitle: 'แก้ไขข้อมูลที่เพิ่งบันทึก', correctionHelp: 'ข้อมูลเดิมจะยังคงอยู่และบันทึกการแก้ไขเป็นประวัติ', voidInput: 'ยกเลิกรายการ', noteLabel: 'หลักการบันทึก', noteText: '“ไม่พบความผิดปกติชัดเจน” เป็นเพียงผลการสังเกต ไม่ใช่การยืนยันว่าปกติทั้งหมด', loadError: 'ไม่สามารถโหลดพื้นที่เฝ้าระวังได้', retryHelp: 'ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง', staleNotice: 'กำลังแสดงรายการเฝ้าระวังที่โหลดล่าสุด', saveError: 'ไม่สามารถบันทึกได้', saved: 'บันทึกแล้ว' },
+  'zh-CN': { eyebrow: '病虫害巡检', title: '今天需要确认的区域', description: '合并重复提醒，仅优先显示值得检查的区域。', refresh: '刷新', loading: '正在加载巡检区域。', emptyTitle: '目前没有需要立即确认的区域。', emptyHelp: '系统会持续观测，出现新的变化时会显示在列表中。', candidate: '检测候选', recentDetection: '最近检测', recentCheck: '最近现场检查', recentAction: '最近处理', details: '查看详情', closeDetails: '关闭详情', fieldCheck: '记录现场确认结果', action: '记录处理', resolve: '结束本次巡检事件', correctionTitle: '修改刚才的输入', correctionHelp: '不会删除原记录，而是追加修正历史。', voidInput: '作废本次输入', noteLabel: '记录原则', noteText: '“未发现明显异常”只作为当时的观察结果保存，并不等于确认完全正常。', loadError: '无法加载巡检区域。', retryHelp: '请检查连接后重试。', staleNotice: '当前显示的是最近一次成功加载的巡检列表。', saveError: '无法保存记录。', saved: '已记录。' },
 };
 
 function localized(value: LocalizedText, language: Language) { return value[language] ?? value.ko; }
@@ -136,23 +136,51 @@ function focusedLocationId() {
 }
 
 type RecentFieldCheck = { fieldCheckId: string; label: string };
+export type ScoutingQueueViewState = 'LOADING' | 'ERROR' | 'EMPTY' | 'READY' | 'STALE';
+
+export function scoutingRowsForFarm<T>(storedRows: T[], loadedFarmId: string, farmId: string) {
+  return loadedFarmId === farmId ? storedRows : [];
+}
+
+export function scoutingQueueViewState({
+  farmId, loadedFarmId, loading, loadError, rowCount,
+}: {
+  farmId: string; loadedFarmId: string; loading: boolean; loadError: string; rowCount: number;
+}): ScoutingQueueViewState {
+  if (loading || (farmId !== '' && loadedFarmId !== farmId && loadError === '')) return 'LOADING';
+  if (loadError !== '' && rowCount === 0) return 'ERROR';
+  if (rowCount === 0) return 'EMPTY';
+  if (loadError !== '') return 'STALE';
+  return 'READY';
+}
 
 export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
   farmId: string; canReview: boolean; language: Language; onChanged?: () => void;
 }) {
-  const [rows, setRows] = useState<ScoutingLocation[]>([]);
+  const [storedRows, setStoredRows] = useState<ScoutingLocation[]>([]);
+  const [loadedFarmId, setLoadedFarmId] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(farmId));
+  const [loadFailure, setLoadFailure] = useState({ farmId: '', message: '' });
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState('');
   const [recentFieldCheck, setRecentFieldCheck] = useState<RecentFieldCheck | null>(null);
+  const loadRequestId = useRef(0);
   const text = copy[language];
+  const rows = scoutingRowsForFarm(storedRows, loadedFarmId, farmId);
+  const loadError = loadFailure.farmId === farmId ? loadFailure.message : '';
+  const viewState = scoutingQueueViewState({ farmId, loadedFarmId, loading, loadError, rowCount: rows.length });
   const selected = useMemo(() => rows.find((row) => row.id === selectedId) ?? null, [rows, selectedId]);
 
   const load = useCallback(async () => {
-    if (!farmId) { setRows([]); setSelectedId(null); return; }
-    setLoading(true); setError('');
+    const requestId = ++loadRequestId.current;
+    if (!farmId) {
+      setStoredRows([]); setLoadedFarmId(''); setSelectedId(null);
+      setLoadFailure({ farmId: '', message: '' }); setLoading(false);
+      return;
+    }
+    setLoading(true); setLoadFailure({ farmId, message: '' }); setError('');
     try {
       const focus = focusedLocationId();
       const params = new URLSearchParams({ farmId, attention: '1', limit: '20' });
@@ -160,19 +188,23 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
       const response = await fetch(`/api/scouting-locations?${params}`, { cache: 'no-store' });
       const result = await response.json() as QueueResponse;
       if (!response.ok) throw new Error(result.error ?? text.loadError);
-      setRows(result.rows);
+      if (requestId !== loadRequestId.current) return;
+      setStoredRows(result.rows); setLoadedFarmId(farmId);
       setSelectedId((current) => {
         if (focus && result.rows.some((row) => row.id === focus)) return focus;
         return current && result.rows.some((row) => row.id === current) ? current : null;
       });
-    } catch (caught) { setError(caught instanceof Error ? caught.message : text.loadError); }
-    finally { setLoading(false); }
+    } catch (caught) {
+      if (requestId === loadRequestId.current) setLoadFailure({ farmId, message: caught instanceof Error ? caught.message : text.loadError });
+    } finally {
+      if (requestId === loadRequestId.current) setLoading(false);
+    }
   }, [farmId, text.loadError]);
 
   useEffect(() => {
     let cancelled = false;
     void Promise.resolve().then(async () => { if (!cancelled) await load(); });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; loadRequestId.current += 1; };
   }, [load]);
 
   async function post(path: string, body: Record<string, unknown>) {
@@ -232,8 +264,10 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
     <header className="scouting-queue-heading"><div><span>{text.eyebrow}</span><h2>{text.title}</h2><p>{text.description}</p></div><button disabled={loading || !farmId} onClick={() => void load()} type="button">{text.refresh}</button></header>
     {message && <div className="review-feedback success" role="status">{message}</div>}
     {error && <div className="review-feedback error" role="alert">{error}</div>}
-    {loading ? <div className="screen-empty compact"><strong>{text.loading}</strong></div>
-      : rows.length === 0 ? <div className="scouting-all-clear"><strong>{text.emptyTitle}</strong><p>{text.emptyHelp}</p></div>
+    {viewState === 'STALE' && <div className="review-feedback error scouting-stale" role="alert"><strong>{loadError}</strong><span>{text.staleNotice}</span></div>}
+    {viewState === 'LOADING' ? <div className="screen-empty compact"><strong>{text.loading}</strong></div>
+      : viewState === 'ERROR' ? <div className="screen-empty compact scouting-load-error" role="alert"><strong>{loadError || text.loadError}</strong><p>{text.retryHelp}</p><button onClick={() => void load()} type="button">{text.refresh}</button></div>
+        : viewState === 'EMPTY' ? <div className="scouting-all-clear"><strong>{text.emptyTitle}</strong><p>{text.emptyHelp}</p></div>
         : <div className="scouting-workspace">
           <div className="scouting-location-list" role="list">{rows.map((row) => {
             const state = stateLabels[row.current_state] ?? stateLabels.WATCH;

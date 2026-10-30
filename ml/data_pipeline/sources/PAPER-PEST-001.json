@@ -1,0 +1,27 @@
+{
+  "source_id": "PAPER-PEST-001",
+  "source_type": "paper",
+  "provider": "MDPI Agronomy",
+  "title": "An Unsupervised and Supervised Machine Learning Approach to Evidence Tetranychus mexicanus Activity in Fluorescence and Thermal Response in Passion Fruit",
+  "original_url": "https://doi.org/10.3390/agronomy15102297",
+  "version_or_revision": "2025-09-28",
+  "license": "CC-BY-4.0",
+  "license_checked_at": "2026-10-16",
+  "redistribution_allowed": "allowed_with_attribution",
+  "commercial_use": "allowed_with_attribution",
+  "status": "REVIEW_REQUIRED",
+  "retrieval": {
+    "doi": "10.3390/agronomy15102297"
+  },
+  "original_labels": [],
+  "nongtori_mapping": {
+    "role": "THERMAL_RESPONSE_MECHANISM_REFERENCE",
+    "status": "REFERENCE_ONLY",
+    "key_findings": [
+      "mite-infested plants showed a measurable thermal response",
+      "thermal direction is context-dependent and must not be hard-coded as warmer-is-riskier",
+      "thermal evidence is supportive rather than a species-specific diagnostic"
+    ]
+  },
+  "notes": "Different crop and Tetranychus species from Nongtori strawberry/T. urticae. Use for mechanism/source grounding only, not threshold transfer."
+}

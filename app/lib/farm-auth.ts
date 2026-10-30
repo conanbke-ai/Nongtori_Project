@@ -121,10 +121,7 @@ type FarmMemberRow = {
 };
 
 export function requestIdentity(request: Request) {
-  const url = new URL(request.url);
-  const isLocal = ['localhost', '127.0.0.1'].includes(url.hostname);
   return {
-    isLocal,
     userId: request.headers.get('oai-authenticated-user-id')?.trim() ?? '',
     email: request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase() ?? '',
   };
@@ -153,28 +150,6 @@ function memberFromRow(row: FarmMemberRow): FarmMember {
 
 export async function getFarmMember(request: Request, farmId: string): Promise<FarmMember | null> {
   const identity = requestIdentity(request);
-  if (identity.isLocal) {
-    const localMember = await env.DB.prepare(`SELECT id, farm_id, login_id, identity_subject, email,
-        display_name, phone, preferred_language, role
-      FROM farm_members WHERE farm_id = ? AND status = 'ACTIVE'
-      ORDER BY CASE role WHEN 'ADMIN' THEN 1 WHEN 'OWNER' THEN 2 ELSE 3 END, created_at LIMIT 1`)
-      .bind(farmId).first<FarmMemberRow>();
-    if (localMember) return memberFromRow(localMember);
-    const role: FarmRole = 'ADMIN';
-    return {
-      id: null,
-      farmId,
-      loginId: 'local-preview',
-      identitySubject: null,
-      email: null,
-      displayName: '로컬 관리자',
-      phone: null,
-      preferredLanguage: 'ko',
-      role,
-      roleLabel: roleLabel(role),
-      permissions: permissionsForRole(role),
-    };
-  }
   if (!identity.userId && !identity.email) return null;
   const scopedSubject = scopedIdentitySubject(farmId, identity.userId);
   const member = await env.DB.prepare(`SELECT id, farm_id, login_id, identity_subject, email,

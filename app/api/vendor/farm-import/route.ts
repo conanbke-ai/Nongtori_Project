@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { NextResponse } from 'next/server';
 import { ensureSchema } from '@/db';
+import { serviceTokenDecision } from '@/app/api/_lib/service-token-auth';
 
 export const runtime = 'edge';
 
@@ -41,15 +42,13 @@ function metadata(value: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const isLocal = ['localhost', '127.0.0.1'].includes(new URL(request.url).hostname);
     const bindings = env as typeof env & { VENDOR_IMPORT_TOKEN?: string };
-    if (!isLocal) {
-      if (!bindings.VENDOR_IMPORT_TOKEN) {
-        return NextResponse.json({ error: '업체 설정용 보안키가 아직 연결되지 않았습니다.' }, { status: 503 });
-      }
-      if (request.headers.get('authorization') !== `Bearer ${bindings.VENDOR_IMPORT_TOKEN}`) {
-        return NextResponse.json({ error: '업체 관리자 인증에 실패했습니다.' }, { status: 401 });
-      }
+    const tokenDecision = serviceTokenDecision(request, bindings.VENDOR_IMPORT_TOKEN);
+    if (tokenDecision === 'UNCONFIGURED') {
+      return NextResponse.json({ error: '업체 설정용 보안키가 아직 연결되지 않았습니다.' }, { status: 503 });
+    }
+    if (tokenDecision === 'DENIED') {
+      return NextResponse.json({ error: '업체 관리자 인증에 실패했습니다.' }, { status: 401 });
     }
     const payload = object(await request.json(), '가져오기 자료');
     const source = object(payload.source, '원본 정보');

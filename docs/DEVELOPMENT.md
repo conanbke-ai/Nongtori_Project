@@ -81,6 +81,10 @@ Controller/API → Service → Domain → Repository Port → Infrastructure
 
 기능마다 branch를 늘리지 않고 canonical workstream 단위로 제한한다. 기존 active lease와 겹치는 작업은 새 branch를 만들지 않고 기존 workstream에 합류한다. branch budget과 active workstream budget은 `ACTIVE_WORK.md`를 따른다.
 
+## 테스트 인증
+
+API 권한·소유권 회귀 테스트는 [`TEST_AUTHENTICATION_HARNESS.md`](./TEST_AUTHENTICATION_HARNESS.md)의 고정 테스트 identity provider를 사용한다. 이 provider는 `tests/` 안의 직접 handler 호출에만 쓰며, 운영 코드·호스트명·query·클라이언트 header로 활성화하지 않는다. 실제 로그인·로그아웃·세션 만료와 배포 환경의 identity 신뢰 경계는 별도 acceptance 범위로 유지한다.
+
 ## Commit
 
 **1 기능 / 1 목적 / 1 커밋**을 기본으로 한다.

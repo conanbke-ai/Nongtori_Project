@@ -1,6 +1,6 @@
 # 농토리 캐릭터 적용 표준
 
-> 이 문서는 편입 전 Site의 캐릭터 적용 이력입니다. 현재 canonical 자산은 [`assets/nongtori-tori.webp`](../assets/nongtori-tori.webp)이고, 현재 프로젝트 기준과 충돌하는 아래의 외형 설명이나 이미지 생성 지침은 적용하지 않습니다. 기존 이미지 파일은 이력 보존용으로 유지하며, 이번 편입에서 로그인·대시보드 본문 이미지는 canonical 자산으로 연결했습니다. 앱 아이콘과 공유 이미지는 기존 파일을 유지했습니다.
+> 2026-10-28 사용자 승인 원본을 canonical 세트로 등록했습니다. 기본 전신은 [`assets/nongtori-character-open-eyes.png`](../assets/nongtori-character-open-eyes.png), 로그인 환영 전신은 [`assets/nongtori-character-wink.png`](../assets/nongtori-character-wink.png)입니다. 얼굴 crop은 동일 외형의 [`assets/nongtori-face-open-eyes.png`](../assets/nongtori-face-open-eyes.png)와 [`assets/nongtori-face-wink.png`](../assets/nongtori-face-wink.png)이며 원본의 흰 배경을 유지합니다. 기존 자산은 이력 보존용으로 남기고 앱 아이콘과 공유 이미지는 변경하지 않습니다.
 
 이 문서는 농토리 운영센터에서 사용하는 캐릭터의 고정 기준입니다. 앱에는 TORi 패밀리 가운데 **농토리만** 사용합니다.
 
@@ -35,7 +35,10 @@
 ## 현재 서비스 자산
 
 - [`../public/nongtori-app-icon-512.png`](../public/nongtori-app-icon-512.png): 앱·PWA·상단 브랜드 아이콘
-- [`../public/nongtori-focus-v1.jpg`](../public/nongtori-focus-v1.jpg): 기록판을 든 집중 동작
+- [`../public/nongtori-character-open-eyes.png`](../public/nongtori-character-open-eyes.png): 대시보드 기본 전신
+- [`../public/nongtori-character-wink.png`](../public/nongtori-character-wink.png): 로그인 환영 영역 한 곳의 윙크 전신
+- [`../public/nongtori-face-open-eyes.png`](../public/nongtori-face-open-eyes.png): 기본 얼굴 crop; 현재 화면 미노출
+- [`../public/nongtori-face-wink.png`](../public/nongtori-face-wink.png): 윙크 얼굴 crop; 현재 화면 미노출
 - [`../public/nongtori-social-card-v1.jpg`](../public/nongtori-social-card-v1.jpg): 서비스 공유 카드
 
 캐릭터를 화면마다 반복 장식처럼 배치하지 않습니다. 앱 아이콘, 로그인, 핵심 브리핑, 공유 이미지처럼 브랜드 인지가 필요한 지점에만 사용하고, 일반 기능은 글자와 독립적인 기능 아이콘으로 구분합니다.

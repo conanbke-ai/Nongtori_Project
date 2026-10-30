@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { NextResponse } from 'next/server';
 import { ensureSchema } from '@/db';
-import { isLocalRequest } from '@/app/api/_lib/farm-access';
+import { serviceTokenDecision } from '@/app/api/_lib/service-token-auth';
 
 export const runtime = 'edge';
 
@@ -35,13 +35,12 @@ function isoDate(value: unknown) {
 export async function POST(request: Request) {
   await ensureSchema();
   const bindings = env as typeof env & { ROBOT_INGEST_TOKEN?: string };
-  if (!isLocalRequest(request)) {
-    if (!bindings.ROBOT_INGEST_TOKEN) {
-      return NextResponse.json({ error: '로봇 연동 보안키가 아직 설정되지 않았습니다.' }, { status: 503 });
-    }
-    if (request.headers.get('authorization') !== `Bearer ${bindings.ROBOT_INGEST_TOKEN}`) {
-      return NextResponse.json({ error: '로봇 인증에 실패했습니다.' }, { status: 401 });
-    }
+  const tokenDecision = serviceTokenDecision(request, bindings.ROBOT_INGEST_TOKEN);
+  if (tokenDecision === 'UNCONFIGURED') {
+    return NextResponse.json({ error: '로봇 연동 보안키가 아직 설정되지 않았습니다.' }, { status: 503 });
+  }
+  if (tokenDecision === 'DENIED') {
+    return NextResponse.json({ error: '로봇 인증에 실패했습니다.' }, { status: 401 });
   }
 
   let body: HarvestCompletionInput;

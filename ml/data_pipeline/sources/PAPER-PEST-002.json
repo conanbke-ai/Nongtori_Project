@@ -1,0 +1,27 @@
+{
+  "source_id": "PAPER-PEST-002",
+  "source_type": "paper",
+  "provider": "Smart Agricultural Technology",
+  "title": "Time-series hyperspectral sensing decodes physiological dynamics and latent-stage detection of Tetranychus urticae infestation in strawberry plants",
+  "original_url": "https://doi.org/10.1016/j.atech.2025.101193",
+  "version_or_revision": "2025",
+  "license": "open_access",
+  "license_checked_at": "2026-10-16",
+  "redistribution_allowed": "reference_only",
+  "commercial_use": "reference_allowed",
+  "status": "REVIEW_REQUIRED",
+  "retrieval": {
+    "doi": "10.1016/j.atech.2025.101193"
+  },
+  "original_labels": [],
+  "nongtori_mapping": {
+    "role": "STRAWBERRY_TSSM_PHYSIOLOGICAL_EARLY_DETECTION_REFERENCE",
+    "status": "REFERENCE_ONLY",
+    "key_findings": [
+      "T. urticae causes measurable physiological changes in strawberry leaves",
+      "time-aware non-destructive sensing can support latent-stage detection",
+      "hyperspectral modality is not treated as interchangeable with thermal imaging"
+    ]
+  },
+  "notes": "Same crop and mite species but different sensing modality. Supports physiological/temporal framing, not thermal threshold transfer."
+}

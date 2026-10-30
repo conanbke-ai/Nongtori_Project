@@ -1,3 +1,328 @@
+## Paired video upload failure cleanup — 2026-10-30
+
+- Base: `39db0b10750e1b3c3b8122a6717a8a480c3f8ec2`; local uncommitted/unpushed repair, independent of the photo cleanup and prior correction/audit changes.
+- Reproduction: the real video POST handler with isolated FILES Map and SQLite left one late RGB object after thermal failed and catch deleted keys early. Target command `node --import ./tests/register.mjs --test --test-name-pattern='paired video storage failure' tests/api-authorization.test.ts`: before FAIL (0/1), expected 0 objects but observed 1.
+- Minimal repair: `app/api/video-upload/route.ts` waits for all put outcomes via Promise.allSettled, then throws a rejected outcome into existing cleanup before any session/video-asset DB batch. Existing upload size/type/location validation, permission, 400/201 response and schema remain unchanged.
+- After: target PASS (1/1, both RGB-first-failure and thermal-first-failure permutations). Each failed attempt leaves 0 fixture objects and no session/video-asset row delta. Explicit clean retry returns 201, saves exactly one session and two videos, preserves zone and UPLOADED_AWAITING_FRAME_EXTRACTION, and every stored asset key exists in the fixture Map. `pnpm test:workflows` PASS (53/53), `pnpm lint` PASS, `pnpm build` PASS, `git diff --check` PASS.
+- This unit owns `app/api/video-upload/route.ts` upload-await hunk; `tests/api-authorization.test.ts` only the final test named `paired video storage failure cleans up delayed sibling puts and permits a clean retry`; and only this ACTIVE_WORK section.
+- Photo unit still separately owns `app/api/pest-capture/route.ts`, the paired-photo test in `tests/pest-records.test.ts`, and its ACTIVE_WORK section. The correction-entry unit owns the separate no-visible-evidence scenario in `tests/api-authorization.test.ts`; staging that entire shared file would mix two units. ACTIVE_WORK must also be staged by section.
+- No server, actual R2/DB/source data, external delivery, model, schema/API/permission change, commit/push/deployment. Idempotency design remains HOLD.
+- NOT_RUN: real storage transport/late remote commit after a rejected put, delete failures, never-settling put, worker termination and ambiguous DB commit. Fixture completion and successful delete do not establish recovery guarantees for those cases.
+- Next gate: review this three-file/hunk unit alongside the independent photo unit; obtain publication approval before commit/push. No additional storage or API redesign is included.
+
+## Paired pest photo upload failure cleanup — 2026-10-30
+
+- Base: `39db0b10750e1b3c3b8122a6717a8a480c3f8ec2`; independent local repair, uncommitted/unpushed. Correction-entry four-file unit and response-loss investigation three-file unit preserved.
+- Confirmed gap: `receivePestCapture` used fail-fast Promise.all for RGB/thermal object writes. When thermal rejected before a delayed RGB put completed, catch deleted the scheduled keys too early; RGB later finished and left an orphan despite a failed response. Existing tests covered accepted catalog targets and authorization, not this failure ordering.
+- Before fix: `node --import ./tests/register.mjs --test tests/pest-records.test.ts` FAIL (5/6); new deterministic delayed-put fixture found 1 leftover object, expected 0.
+- Minimal fix: await all put outcomes with Promise.allSettled, then throw a rejected outcome into existing cleanup. Only after every put has settled may failure cleanup run. Existing 400/201 responses, authorization, catalog and DB schema remain unchanged.
+- After fix: same target PASS (6/6). Failed paired upload leaves 0 isolated objects and no new session/assets; explicit retry after the injected storage failure saves exactly 1 session and 2 assets. `pnpm test:workflows` PASS (52/52), `pnpm lint` PASS, `pnpm build` PASS (existing proxy warning), `git diff --check` PASS.
+- Owned files/hunk: `app/api/pest-capture/route.ts` upload-await hunk; `tests/pest-records.test.ts` new delayed-sibling cleanup/retry scenario; only this ACTIVE_WORK section. No new API/storage abstraction or migration introduced.
+- Evidence uses a separate in-memory object Map and existing SQLite fixture; no server/browser, actual R2/DB, user data, external delivery, model or account action. No real source file was deleted.
+- NOT_RUN: hosted R2 transport, never-settling uploads, delete failures, database commit ambiguity, worker termination and full browser upload. This does not solve response-loss idempotency; that design remains HOLD. Cleanup cannot be guaranteed if the worker dies or deletion fails.
+- Next safe gate: separately reproduce the analogous fail-fast paired-video path in `app/api/video-upload/route.ts`; do not assume photo evidence proves video behavior. Publication of this three-file unit needs its own approval.
+
+## Notification panel load states — 2026-10-30
+
+- Validation base: `399e1a21282e3bf7786aa5176bd0e89bc0f1c0cf`. N-13 approved; notification implementation is recorded in this separate commit. Publication SHA and CI results are reported separately.
+- Fixed initial failure displaying successful empty-inbox copy. Added explicit loading, error/retry, successful empty, and stale-list states. Snapshots are farm-scoped; superseded GET responses cannot replace the current farm snapshot. Authorization, notification delivery, consent, API, and database contracts are unchanged.
+- Reproduction: `node --import ./tests/register.mjs --test tests/notification-center.test.ts` initially FAIL (4/5); after implementation PASS (5/5).
+- Final gates: `pnpm test:workflows` PASS (50/50), `pnpm lint` PASS, `pnpm build` PASS; `git diff --check` PASS.
+- Real Chromium isolated fixture: mobile 390x844 loading/error/empty/retry/stale/farm-switch with delayed old response PASS; desktop 1440x900 error and delayed response PASS. No horizontal overflow. Local screenshots: `/tmp/nongtori-scouting-qa-qY2gOK/notification-*.png`. Fixture empty response used an inconsistent unreadCount=1; empty-copy behavior was checked, but badge consistency is not acceptance evidence.
+- NOT_RUN: live hosting/identity, production DB, real delivery, consent changes, complete product browser acceptance. Browser fixture uses only the production presentation component and deterministic mock GET responses.
+- Approved commit split (N-11/N-12/N-13; shared document sections are staged separately):
+  1. Auth harness: `tests/support/test-identity-provider.ts`, `tests/test-identity-provider.test.ts`, `tests/api-authorization.test.ts`, `package.json` test:auth-harness script, `docs/TEST_AUTHENTICATION_HARNESS.md`, `docs/DEVELOPMENT.md` test-auth section; ACTIVE_WORK only the test-auth section plus N-10 publication/CI synchronization.
+  2. Scouting load states: `app/features/pests/presentation/ScoutingQueue.tsx`, `app/features/pests/presentation/scouting.css`, `tests/scouting-ui.test.tsx`; ACTIVE_WORK only the scouting data-trust section.
+  3. Notification load states: `app/features/notifications/presentation/NotificationCenter.tsx`, `app/features/notifications/presentation/notification-load-state.ts`, `app/features/notifications/presentation/notification-center.css`, `tests/notification-center.test.ts`; ACTIVE_WORK only this notification section.
+- Publication approval: N-11/N-12/N-13 confirmed on 2026-10-30 for the above three separate commits, normal push to existing PR #105 after remote comparison, and CI verification. Main merge/deployment and runtime settings remain excluded.
+
+## Scouting queue data-trust states — 2026-10-30
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base / current PR HEAD: `399e1a21282e3bf7786aa5176bd0e89bc0f1c0cf`.
+- Status: `SCOUTING_LOAD_STATES_VERIFIED` (N-12 approved; implementation recorded in this separate commit; publication SHA and CI reported separately; not merged or deployed).
+- Selection reason: pest scouting is a Portfolio V1 MUST workflow, but its initial request failure rendered the successful zero-row all-clear copy at the same time. A farm switch could also retain an older farm snapshot, and a superseded response could overwrite the newer farm load state.
+- Scope:
+  - a connected farm starts in an explicit loading state rather than briefly appearing empty;
+  - an initial load failure renders an error, recovery guidance, and a 44px retry action without claiming that no zones need attention;
+  - only a successful zero-row response renders the existing all-clear state;
+  - a same-farm refresh failure preserves the last successful rows and labels them as the last loaded list;
+  - stored rows are projected only when their farm ID matches the current farm, and a monotonically increasing request ID prevents an older response from overwriting a newer load;
+  - normal list/detail/actions, role checks, API payloads, persistence, and scouting domain policy are unchanged.
+- Changed product files: `app/features/pests/presentation/ScoutingQueue.tsx`, `app/features/pests/presentation/scouting.css`, and `tests/scouting-ui.test.tsx`.
+- Validation:
+  - `node --import ./tests/register.mjs --test tests/scouting-ui.test.tsx`: PASS (9/9);
+  - `pnpm test:workflows`: PASS (49/49);
+  - `pnpm test:overview`: PASS (7/7);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS (existing proxy-environment warning only);
+  - `git diff --check`: PASS;
+  - isolated real Chromium fixture: PASS for initial 503, successful empty, retry success, and prior-success refresh failure at desktop `1440x900` and affected mobile `390x844`; no horizontal overflow (`/tmp/nongtori-scouting-qa-qY2gOK/*-final.png`).
+- Evidence boundary: browser requests used deterministic in-memory network fixtures and the production presentation component; no live account, production D1/R2, field data, external delivery, deployment, or environment setting was used or changed.
+- `NOT_RUN`: live hosted identity/backend behavior, offline service-worker behavior, and production-device field acceptance.
+- Next safe unit: apply the same error-versus-empty and retry contract to the notification panel, which currently renders its empty copy beside an initial load error; keep this as a separate reviewable change.
+
+## Test-only fixed identity harness — 2026-10-30
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base / current PR HEAD: `399e1a21282e3bf7786aa5176bd0e89bc0f1c0cf`.
+- Status: `TEST_AUTH_HARNESS_VERIFIED` (N-11 approved; implementation recorded in this separate commit; publication SHA and CI reported separately; not merged or deployed).
+- Scope:
+  - a `tests/`-only identity provider supplies four fixed fixture subjects (`admin-a`, `owner-a`, `worker-a`, `owner-b`) explicitly per direct handler request;
+  - farm and role metadata seed only the isolated `farm_members` table; requests carry no farm, role, permission, or administrator header, so production membership and permission checks remain authoritative;
+  - caller-supplied Sites identity headers are removed before the selected fixture subject is applied, and neither query parameters nor hostnames select an identity;
+  - the existing authorization suite now uses the provider for member identities while preserving anonymous, cross-farm, insufficient-role, and service-token paths;
+  - a source-isolation regression fails if the provider or its fixed identities enter `app/`, or if `tests/register.mjs` starts injecting an identity automatically.
+- Usage: `pnpm test:auth-harness`; select an identity with `testIdentityProvider.requestAs(...)` or `authenticate(...)`, and use `null` for anonymous requests.
+- Runtime boundary: no application route, middleware, production flag, secret, environment value, authentication setting, server, account, database, or network configuration was added or changed.
+- Validation:
+  - `pnpm test:auth-harness`: PASS (19/19);
+  - `pnpm test:workflows`: PASS (46/46);
+  - `pnpm test:overview`: PASS (7/7);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS (the existing proxy-environment warning was non-blocking);
+  - `git diff --check`: PASS.
+- `NOT_RUN`: browser role switching, real login/logout, session expiry, hosted Sites identity-header provenance, deployed-host behavior, production D1/R2, and external delivery. No browser/query/header runtime test-auth entry point was introduced because a trusted isolated browser boundary is not present.
+
+## Deployment authentication boundary hardening — 2026-10-29
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `d3f6a1f279ffc4cc658149d13d23af0045d5504b`.
+- Implementation / PR HEAD: `399e1a21282e3bf7786aa5176bd0e89bc0f1c0cf`.
+- Status: `AUTH_HOSTNAME_BYPASS_REMOVED_AND_PUBLISHED_TO_PR` (N-10 committed and pushed to PR #105; not merged to `main` or deployed).
+- Implemented boundary:
+  - request hostname, `Host`, and forwarded headers no longer grant farm identity or service access;
+  - `requestIdentity` accepts only the Sites identity headers, and `getFarmMember` always requires a matching active membership; first-member selection and the synthetic preview ADMIN were removed;
+  - farm listing and the dashboard use the same membership-scoped `getAccessibleFarms` query, including on `localhost` / `127.0.0.1`;
+  - forecast, notification, robot-ingest, and vendor routes share a hostname-independent service-token decision helper while preserving their existing `401` / capability-unconfigured `503` response contracts;
+  - no boolean local-preview capability was added. Because this application cannot verify the client's network origin, a flag plus loopback hostname would leave shared preview Host spoofing possible.
+- Local preview impact:
+  - local UI requests now require the Sites local identity to match an active farm membership; automatic first-member/synthetic-ADMIN access is gone;
+  - local worker/vendor calls require their normal service tokens;
+  - tests use explicit fixture Sites identities and service tokens, not a test-only production authorization bypass.
+- Security review:
+  - the Advisor transport was unavailable because this executor exposes no installed, verified launcher root; root-owned implementation continued under the skill's unavailable route;
+  - an independent read-only review found no established production remote ADMIN exploit, confirmed the external-development/shared-preview Host boundary as conditional P2, and recommended removing the runtime local bypass; that recommendation was accepted;
+  - static inspection still shows the installed Cloudflare/vinext production path preserving `request.url`, but the upstream OpenAI hosting edge and live hosting behavior remain `NOT_RUN`.
+- Validation:
+  - before implementation, `node --import ./tests/register.mjs --test tests/api-authorization.test.ts tests/scouting-hardening.test.ts`: expected FAIL (18/23 passed, 5 failed on hostname-derived access);
+  - after implementation, the same targeted command: PASS (23/23);
+  - final `node --import ./tests/register.mjs --test tests/api-authorization.test.ts`: PASS (16/16), including loopback missing/wrong/valid token branches through production handlers;
+  - `pnpm test:workflows`: PASS (46/46);
+  - `pnpm test:overview`: PASS (7/7);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS;
+  - exact N-10 SHA `399e1a21282e3bf7786aa5176bd0e89bc0f1c0cf`: Data Pipeline run `40979626448` SUCCESS and App run `40979626455` SUCCESS (confirmed externally on 2026-10-30).
+- Evidence boundary: all writes and object storage are isolated fixtures; no external host probing, live deployment, production DB/R2, token issuance, secret-value read, actual environment mutation, or network-setting change was performed.
+
+## Mutating API authorization matrix — 2026-10-29
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`.
+- PR HEAD: `d3f6a1f279ffc4cc658149d13d23af0045d5504b`.
+- Status: `API_AUTHORIZATION_MATRIX_VERIFIED` (N-06/N-07/N-08 committed and pushed; not merged to `main`).
+- Scope:
+  - all 33 exported `POST / PUT / PATCH / DELETE` handlers are classified as `FARM_MEMBER`, `FARM_PERMISSION`, `MEMBER_SELF`, or `SERVICE_TOKEN`;
+  - a source-scanning regression fails when a new mutating handler is not assigned to an authorization boundary;
+  - an isolated in-memory SQLite/D1 adapter and `FILES` stub prove that unauthenticated users, workers without `manageMembers`, and owners from another farm cannot add a farm member or create an audit row;
+  - unauthenticated and cross-farm identities cannot update another farm member's profile;
+  - unauthenticated and cross-farm identities are rejected before video `FILES` stub/session writes;
+  - wrong forecast, robot-ingest, notification, and vendor tokens are rejected before database mutation or external delivery;
+  - representative authorized success paths cover active-member chat ownership, member-self profile updates, `manageMembers`, `uploadMedia`, and all four service-token families;
+  - direct isolated success calls also cover scouting observation, field check, append-only correction, action, and resolution state transitions;
+  - direct isolated success calls now cover an ADMIN changing and deleting one scoped fixture member, with audit rows and pending-notification cancellation verified;
+  - all remaining community chat, forecast result, fruit assessment, harvest run, legacy mite capture, app notification, paired observation, phone-toggle, record-note deletion, and video-session routes execute their production handlers against isolated fixtures;
+  - all 33 handlers have a direct successful route call; no handler remains `NOT_RUN`, while untested role combinations remain explicitly outside this claim.
+  - Coverage meaning: 33/33 is one authorized success-branch smoke/contract check per handler, not full product acceptance. Phone coverage is notification-disable only, forecast coverage persists supplied fixture predictions without running a model, and file coverage uses only the in-memory `FILES` stub; actual SMS, model integration, R2, production D1, hosting, and every action/role branch remain unverified.
+- Validation:
+  - `node --import ./tests/register.mjs --test tests/api-authorization.test.ts`: PASS (16/16 with N-09 hostname-independent authorization tests);
+  - `pnpm test:workflows`: PASS (46/46);
+  - `pnpm test:overview`: PASS (7/7);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS for the current local application-code diff;
+  - exact N-08 SHA `d3f6a1f279ffc4cc658149d13d23af0045d5504b`: Data Pipeline run `40829683506` SUCCESS, App run `40829683340` SUCCESS (confirmed externally at 2026-10-29 06:34:41 UTC); the current local diff has no CI evidence.
+- Evidence boundary:
+  - no real DB, R2, SMS, worker endpoint, or user field data was used;
+  - file writes use the in-memory `FILES` stub; external `fetch` is replaced with a fail-on-call stub and remained at 0 calls;
+  - production authorization code removed hostname-derived bypasses and centralized service-token decisions; no actual runtime environment value, secret, or network setting changed;
+  - loopback and non-local anonymous denial, proxy-header non-promotion, missing/wrong service-token denial, and valid-token success were unit-tested; no hostname-based development fallback remains;
+  - staging and live hosting were not exercised;
+  - the matrix records handler-level authorized success coverage and does not claim every action or role combination for every handler.
+- Character status correction: the four user-approved character assets were applied at `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`; existing icon and social-card assets remain intentionally unchanged.
+
+## Mite public source contract pin gate — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `b3e8a901f9d686a5ed87788956e34b44330d96f9`.
+- Status: `MITE_PUBLIC_SOURCE_CONTRACT_PINS_VERIFIED`.
+- Scope:
+  - `DATA-PEST-001` remains pinned to Roboflow version 1, the strawberry field-context role, and its four ordered source classes;
+  - `DATA-PEST-002` remains pinned to version 210, the separate TSSM morphology/life-stage role, and the ordered `Adult_female / Immature / Viable_egg` class contract;
+  - missing registry pins, registry/retrieval revision mismatch, an unapproved version change, role swaps, and class drift now fail the offline source gate;
+  - existing output keys and CLI exit semantics remain compatible, with additive version evidence and an explicit `REGISTERED_SOURCE_CONTRACT_PRE_ACQUISITION_ONLY` scope.
+- Evidence boundary:
+  - `MITE_PUBLIC_SOURCE_GATE_READY` means only that the registered pre-acquisition source contract passed;
+  - it does not claim download, dataset audit, snapshot readiness, model training, license approval, or Nongtori field acceptance;
+  - both canonical registry records remain `REVIEW_REQUIRED` and no source, snapshot, checkpoint, or split was changed.
+- Reproduction before implementation: `python -m unittest tests.test_mite_public_source_audit -v` ran 5 tests with 4 failures and 1 error because the validator accepted missing/mismatched pins, swapped roles, and class drift, and lacked the explicit gate scope.
+- Validation after implementation:
+  - `python -m unittest tests.test_mite_public_source_audit -v`: PASS (6/6);
+  - related mite source/acquisition/snapshot/reference tests: PASS (16/16);
+  - `python -m compileall -q ml/data_pipeline ml/detector_baseline tests`: PASS;
+  - `python -m unittest discover -s tests -p 'test_*.py'`: PASS (213/213; pre-existing fixture `ResourceWarning` messages remain non-blocking);
+  - `python -m ml.data_pipeline.cli list`: PASS (15 registered records);
+  - canonical offline source audit: `MITE_PUBLIC_SOURCE_GATE_READY`, 0 blocking reasons, registry statuses preserved as `REVIEW_REQUIRED`;
+  - `git diff --check`: PASS.
+- Tool note: `python -m pytest` was NOT RUN because this executor does not have `pytest`; the repository CI uses `unittest`, which passed targeted and full-suite checks.
+- Character work completed separately at `5e9b73aaa4940a43f50497c00b2eaa1d4de326a4`; it does not change this public-source gate's evidence boundary.
+- Next safe gate: independent review and exact-head Data CI. No download, training, test-set reopening, main merge, deployment, DB migration, destructive action, paid resource, or GPU work was performed.
+
+## Dashboard data-trust state repair — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `250120b9bae07aaa4c76f055213b79c798d6e73d`.
+- Implementation SHA: `b3215c6824d9a9ecf1ae2def28191448b24f93c4`.
+- Status: `DASHBOARD_DATA_TRUST_STATES_VERIFIED`.
+- Scope:
+  - initial loading and initial request failure no longer render default zero metrics or claim that the account has no connected farm;
+  - an initial failure reports that operating values are unverified and retains the existing retry action;
+  - a successful zero-data response still renders the existing setup/empty state and actual zero values;
+  - a failure after a successful response preserves the last successful values and labels them as potentially stale;
+  - refresh-in-progress with prior data identifies that the last successful response is still being displayed.
+- Preserved contracts: the existing successful-data payload, empty-state meaning, last-successful-data retention, retry behavior, tab history, API, DB, authorization, data, notification, training, and responsive-layout contracts are unchanged.
+- Reproduction before implementation: the isolated initial 503 browser fixture rendered the error alert together with setup-required copy and default `0` metrics (`/workspace/scratch/nongtori-ui-qa-20261027/desktop-error-fixture.png`).
+- Validation after implementation:
+  - `node --import ./tests/register.mjs --test tests/dashboard-data-state.test.ts`: PASS (1/1);
+  - `pnpm test:overview`: PASS (7/7);
+  - `pnpm test:workflows`: PASS (30/30);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS;
+  - desktop 1440x900 and mobile 390x844 isolated-browser checks for initial loading, initial 503, retry success, actual zero success, prior-success refresh failure, and Back/Forward regression: PASS (`/workspace/scratch/nongtori-dashboard-data-state-20261027/report.json`).
+- Evidence limit: request failures were deterministic browser-route fixtures; no live backend outage, DB write, source-data change, or external upload was used.
+- Next safe gate: independent review and PR #105 CI. No main merge, deployment, migration, destructive action, or GPU work was performed.
+
+## Dashboard browser-history repair — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `d724cc4a90227c5dd5ded4c664d6c5d3ff4837da`.
+- Implementation SHA: `b48350866666f111cdb9241cc68cf72d925e02e8`.
+- Status: `BROWSER_HISTORY_VERIFIED`.
+- Scope:
+  - explicit dashboard screen changes now add one browser-history entry;
+  - Back/Forward events restore the screen from the URL;
+  - repeated clicks on the active screen do not add duplicate entries;
+  - direct valid screen URLs and reloads retain their screen;
+  - missing or unknown screen values are normalized to `home` with `replaceState`, preserving unrelated query parameters and the hash;
+  - Back before the first dashboard visit continues to leave the dashboard normally.
+- Preserved contracts: no API, DB, authorization, data, notification, style, responsive-layout, training, or error-state behavior changed.
+- Reproduction before implementation: desktop and mobile browser QA both moved from `?screen=capture` to `about:blank` instead of the prior dashboard screen on Back (`/workspace/scratch/nongtori-ui-qa-20261027/report.json`).
+- Validation after implementation:
+  - `node --import ./tests/register.mjs --test tests/dashboard-navigation.test.ts`: PASS (3/3);
+  - `pnpm test:overview`: PASS (6/6);
+  - `pnpm test:workflows`: PASS (30/30);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS;
+  - desktop 1440x900 and mobile 390x844 real Chromium Back/Forward, repeated-click, direct URL/reload, fallback normalization, and pre-dashboard Back QA: PASS (`/workspace/scratch/nongtori-navigation-history-20261027/report.json`).
+- Remaining separate issue: dashboard-load errors still render empty-data zero counts below the alert; this was intentionally not changed in this workstream.
+- Next safe gate: independent review and PR #105 CI. No main merge, deployment, migration, data mutation, external upload, or GPU work was performed.
+
+## Thermal numeric error-contract follow-up — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `088335022da23d3b85117d33599ef9457e5595ea`.
+- Implementation SHA: `fa9d2e214711fdae6e32ebd75eb5ae2e5a4c139f`.
+- Status: `NUMERIC_ERROR_CONTRACT_VERIFIED`.
+- Corrected guarantees:
+  - `_finite` converts `TypeError`, `ValueError`, and float-conversion `OverflowError` into `ThermalRiskFeatureError`;
+  - the helper and public `build_thermal_risk_features` paths both reject a `10**400` input through the same feature-error contract;
+  - the derived-finiteness regression now proves branch reachability: saturation pressure for `leaf_temp_c=1e307` is finite, then `leaf_minus_reference_c` alone overflows and is rejected by the derived-feature check.
+- Reproduction before implementation: `python3 -m unittest -v tests.test_thermal_mite_risk_v001` ran 9 tests with 2 raw `OverflowError` subtest errors (helper and builder paths).
+- Validation after implementation:
+  - `python3 -m unittest -v tests.test_thermal_mite_risk_v001`: PASS (9/9);
+  - `python3 -m unittest discover -s tests -p 'test_*.py'`: PASS (208/208);
+  - `python3 -m compileall -q ml tests`: PASS;
+  - `pnpm test:workflows`: PASS (30/30);
+  - `pnpm test:overview`: PASS (3/3);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS.
+- Scope remains numeric error normalization and regression coverage only. No production temperature threshold, thermal direction, model meaning, source/data/snapshot, API, or DB contract changed.
+- Next gate: independent review and PR #105 CI only. No additional implementation, main merge, deployment, training, migration, or data mutation was started.
+
+## Thermal risk fail-closed gate hardening — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `f6c6d535b4be368cdc1d0b1d85016ad583729b63`.
+- Implementation SHA: `2d0aeb33e9e7bb3ebe4477d2de9e60dabfe8ab5a`.
+- Status: `FAIL_CLOSED_BOUNDARIES_VERIFIED`.
+- Scope:
+  - `risk_training_allowed` now opens only when both approvals are actual `True` booleans; truthy strings, integers, and containers remain blocked;
+  - saturation-vapor-pressure non-finite inputs, the `-237.3` denominator singularity, overflow, and non-finite results consistently raise `ThermalRiskFeatureError`;
+  - every derived numeric feature is checked for finiteness before the immutable feature record is returned.
+- Preserved contracts:
+  - the normal 24/25°C, 60% RH calculation and kPa outputs are unchanged;
+  - optional reference/light/RGB inputs still preserve `None`, and RGB evidence `0.0` is retained without conversion to a negative label;
+  - the existing True/False training-gate behavior is unchanged;
+  - no temperature threshold, thermal risk direction, diagnosis, label, model, data source, or snapshot contract was added or changed.
+- Reproduction before implementation: the targeted module ran 8 tests with 12 failing subtests and 2 raw arithmetic errors (`ZeroDivisionError`, `OverflowError`).
+- Validation after implementation:
+  - `python3 -m unittest -v tests.test_thermal_mite_risk_v001`: PASS (8/8);
+  - `python3 -m unittest discover -s tests -p 'test_*.py'`: PASS (207/207);
+  - `python3 -m compileall -q ml tests`: PASS;
+  - `pnpm test:workflows`: PASS (30/30);
+  - `pnpm test:overview`: PASS (3/3);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS.
+- Remaining boundary: finite but agronomically implausible temperatures are not rejected here because field calibration has not established an authoritative physical range. They can only proceed as features; model training remains blocked by the two explicit evidence gates.
+- Next safe gate: review PR #105 and its CI for this incremental change. No main merge, deployment, migration, data/snapshot mutation, or GPU work was performed.
+
+## Dyson Python quality gate repair — 2026-10-27
+
+- Workstream: `feat/thermal-mite-risk-v001` / PR #105.
+- Base SHA: `df6109164fa703daa23707136c53132ffe57db73`.
+- Repair SHA: `368a62e72d0aa0cdc303aca0dd985ddd7d1e2603`.
+- Status: `QUALITY_GATE_REPAIRED`.
+- Scope: test-only repair in `tests/test_dyson_weight_reference.py`; production audit code, raw data, derived source artifacts, and scientific contracts are unchanged.
+- Contract evidence retained:
+  - the production freeze still requires exactly four excluded 6-column rows;
+  - the synthetic freeze fixture first proves the incomplete 0-row fixture is rejected, then materializes four distinct synthetic exception scenes before freeze;
+  - unresolved multi-column schema review remains higher-priority than invalid-value exception status, as required by `docs/DYSON_WEIGHT_REFERENCE_V1.md`.
+- Validation:
+  - targeted three-test reproduction: PASS (3/3);
+  - `python3 -m unittest discover -s tests -p 'test_*.py'`: PASS (203/203);
+  - `python3 -m compileall -q ml tests`: PASS;
+  - `pnpm test:workflows`: PASS (30/30);
+  - `pnpm test:overview`: PASS (3/3);
+  - `pnpm lint`: PASS;
+  - `pnpm build`: PASS.
+- Known non-blocking observation: pre-existing Python `ResourceWarning` messages for unclosed fixture CSV readers remain outside this repair scope.
+- Next safe gate: review PR #105 with this quality-gate repair included. No main merge, deployment, migration, data replacement, or GPU work was performed.
+
+## Thermal-first mite risk V1 — 2026-10-16
+
+- Workstream: `feat/thermal-mite-risk-v001`.
+- Product priority reset after YOLO11 source-reference completion:
+  - Thermal/environment risk = primary signal.
+  - RGB mite detection = auxiliary corroboration only.
+- Source alignment:
+  - `PAPER-PEST-001`: Tetranychus thermal-response mechanism reference; thermal direction is context-dependent.
+  - `PAPER-PEST-002`: strawberry/T. urticae physiological early-detection reference; supports time-aware non-destructive sensing but not thermal-threshold transfer.
+- Added `configs/thermal-mite-risk-v001.json`.
+- Added deterministic feature builder:
+  - leaf - ambient temperature
+  - leaf - reference temperature
+  - ambient VPD
+  - leaf VPD
+  - leaf-air VPD delta
+  - absolute reference thermal deviation
+- No warmer-is-riskier or cooler-is-riskier rule is encoded.
+- No fixed thermal threshold is allowed before field calibration.
+- Existing RGB absence remains non-negative evidence.
+- Model fitting gate remains BLOCKED until:
+  1. field label policy freeze;
+  2. field cohort/split audit.
+- Planned first models after the gate: logistic regression baseline, then XGBoost.
+- Sequence deep model remains FUTURE / not required for Portfolio V1.
+
 ## Mite YOLO11 source-reference V001 public test freeze — 2026-10-16
 
 - Status: SOURCE_REFERENCE_TEST_FROZEN / MORPHOLOGY_RESEARCH_COMPLETE.

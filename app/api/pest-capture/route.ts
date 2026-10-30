@@ -53,13 +53,16 @@ export async function receivePestCapture(request: Request, legacyDefault?: strin
       id: crypto.randomUUID(), file, modality,
       key: `direct/${farmId}/pest/${pestCode}/${sessionId}/${modality}-${crypto.randomUUID()}.${extension(file.name)}`,
     }));
-    await Promise.all(assets.map(async (asset) => {
+    const uploads = await Promise.allSettled(assets.map(async (asset) => {
       uploadedKeys.push(asset.key);
       await env.FILES.put(asset.key, asset.file.stream(), {
         httpMetadata: { contentType: asset.file.type },
         customMetadata: { captureSessionId: sessionId, modality: asset.modality, originalName: asset.file.name },
       });
     }));
+    // A failed sibling must not trigger cleanup while another put can still finish.
+    const failedUpload = uploads.find((upload) => upload.status === 'rejected');
+    if (failedUpload?.status === 'rejected') throw failedUpload.reason;
 
     await env.DB.batch([
       env.DB.prepare(`INSERT INTO capture_sessions(

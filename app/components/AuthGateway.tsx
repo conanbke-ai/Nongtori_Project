@@ -52,7 +52,7 @@ export function AuthGateway({ preview = false }: { preview?: boolean }) {
             <h1>{translate(language, 'auth.welcomeTitle')}</h1>
             <p>{translate(language, 'auth.welcomeDesc')}</p>
           </div>
-          <div className="auth-nongtori"><NongtoriPortrait alt={translate(language, 'scout.alt')} /></div>
+          <div className="auth-nongtori"><NongtoriPortrait alt={translate(language, 'scout.alt')} variant="wink" /></div>
           <div className="auth-trust-list"><span>{translate(language, 'auth.trustFarm')}</span><span>{translate(language, 'auth.trustLanguage')}</span><span>{translate(language, 'auth.trustRoles')}</span></div>
         </aside>
 
