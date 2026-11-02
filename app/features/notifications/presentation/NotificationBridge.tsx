@@ -7,13 +7,13 @@ import { NotificationCenter } from './NotificationCenter';
 
 function currentFarmId() {
   if (typeof document === 'undefined') return '';
-  const select = document.querySelector<HTMLSelectElement>('.farm-select-wrap select');
+  const select = document.querySelector('.farm-select-wrap select') as HTMLSelectElement | null;
   return select?.value?.trim() ?? '';
 }
 
 function currentLanguage() {
   if (typeof document === 'undefined') return 'ko' as Language;
-  const select = document.querySelector<HTMLSelectElement>('.language-select select');
+  const select = document.querySelector('.language-select select') as HTMLSelectElement | null;
   return asLanguage(select?.value || window.localStorage.getItem('farm-language') || 'ko');
 }
 
