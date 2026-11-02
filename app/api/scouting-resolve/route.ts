@@ -5,6 +5,7 @@ import { ensureScoutingRuntime } from '@/db/scouting-runtime';
 import { resolveScoutingCase } from '@/app/features/pests/application/scouting-service';
 import { ScoutingRepository } from '@/app/features/pests/infrastructure/scouting-repository';
 import { getFarmMember } from '@/app/lib/farm-auth';
+import { handleKeyedScoutingMutation } from '@/app/api/_lib/scouting-idempotency';
 
 export const runtime = 'edge';
 
@@ -15,6 +16,7 @@ function text(value: unknown, max = 200) {
 }
 
 export async function POST(request: Request) {
+  if (request.headers.has('Idempotency-Key')) return handleKeyedScoutingMutation(request, 'RESOLVE');
   try {
     await ensureSchema();
     await ensureScoutingRuntime();

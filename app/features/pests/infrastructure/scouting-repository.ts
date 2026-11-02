@@ -67,7 +67,12 @@ export type ObservationInput = {
 };
 
 export class ScoutingRepository {
-  constructor(private db: D1Database) {}
+  constructor(private db: D1Database, private mutationPlan?: D1PreparedStatement[]) {}
+
+  private async commitMutation(statements: D1PreparedStatement[]) {
+    if (this.mutationPlan) this.mutationPlan.push(...statements);
+    else await this.db.batch(statements);
+  }
 
   async resolveLocation(farmId: string, houseId: string, bedId: string, zoneId: string, now: string) {
     const location = await this.db.prepare(`SELECT h.id AS house_id, h.code AS house_code,
@@ -229,13 +234,15 @@ export class ScoutingRepository {
     checkedAt: string; checkerMemberId: string; evidenceCode: FieldEvidenceCode;
     secondaryEvidenceJson?: string; note?: string | null;
   }) {
-    await this.db.prepare(`INSERT INTO scouting_field_checks(
+    const statement = this.db.prepare(`INSERT INTO scouting_field_checks(
       id, farm_id, location_state_id, case_id, observation_id, checked_at, checker_member_id,
       primary_evidence_code, secondary_evidence_json, note, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(input.id, input.farmId, input.locationStateId, input.caseId, input.observationId ?? null,
         input.checkedAt, input.checkerMemberId, input.evidenceCode, input.secondaryEvidenceJson ?? '{}',
-        input.note ?? null, input.checkedAt).run();
+        input.note ?? null, input.checkedAt);
+    if (this.mutationPlan) this.mutationPlan.push(statement);
+    else await statement.run();
   }
 
   async fieldCheckForCorrection(farmId: string, fieldCheckId: string) {
@@ -264,7 +271,7 @@ export class ScoutingRepository {
       statements.push(this.db.prepare(`UPDATE scouting_cases SET status = 'MONITORING', updated_at = ?
         WHERE id = ? AND status != 'RESOLVED'`).bind(input.now, input.caseId));
     }
-    await this.db.batch(statements);
+    await this.commitMutation(statements);
   }
 
   async appendFieldCheckCorrection(input: {
@@ -301,7 +308,7 @@ export class ScoutingRepository {
           input.actorMemberId, JSON.stringify({ fieldCheckId: input.fieldCheckId, correctionKind: input.correctionKind,
             replacementEvidenceCode: input.replacementEvidenceCode ?? null }), input.now));
     }
-    await this.db.batch(statements);
+    await this.commitMutation(statements);
   }
 
   async appendAction(input: {
@@ -325,13 +332,13 @@ export class ScoutingRepository {
       statements.push(this.db.prepare('UPDATE scouting_cases SET status = ?, updated_at = ? WHERE id = ? AND status != \'RESOLVED\'')
         .bind(status, input.actionAt, input.caseId));
     }
-    await this.db.batch(statements);
+    await this.commitMutation(statements);
   }
 
   async resolveCase(input: {
     farmId: string; locationStateId: string; caseId: string; reasonCode: string; actorMemberId: string; now: string;
   }) {
-    await this.db.batch([
+    await this.commitMutation([
       this.db.prepare(`UPDATE scouting_cases SET status = 'RESOLVED', closed_at = ?, close_reason = ?, updated_at = ?
         WHERE id = ? AND farm_id = ? AND location_state_id = ? AND status != 'RESOLVED'`)
         .bind(input.now, input.reasonCode, input.now, input.caseId, input.farmId, input.locationStateId),
