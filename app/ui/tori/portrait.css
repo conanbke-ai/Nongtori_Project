@@ -33,12 +33,4 @@
   object-fit: contain;
   object-position: center bottom;
   transform: translateX(-50%);
-  /* Blend the original pale backdrop with the panel without redrawing the mascot. */
-  mix-blend-mode: multiply;
-  /* All fades stay in the source's empty margins; ears, face and feet stay opaque. */
-  mask-image:
-    linear-gradient(to right, transparent, #000 18%, #000 82%, transparent),
-    linear-gradient(to bottom, transparent, #000 4%, #000 91%, transparent);
-  mask-composite: intersect;
-  -webkit-mask-composite: source-in;
 }

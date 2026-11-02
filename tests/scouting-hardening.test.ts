@@ -174,7 +174,10 @@ test('post-treatment and monitoring states are not treated as immediate attentio
   assert.equal((sqlite.prepare('SELECT current_state FROM scouting_location_states WHERE id = ?').get(location.id) as { current_state: string }).current_state, 'POST_TREATMENT');
 
   const { GET } = await import('../app/api/scouting-locations/route');
-  const response = await GET(new Request('http://localhost/api/scouting-locations?farmId=farm-hardening&attention=1'));
+  const response = await GET(new Request(
+    'https://nongtori.test/api/scouting-locations?farmId=farm-hardening&attention=1',
+    { headers: { 'oai-authenticated-user-id': 'worker-h' } },
+  ));
   assert.equal(response.status, 200);
   const payload = await response.json() as { rows: { id: string; current_state: string }[] };
   assert.equal(payload.rows.some((row) => row.id === location.id), false);

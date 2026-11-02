@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { localeForLanguage, type Language } from '@/app/lib/i18n';
 import './notification-center.css';
+import { notificationLoadState } from './notification-load-state';
 
 type NotificationRow = {
   recipient_id: string;
@@ -45,29 +46,45 @@ export function NotificationCenter({ farmId, language, onOpenScouting }: {
   onOpenScouting: (locationStateId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState<NotificationRow[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [snapshot, setSnapshot] = useState<{ farmId: string; rows: NotificationRow[]; unreadCount: number } | null>(null);
+  const [loadStatus, setLoadStatus] = useState({ farmId: '', loading: false, error: '' });
   const [error, setError] = useState('');
+  const requestId = useRef(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const text = copy[language];
+  const current = snapshot?.farmId === farmId ? snapshot : null;
+  const rows = current?.rows ?? [];
+  const unreadCount = current?.unreadCount ?? 0;
+  const loadError = loadStatus.farmId === farmId ? loadStatus.error : '';
+  const loading = loadStatus.farmId === farmId && loadStatus.loading;
+  const viewState = notificationLoadState({ loading, failed: Boolean(loadError), loaded: Boolean(current), rowCount: rows.length });
+  const stateCopy = {
+    ko: { loading: '알림을 불러오는 중입니다.', retry: '다시 시도', stale: '마지막으로 불러온 알림을 표시합니다.' },
+    vi: { loading: 'Đang tải thông báo.', retry: 'Thử lại', stale: 'Đang hiển thị thông báo được tải gần nhất.' },
+    th: { loading: 'กำลังโหลดการแจ้งเตือน', retry: 'ลองอีกครั้ง', stale: 'กำลังแสดงการแจ้งเตือนที่โหลดล่าสุด' },
+    'zh-CN': { loading: '正在加载通知。', retry: '重试', stale: '当前显示最近一次加载的通知。' },
+  }[language];
 
   const load = useCallback(async () => {
-    if (!farmId) { setRows([]); setUnreadCount(0); return; }
+    const id = ++requestId.current;
+    if (!farmId) { setSnapshot(null); return; }
+    setLoadStatus({ farmId, loading: true, error: '' });
     try {
       const response = await fetch(`/api/notifications?farmId=${encodeURIComponent(farmId)}&limit=30`, { cache: 'no-store' });
       const result = await response.json() as ResponseShape;
       if (!response.ok) throw new Error(result.error ?? text.loadError);
-      setRows(result.rows);
-      setUnreadCount(result.unreadCount);
+      if (id !== requestId.current) return;
+      setSnapshot({ farmId, rows: result.rows, unreadCount: result.unreadCount });
+      setLoadStatus({ farmId, loading: false, error: '' });
       setError('');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : text.loadError);
+      if (id === requestId.current) setLoadStatus({ farmId, loading: false, error: caught instanceof Error ? caught.message : text.loadError });
     }
   }, [farmId, text.loadError]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => { void load(); }, 0);
-    return () => window.clearTimeout(handle);
+    return () => { window.clearTimeout(handle); requestId.current += 1; };
   }, [load]);
   useEffect(() => {
     if (!open) return;
@@ -106,10 +123,13 @@ export function NotificationCenter({ farmId, language, onOpenScouting }: {
       <span aria-hidden="true">🔔</span>
       {unreadCount > 0 && <b>{unreadCount > 99 ? '99+' : unreadCount}</b>}
     </button>
-    {open && <section aria-label={text.title} className="notification-panel">
+    {open && farmId && <section aria-label={text.title} aria-busy={viewState === 'LOADING'} className="notification-panel">
       <header><strong>{text.title}</strong>{unreadCount > 0 && <button onClick={() => void update('READ_ALL')} type="button">{text.markAll}</button>}</header>
       {error && <p className="notification-error" role="alert">{error}</p>}
-      {rows.length === 0 ? <div className="notification-empty">{text.empty}</div> : <div className="notification-list">
+      {loadError && <div className="notification-error" role="alert">{loadError}{viewState === 'STALE' && <p>{stateCopy.stale}</p>}<button disabled={loading} onClick={() => void load()} type="button">{stateCopy.retry}</button></div>}
+      {viewState === 'LOADING' ? <div className="notification-empty" role="status">{stateCopy.loading}</div>
+        : viewState === 'EMPTY' ? <div className="notification-empty">{text.empty}</div>
+          : rows.length > 0 ? <div className="notification-list">
         {rows.map((row) => <article className={`${row.read_at ? 'read' : 'unread'} severity-${row.severity.toLowerCase()}`} key={row.recipient_id}>
           <button className="notification-open" onClick={() => void openNotification(row)} type="button">
             <span className="notification-dot" aria-hidden="true" />
@@ -117,7 +137,7 @@ export function NotificationCenter({ farmId, language, onOpenScouting }: {
           </button>
           <button aria-label={text.dismiss} className="notification-dismiss" onClick={() => void update('DISMISS', row.notification_id)} title={text.dismiss} type="button">×</button>
         </article>)}
-      </div>}
+      </div> : null}
     </section>}
   </div>;
 }

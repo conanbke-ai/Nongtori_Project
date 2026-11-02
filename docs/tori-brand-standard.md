@@ -13,9 +13,12 @@
 
 ## 기준 자산
 
-- 공식 프로젝트 캐릭터: `assets/nongtori-tori.webp`
+- 기본 전신: `assets/nongtori-character-open-eyes.png`
+- 로그인 환영 전신: `assets/nongtori-character-wink.png`
+- 기본 얼굴 crop: `assets/nongtori-face-open-eyes.png`
+- 윙크 얼굴 crop: `assets/nongtori-face-wink.png`
 
-현재 `Nongtori_Project` 저장소는 프로젝트 기준 문서 중심이며 실행 가능한 프론트엔드가 들어 있지 않다. 실제 UI 소스가 이 저장소에 추가되는 즉시 위 자산을 기본 mascot source of truth로 연결한다. 새 화면이나 문서에서 서로 다른 토끼를 임의로 생성하지 않는다.
+현재 실행 UI는 기본 전신을 대시보드에, 윙크 전신을 로그인 환영 영역 한 곳에 사용합니다. 얼굴 crop은 적합한 전용 슬롯이 생길 때까지 화면에 반복 노출하지 않습니다. 새 화면이나 문서에서 서로 다른 토끼를 임의로 생성하지 않습니다.
 
 ## TORI 패밀리 공통 원칙
 

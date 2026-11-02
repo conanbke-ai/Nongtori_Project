@@ -59,13 +59,16 @@ export async function POST(request: Request) {
       id: crypto.randomUUID(), file, modality,
       key: `video-import/${farmId}/${sessionId}/${modality}-${crypto.randomUUID()}.${safeExtension(file.name)}`,
     }));
-    await Promise.all(assets.map(async (asset) => {
+    const uploads = await Promise.allSettled(assets.map(async (asset) => {
       uploadedKeys.push(asset.key);
       await env.FILES.put(asset.key, asset.file.stream(), {
         httpMetadata: { contentType: asset.file.type },
         customMetadata: { captureSessionId: sessionId, modality: asset.modality, analysisScope: 'FRUIT_AND_MITE', originalName: asset.file.name },
       });
     }));
+    // Finish every put before cleanup so a delayed sibling cannot recreate an orphan.
+    const failedUpload = uploads.find((upload) => upload.status === 'rejected');
+    if (failedUpload?.status === 'rejected') throw failedUpload.reason;
 
     await env.DB.batch([
       env.DB.prepare(`INSERT INTO capture_sessions(

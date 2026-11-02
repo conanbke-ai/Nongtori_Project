@@ -1,0 +1,59 @@
+{
+  "contract_id": "THERMAL-MITE-RISK-V001",
+  "status": "CALIBRATION_PENDING",
+  "task": "mite_risk_signal_from_thermal_environment_context",
+  "product_role": "PRIMARY_RISK_SIGNAL",
+  "rgb_role": "AUXILIARY_CORROBORATION_ONLY",
+  "target_issue_code": "SPIDER_MITE",
+  "required_inputs": [
+    "leaf_temp_c",
+    "ambient_temp_c",
+    "ambient_rh_pct"
+  ],
+  "optional_inputs": [
+    "reference_temp_c",
+    "light_level",
+    "observed_at",
+    "spatial_unit_id",
+    "rgb_mite_evidence"
+  ],
+  "derived_features": [
+    "leaf_minus_ambient_c",
+    "leaf_minus_reference_c",
+    "ambient_vpd_kpa",
+    "leaf_vpd_kpa",
+    "leaf_air_vpd_delta_kpa",
+    "thermal_abs_reference_delta_c"
+  ],
+  "source_constraints": {
+    "no_warmer_means_risk_rule": true,
+    "no_cooler_means_risk_rule": true,
+    "no_fixed_temperature_threshold_before_field_calibration": true,
+    "no_rgb_absence_to_negative_label": true,
+    "no_human_input_dependency": true
+  },
+  "model_gate": {
+    "training_status": "BLOCKED_UNTIL_FIELD_LABEL_POLICY_AND_MINIMUM_COHORT_AUDIT",
+    "baseline_candidates": [
+      "logistic_regression",
+      "xgboost"
+    ],
+    "sequence_model": "FUTURE_NOT_V1"
+  },
+  "evaluation": {
+    "split_unit": "farm_or_spatial_group_holdout_when_available",
+    "metrics": [
+      "AUROC",
+      "AUPRC",
+      "sensitivity",
+      "specificity",
+      "calibration_error"
+    ],
+    "operational_metrics": [
+      "alert_precision",
+      "alert_burden",
+      "case_recheck_rate"
+    ],
+    "test_tuning": "PROHIBITED"
+  }
+}

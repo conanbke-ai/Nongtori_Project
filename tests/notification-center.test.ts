@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { notificationLoadState } from '../app/features/notifications/presentation/notification-load-state';
+
+test('notification load failure never claims a successful empty inbox', () => {
+  assert.equal(notificationLoadState({ loading: false, failed: true, loaded: false, rowCount: 0 }), 'ERROR');
+  assert.equal(notificationLoadState({ loading: true, failed: false, loaded: false, rowCount: 0 }), 'LOADING');
+  assert.equal(notificationLoadState({ loading: false, failed: false, loaded: true, rowCount: 0 }), 'EMPTY');
+  assert.equal(notificationLoadState({ loading: false, failed: true, loaded: true, rowCount: 1 }), 'STALE');
+  assert.equal(notificationLoadState({ loading: false, failed: false, loaded: true, rowCount: 1 }), 'READY');
+  const source = readFileSync('app/features/notifications/presentation/NotificationCenter.tsx', 'utf8');
+  assert.ok(source.includes("viewState === 'EMPTY'"), 'empty copy must be gated by successful load state');
+});
 
 test('notification center is mounted in the app shell', () => {
   const page = readFileSync('app/page.tsx', 'utf8');

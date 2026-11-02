@@ -7,6 +7,7 @@ const root = path.resolve(import.meta.dirname, '..');
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === 'cloudflare:workers') return { url: 'test:cloudflare', shortCircuit: true };
+    if (specifier === 'next/image') return { url: 'test:next-image', shortCircuit: true };
     if (specifier === 'next/server') specifier = 'next/server.js';
     if (specifier.startsWith('@/') || specifier.startsWith('.')) {
       const base = specifier.startsWith('@/') ? path.join(root, specifier.slice(2)) : path.resolve(path.dirname(fileURLToPath(context.parentURL)), specifier);
@@ -18,6 +19,11 @@ registerHooks({
   },
   load(url, context, nextLoad) {
     if (url === 'test:cloudflare') return { format: 'module', source: 'export const env = new Proxy({}, { get(_target, key) { return globalThis.nongtoriTestEnv?.[key]; } });', shortCircuit: true };
+    if (url === 'test:next-image') {
+      const reactUrl = pathToFileURL(path.join(root, 'node_modules/react/index.js')).href;
+      return { format: 'module', source: `import React from ${JSON.stringify(reactUrl)}; export default function Image({ priority, unoptimized, ...props }) { return React.createElement("img", props); }`, shortCircuit: true };
+    }
+    if (url.endsWith('.css')) return { format: 'module', source: '', shortCircuit: true };
     if (/\.(ts|tsx)$/.test(url)) return { format: 'module', shortCircuit: true, source: ts.transpileModule(readFileSync(fileURLToPath(url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText };
     return nextLoad(url, context);
   },

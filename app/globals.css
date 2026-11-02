@@ -98,14 +98,18 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { 
 .primary-action:hover { background:var(--accent-dark); }
 
 /* Alerts and access states */
-.setup-banner,.error-banner,.account-link-banner { margin-bottom:18px; padding:14px 16px; display:flex; align-items:center; gap:12px; border:1px solid #ead49d; border-radius:9px; background:#fff9e9; color:#715823; font-size:12px; }
+.setup-banner,.error-banner,.account-link-banner,.data-refresh-banner { margin-bottom:18px; padding:14px 16px; display:flex; align-items:center; gap:12px; border:1px solid #ead49d; border-radius:9px; background:#fff9e9; color:#715823; font-size:12px; }
 .setup-banner { margin:22px 0 0; }
 .setup-banner>span { width:28px; height:28px; flex:0 0 28px; display:grid; place-items:center; border-radius:50%; background:#bc8129; color:#fff; font-weight:900; }
 .setup-banner p { margin:1px 0 0; color:#78643e; }
 .error-banner { justify-content:space-between; border-color:#edc3c9; background:#fff4f5; color:#8d3341; }
+.error-banner>div { display:grid; gap:2px; }
+.error-banner span { color:#9a5963; }
 .error-banner button { border:1px solid #e2aeb6; border-radius:7px; background:#fff; color:#8d3341; font-size:12px; font-weight:850; }
 .account-link-banner strong { white-space:nowrap; }
 .account-link-banner span { color:#806b43; }
+.data-refresh-banner { border-color:#cbded0; background:#f3f8f2; color:#315f3d; }
+.dashboard-state-panel { min-height:420px; }
 
 /* Overview */
 .overview-heading h1 { margin-top:5px; }
