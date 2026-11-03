@@ -240,6 +240,8 @@ export async function processScoutingObservation(repository: ScoutingRepository,
   };
 }
 
+export class ScoutingMutationValidationError extends Error {}
+
 export async function recordScoutingFieldCheck(repository: ScoutingRepository, input: {
   farmId: string;
   locationStateId: string;
@@ -251,11 +253,11 @@ export async function recordScoutingFieldCheck(repository: ScoutingRepository, i
   secondaryEvidence?: unknown;
 }) {
   if (!fieldEvidenceCodes.includes(input.evidenceCode as FieldEvidenceCode)) {
-    throw new Error('현장 점검 결과를 다시 선택해 주세요.');
+    throw new ScoutingMutationValidationError('현장 점검 결과를 다시 선택해 주세요.');
   }
   const evidenceCode = input.evidenceCode as FieldEvidenceCode;
   const history = await repository.locationHistory(input.farmId, input.locationStateId, 1);
-  if (!history) throw new Error('이 농장의 예찰 구역을 찾을 수 없습니다.');
+  if (!history) throw new ScoutingMutationValidationError('이 농장의 예찰 구역을 찾을 수 없습니다.');
   const activeCase = await repository.activeCase(input.locationStateId);
   const nextState = stateAfterFieldEvidence(evidenceCode);
   const classification = caseClassificationFromEvidence(evidenceCode);
@@ -304,12 +306,12 @@ export async function correctScoutingFieldCheck(repository: ScoutingRepository, 
   note?: string | null;
 }) {
   const original = await repository.fieldCheckForCorrection(input.farmId, input.fieldCheckId);
-  if (!original) throw new Error('수정할 현장 점검 기록을 찾을 수 없습니다.');
+  if (!original) throw new ScoutingMutationValidationError('수정할 현장 점검 기록을 찾을 수 없습니다.');
 
   let replacement: FieldEvidenceCode | null = null;
   if (input.correctionKind === 'REPLACE') {
     if (!fieldEvidenceCodes.includes(input.replacementEvidenceCode as FieldEvidenceCode)) {
-      throw new Error('수정할 현장 점검 결과를 다시 선택해 주세요.');
+      throw new ScoutingMutationValidationError('수정할 현장 점검 결과를 다시 선택해 주세요.');
     }
     replacement = input.replacementEvidenceCode as FieldEvidenceCode;
   }
@@ -352,9 +354,9 @@ export async function recordScoutingAction(repository: ScoutingRepository, input
   note?: string | null;
 }) {
   const allowed = new Set(['TREATMENT_APPLIED', 'LEAF_REMOVED', 'BIOCONTROL_APPLIED', 'OBSERVE_ONLY', 'OTHER_ACTION']);
-  if (!allowed.has(input.actionCode)) throw new Error('현장 조치를 다시 선택해 주세요.');
+  if (!allowed.has(input.actionCode)) throw new ScoutingMutationValidationError('현장 조치를 다시 선택해 주세요.');
   const history = await repository.locationHistory(input.farmId, input.locationStateId, 1);
-  if (!history) throw new Error('이 농장의 예찰 구역을 찾을 수 없습니다.');
+  if (!history) throw new ScoutingMutationValidationError('이 농장의 예찰 구역을 찾을 수 없습니다.');
   const activeCase = await repository.activeCase(input.locationStateId);
   const nextState = stateAfterAction(input.actionCode);
   await repository.appendAction({
@@ -380,11 +382,11 @@ export async function resolveScoutingCase(repository: ScoutingRepository, input:
   resolvedAt: string;
 }) {
   const allowedReasons = new Set(['NO_FURTHER_ABNORMALITY', 'TREATMENT_COMPLETED', 'FALSE_ALARM_CLOSED', 'OTHER']);
-  if (!allowedReasons.has(input.reasonCode)) throw new Error('종료 사유를 다시 선택해 주세요.');
+  if (!allowedReasons.has(input.reasonCode)) throw new ScoutingMutationValidationError('종료 사유를 다시 선택해 주세요.');
   const history = await repository.locationHistory(input.farmId, input.locationStateId, 1);
-  if (!history) throw new Error('이 농장의 예찰 구역을 찾을 수 없습니다.');
+  if (!history) throw new ScoutingMutationValidationError('이 농장의 예찰 구역을 찾을 수 없습니다.');
   const activeCase = await repository.activeCase(input.locationStateId);
-  if (!activeCase) throw new Error('종료할 진행 중 예찰 건이 없습니다.');
+  if (!activeCase) throw new ScoutingMutationValidationError('종료할 진행 중 예찰 건이 없습니다.');
   await repository.resolveCase({
     farmId: input.farmId,
     locationStateId: input.locationStateId,

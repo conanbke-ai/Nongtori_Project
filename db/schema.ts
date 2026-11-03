@@ -1,5 +1,24 @@
 import { sql } from 'drizzle-orm';
-import { check, index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+
+// Prepared definitions only; deliberately absent from request-time DDL/bootstrap.
+export const scoutingOperationReceipts = sqliteTable('scouting_operation_receipts', {
+  farmId: text('farm_id').notNull(), memberId: text('member_id').notNull(),
+  operationKind: text('operation_kind').notNull(), keyDigest: text('key_digest').notNull(),
+  canonicalVersion: integer('canonical_version').notNull(), payloadHash: text('payload_hash').notNull(),
+  httpStatus: integer('http_status').notNull(), responseJson: text('response_json').notNull(),
+  committedAt: text('committed_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.farmId, table.memberId, table.operationKind, table.keyDigest] }),
+  index('idx_scouting_receipts_farm_member').on(table.farmId, table.memberId),
+  check('scouting_receipt_operation', sql`${table.operationKind} IN ('CHECK','CORRECTION','ACTION','RESOLVE')`),
+  check('scouting_receipt_version', sql`${table.canonicalVersion} = 1`),
+  check('scouting_receipt_status', sql`${table.httpStatus} IN (200,201)`),
+  check('scouting_receipt_size', sql`length(CAST(${table.responseJson} AS BLOB)) <= 4096`),
+]);
+export const scoutingOperationGuards = sqliteTable('scouting_operation_guards', {
+  id: text('id').primaryKey().notNull(), accepted: integer('accepted').notNull(),
+}, table => [check('scouting_receipt_quota', sql`${table.accepted} = 1`)]);
 
 export const cultivars = sqliteTable('cultivars', {
   code: text('code').primaryKey(),

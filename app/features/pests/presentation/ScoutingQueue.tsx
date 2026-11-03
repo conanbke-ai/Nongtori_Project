@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { localeForLanguage, type Language } from '@/app/lib/i18n';
+import { ScoutingPendingIntent, type PendingScoutingIntent } from './scouting-pending-intent';
 
 export type ScoutingLocation = {
   id: string;
@@ -154,8 +155,8 @@ export function scoutingQueueViewState({
   return 'READY';
 }
 
-export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
-  farmId: string; canReview: boolean; language: Language; onChanged?: () => void;
+export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMutations = false, mutationMemberId = '' }: {
+  farmId: string; canReview: boolean; language: Language; onChanged?: () => void; keyedMutations?: boolean; mutationMemberId?: string;
 }) {
   const [storedRows, setStoredRows] = useState<ScoutingLocation[]>([]);
   const [loadedFarmId, setLoadedFarmId] = useState('');
@@ -167,6 +168,14 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
   const [sending, setSending] = useState('');
   const [recentFieldCheck, setRecentFieldCheck] = useState<RecentFieldCheck | null>(null);
   const loadRequestId = useRef(0);
+  const keyedClient = useRef<ScoutingPendingIntent | null>(null);
+  const [pendingIntent, setPendingIntent] = useState<PendingScoutingIntent | null>(null);
+  const pendingCopy = {
+    ko: ['처리 결과 확인이 필요합니다. 새 입력 전에 같은 요청으로 확인해 주세요. 새로고침하면 자동 복구되지 않습니다.', '같은 요청 다시 확인', '거부된 입력 다시 작성'],
+    vi: ['Cần kiểm tra kết quả. Thử lại cùng yêu cầu trước khi nhập mới. Tải lại trang không tự khôi phục.', 'Kiểm tra lại yêu cầu', 'Nhập lại yêu cầu bị từ chối'],
+    th: ['ต้องตรวจสอบผล ลองคำขอเดิมก่อนกรอกใหม่ การรีเฟรชไม่กู้คืนอัตโนมัติ', 'ตรวจสอบคำขอเดิม', 'แก้ไขคำขอที่ถูกปฏิเสธ'],
+    'zh-CN': ['请先使用同一请求确认结果，再提交新输入。刷新后不会自动恢复。', '重新确认同一请求', '重新填写被拒绝的输入'],
+  }[language];
   const text = copy[language];
   const rows = scoutingRowsForFarm(storedRows, loadedFarmId, farmId);
   const loadError = loadFailure.farmId === farmId ? loadFailure.message : '';
@@ -208,10 +217,32 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
   }, [load]);
 
   async function post(path: string, body: Record<string, unknown>) {
+    if (keyedMutations) {
+      keyedClient.current ??= new ScoutingPendingIntent();
+      try { return await keyedClient.current.request(path, body, mutationMemberId); }
+      finally { setPendingIntent(keyedClient.current.snapshot()); }
+    }
     const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const result = await response.json() as { error?: string; message?: string; fieldCheckId?: string };
     if (!response.ok) throw new Error(result.error ?? text.saveError);
     return result;
+  }
+
+  async function retryPending() {
+    if (!pendingIntent || !canReview || sending) return;
+    const body = JSON.parse(pendingIntent.json) as Record<string, unknown>;
+    if (body.farmId !== farmId || pendingIntent.memberId !== mutationMemberId) return;
+    setSending('pending'); setError('');
+    try {
+      const result = await post(pendingIntent.path, body);
+      setMessage(result.message ?? text.saved);
+      if ('correctionKind' in result) setRecentFieldCheck(null);
+      else if (result.fieldCheckId) setRecentFieldCheck({ farmId, fieldCheckId: result.fieldCheckId,
+        label: rows.find(row => row.id === body.locationStateId) ? locationLabel(rows.find(row => row.id === body.locationStateId)!) : text.fieldCheck });
+      if ('state' in result && result.state === 'RESOLVED') closeDetail();
+      await load(); onChanged?.();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : text.saveError); }
+    finally { setSending(''); }
   }
 
   async function submitFieldCheck(row: ScoutingLocation, code: string) {
@@ -264,6 +295,10 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
     <header className="scouting-queue-heading"><div><span>{text.eyebrow}</span><h2>{text.title}</h2><p>{text.description}</p></div><button disabled={loading || !farmId} onClick={() => void load()} type="button">{text.refresh}</button></header>
     {message && <div className="review-feedback success" role="status">{message}</div>}
     {error && <div className="review-feedback error" role="alert">{error}</div>}
+    {keyedMutations && pendingIntent && <aside className="scouting-correction-panel" role="status"><p>{pendingCopy[0]}</p><div className="scouting-choice-grid">
+      <button type="button" disabled={Boolean(sending) || !canReview || pendingIntent.memberId !== mutationMemberId || JSON.parse(pendingIntent.json).farmId !== farmId} onClick={() => void retryPending()}>{pendingCopy[1]}</button>
+      {pendingIntent.rejected && <button type="button" disabled={Boolean(sending)} onClick={() => { keyedClient.current?.discardRejected(); setPendingIntent(keyedClient.current?.snapshot() ?? null); }}>{pendingCopy[2]}</button>}
+    </div></aside>}
     {recentFieldCheck?.farmId === farmId && canReview && <aside className="scouting-correction-panel"><div><strong>{text.correctionTitle}</strong><span>{recentFieldCheck.label}</span><p>{text.correctionHelp}</p></div><div className="scouting-choice-grid">{evidenceOptions.map((option) => <button disabled={Boolean(sending)} key={option.code} onClick={() => void correctRecent(option.code)} type="button">{localized(option, language)}</button>)}<button disabled={Boolean(sending)} onClick={() => void correctRecent(null)} type="button">{text.voidInput}</button></div></aside>}
     {viewState === 'STALE' && <div className="review-feedback error scouting-stale" role="alert"><strong>{loadError}</strong><span>{text.staleNotice}</span></div>}
     {viewState === 'LOADING' ? <div className="screen-empty compact"><strong>{text.loading}</strong></div>

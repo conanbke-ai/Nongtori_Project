@@ -1,5 +1,21 @@
 # Scouting mutation response-loss audit
 
+## Isolated V1 implementation candidate — 2026-11-02
+
+Base Draft PR106 `6bad1d4359093294149329333f9b7aa789ebac45`. This candidate is uncommitted and unpublished in a separate detached worktree; it does not change the historical evidence below. Implementation/schema-file preparation was specifically approved; runtime migration, production activation, publication and deployment were not.
+
+- Optional keyed paths for CHECK/CORRECTION/ACTION/RESOLVE reuse existing service decisions. Receipt, planned domain/projection writes and existing audit events commit in one batch. New-key historical correction and case behavior remain unchanged; the earlier proposal to require client expected-case/version is **not implemented**. Existing cross-intent race/recurrence semantics are not repaired by request-key deduplication.
+- Same member/farm/operation/key and canonical payload replay the original response; a changed payload conflicts409. Authentication and target farm ownership are checked before replay. A different member has a separate namespace, not access to the original receipt. No extra replay audit event.
+- Keyed capability defaults off. It requires exact server opt-in plus explicit positive farm/member limits and prepared receipt/guard tables; no production values are supplied. Missing capability/config/schema returns503, never falls through to unkeyed writes. No runtime DDL is added. Prepared migration0020 and Drizzle definitions are files only.
+- Two prepared tables: receipts and a transient CHECK guard. The guard row is inserted/deleted in the same batch for quota rollback; receipts are never automatically deleted. Farm/member row-count quota is synthetic-tested; byte quotas, rate windows, operational values and capacity remain unresolved rollout requirements.
+- UI opt-in also defaults false and requires a stable current member ID. The existing application does not supply/activate it. Pending key/body/farm/member stay in memory; explicit same-intent retry only. Once uncertain, a later4xx cannot allow key discard; only matching success or a future authorized reconciliation can resolve uncertainty. No raw payload browser persistence, reload recovery, timer/background delivery or automatic key rotation.
+- This conservative candidate has no expiry or410 path. Full response retention is bounded by explicit receipt-count limits, not a time policy. It does not authorize indefinite production storage or safe hard-delete. Retention/privacy and a verified expiry protocol remain separate decisions.
+- API adapter: `app/api/_lib/scouting-idempotency.ts`; intent/service orchestration: `application/scouting-intent.ts`; receipt SQL: `infrastructure/scouting-receipt-repository.ts`; write-plan support stays in existing ScoutingRepository. Existing bootstrap sources are unchanged. Existing legacy services keep their behavior; typed validation errors preserve original messages.
+- Tests create a fresh synthetic binding and apply fixture SQL only; no product ensureSchema/ensureScoutingRuntime execution. Local official Miniflare integration also exercises the real keyed handler and candidate batch against a new synthetic binding. This is not hosted D1 or live authentication evidence.
+- Browser visual/interaction acceptance remains NOT_RUN because the existing access restriction was not retried or bypassed. This is a disabled isolated implementation candidate, not release readiness.
+
+See the worktree ACTIVE_WORK section and external evidence report for exact commands, current counts, independent-review findings and pre-existing type-check failures. The proposals below remain design history rather than authorization to expand this candidate.
+
 Evidence base: `39db0b10750e1b3c3b8122a6717a8a480c3f8ec2`, 2026-10-30. Local investigation only.
 
 ## Existing contract and implementation

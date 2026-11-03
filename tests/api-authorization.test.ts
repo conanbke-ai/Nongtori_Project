@@ -283,7 +283,7 @@ test('member administration rejects unauthenticated, worker, and cross-farm owne
   };
   const memberCount = count('farm_members');
   const eventCount = count('farm_member_events');
-  for (const actor of [null, 'worker-a', 'owner-b']) {
+  for (const actor of [null, 'worker-a', 'owner-b'] as const) {
     const response = await farmMembers.POST(jsonRequest('farm-members', 'POST', actor, body));
     assert.equal(response.status, 403);
   }
@@ -365,7 +365,7 @@ test('profile updates cannot cross farm or run without a member identity', async
     display_name: string;
   };
   const body = { farmId: 'farm-a', displayName: 'unauthorized change', preferredLanguage: 'ko' };
-  for (const actor of [null, 'owner-b']) {
+  for (const actor of [null, 'owner-b'] as const) {
     const response = await accountProfile.PATCH(jsonRequest('account-profile', 'PATCH', actor, body));
     assert.equal(response.status, 404);
   }
@@ -377,7 +377,7 @@ test('profile updates cannot cross farm or run without a member identity', async
 
 test('video upload denies unauthenticated and cross-farm actors before R2 or session writes', async () => {
   const sessionCount = count('capture_sessions');
-  for (const actor of [null, 'owner-b']) {
+  for (const actor of [null, 'owner-b'] as const) {
     const response = await videoUpload.POST(uploadRequest(actor));
     assert.equal(response.status, 403);
   }
@@ -678,6 +678,7 @@ test('authorized community and notification routes persist only member-scoped fi
     const read = await notifications.POST(jsonRequest('notifications', 'POST', 'worker-a', {
       farmId: 'farm-a', action: 'READ', notificationId: 'member-notification-a',
     }));
+    assert.ok(read, 'authorized notification request must return a response');
     assert.equal(read.status, 200);
     assert.ok((sqlite.prepare(`SELECT read_at FROM app_notification_recipients
       WHERE id = 'member-notification-recipient-a'`).get() as { read_at: string | null }).read_at);
