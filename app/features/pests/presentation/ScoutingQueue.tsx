@@ -135,7 +135,7 @@ function focusedLocationId() {
   return new URLSearchParams(window.location.search).get('scoutingLocation')?.trim() ?? '';
 }
 
-type RecentFieldCheck = { fieldCheckId: string; label: string };
+type RecentFieldCheck = { fieldCheckId: string; label: string; farmId: string };
 export type ScoutingQueueViewState = 'LOADING' | 'ERROR' | 'EMPTY' | 'READY' | 'STALE';
 
 export function scoutingRowsForFarm<T>(storedRows: T[], loadedFarmId: string, farmId: string) {
@@ -218,7 +218,7 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
     setSending(`${row.id}:${code}`); setMessage(''); setError('');
     try {
       const result = await post('/api/scouting-field-checks', { farmId, locationStateId: row.id, evidenceCode: code });
-      if (result.fieldCheckId) setRecentFieldCheck({ fieldCheckId: result.fieldCheckId, label: locationLabel(row) });
+      if (result.fieldCheckId) setRecentFieldCheck({ fieldCheckId: result.fieldCheckId, label: locationLabel(row), farmId });
       setMessage(result.message ?? text.saved); await load(); onChanged?.();
     } catch (caught) { setError(caught instanceof Error ? caught.message : text.saveError); }
     finally { setSending(''); }
@@ -232,7 +232,7 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
   }
 
   async function correctRecent(code: string | null) {
-    if (!recentFieldCheck) return;
+    if (!recentFieldCheck || recentFieldCheck.farmId !== farmId) return;
     setSending(`correction:${recentFieldCheck.fieldCheckId}`); setMessage(''); setError('');
     try {
       const result = await post('/api/scouting-field-check-corrections', {
@@ -264,6 +264,7 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
     <header className="scouting-queue-heading"><div><span>{text.eyebrow}</span><h2>{text.title}</h2><p>{text.description}</p></div><button disabled={loading || !farmId} onClick={() => void load()} type="button">{text.refresh}</button></header>
     {message && <div className="review-feedback success" role="status">{message}</div>}
     {error && <div className="review-feedback error" role="alert">{error}</div>}
+    {recentFieldCheck?.farmId === farmId && canReview && <aside className="scouting-correction-panel"><div><strong>{text.correctionTitle}</strong><span>{recentFieldCheck.label}</span><p>{text.correctionHelp}</p></div><div className="scouting-choice-grid">{evidenceOptions.map((option) => <button disabled={Boolean(sending)} key={option.code} onClick={() => void correctRecent(option.code)} type="button">{localized(option, language)}</button>)}<button disabled={Boolean(sending)} onClick={() => void correctRecent(null)} type="button">{text.voidInput}</button></div></aside>}
     {viewState === 'STALE' && <div className="review-feedback error scouting-stale" role="alert"><strong>{loadError}</strong><span>{text.staleNotice}</span></div>}
     {viewState === 'LOADING' ? <div className="screen-empty compact"><strong>{text.loading}</strong></div>
       : viewState === 'ERROR' ? <div className="screen-empty compact scouting-load-error" role="alert"><strong>{loadError || text.loadError}</strong><p>{text.retryHelp}</p><button onClick={() => void load()} type="button">{text.refresh}</button></div>
@@ -300,8 +301,6 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged }: {
               <span>{text.recentCheck} <b>{formatTime(selected.last_field_check_at, language)}</b></span>
               <span>{text.recentAction} <b>{formatTime(selected.last_action_at, language)}</b></span>
             </div>
-
-            {recentFieldCheck && canReview && <aside className="scouting-correction-panel"><div><strong>{text.correctionTitle}</strong><span>{recentFieldCheck.label}</span><p>{text.correctionHelp}</p></div><div className="scouting-choice-grid">{evidenceOptions.map((option) => <button disabled={Boolean(sending)} key={option.code} onClick={() => void correctRecent(option.code)} type="button">{localized(option, language)}</button>)}<button disabled={Boolean(sending)} onClick={() => void correctRecent(null)} type="button">{text.voidInput}</button></div></aside>}
 
             {canReview && <div className="scouting-detail-actions">
               <details><summary>{text.fieldCheck}</summary><div className="scouting-choice-grid">{evidenceOptions.map((option) => <button disabled={Boolean(sending)} key={option.code} onClick={() => void submitFieldCheck(selected, option.code)} type="button">{localized(option, language)}</button>)}</div></details>

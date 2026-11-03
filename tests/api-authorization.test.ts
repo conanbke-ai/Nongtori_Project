@@ -923,6 +923,91 @@ test('valid service tokens reach isolated domain work without external delivery'
   assert.equal(externalCalls, 0);
 });
 
+test('a no-visible-evidence check leaving the attention queue remains correctable by its saved ID', async () => {
+  const observed = await scoutingObservations.POST(jsonRequest('scouting-observations', 'POST', 'admin-a', {
+    farmId: 'farm-a', houseId: 'house-a', bedId: 'bed-a', zoneId: 'zone-a',
+    sourceType: 'FUSION', signals: { hasMeaningfulAnomaly: true, hasMeaningfulNewEvidence: true },
+  }));
+  assert.equal(observed.status, 201);
+  const { locationStateId } = await observed.json() as { locationStateId: string };
+  const checked = await scoutingFieldChecks.POST(jsonRequest('scouting-field-checks', 'POST', 'worker-a', {
+    farmId: 'farm-a', locationStateId, evidenceCode: 'NO_VISIBLE_EVIDENCE',
+  }));
+  assert.equal(checked.status, 201);
+  const { fieldCheckId } = await checked.json() as { fieldCheckId: string };
+  const { GET } = await import('../app/api/scouting-locations/route');
+  const queue = () => GET(authenticatedRequest('worker-a', 'https://nongtori.test/api/scouting-locations?farmId=farm-a&attention=1'));
+  assert.equal((await (await queue()).json() as { rows: { id: string }[] }).rows.some(row => row.id === locationStateId), false);
+  const corrected = await scoutingFieldCheckCorrections.POST(jsonRequest('scouting-field-check-corrections', 'POST', 'worker-a', {
+    farmId: 'farm-a', fieldCheckId, correctionKind: 'REPLACE',
+    replacementEvidenceCode: 'DIRECT_MITE_OR_EGG_CONFIRMED', reasonCode: 'MISCLICK',
+  }));
+  assert.equal(corrected.status, 201);
+  assert.equal((await corrected.json() as { nextState: string }).nextState, 'CONFIRMED');
+  assert.equal((await (await queue()).json() as { rows: { id: string }[] }).rows.some(row => row.id === locationStateId), true);
+  assert.equal((sqlite.prepare('SELECT primary_evidence_code FROM scouting_field_checks WHERE id = ?').get(fieldCheckId) as { primary_evidence_code: string }).primary_evidence_code, 'NO_VISIBLE_EVIDENCE');
+});
+
+test('rejected field-check corrections preserve all evidence and allow one explicit valid void', async () => {
+  const observed = await scoutingObservations.POST(jsonRequest('scouting-observations', 'POST', 'admin-a', {
+    farmId: 'farm-a', houseId: 'house-a', bedId: 'bed-a', zoneId: 'zone-a',
+    sourceType: 'FUSION', signals: { hasMeaningfulAnomaly: true, hasMeaningfulNewEvidence: true },
+  }));
+  assert.equal(observed.status, 201);
+  const { locationStateId } = await observed.json() as { locationStateId: string };
+  const checked = await scoutingFieldChecks.POST(jsonRequest('scouting-field-checks', 'POST', 'worker-a', {
+    farmId: 'farm-a', locationStateId, evidenceCode: 'DIRECT_MITE_OR_EGG_CONFIRMED',
+  }));
+  assert.equal(checked.status, 201);
+  const { fieldCheckId } = await checked.json() as { fieldCheckId: string };
+  const original = sqlite.prepare('SELECT * FROM scouting_field_checks WHERE id = ?').get(fieldCheckId);
+  const stateBefore = sqlite.prepare('SELECT state_version FROM scouting_location_states WHERE id = ?')
+    .get(locationStateId) as { state_version: number };
+  const correctionCount = count('scouting_field_check_corrections');
+  const eventCount = count('scouting_case_events');
+  const snapshot = () => Object.fromEntries([
+    'scouting_field_checks', 'scouting_field_check_corrections', 'scouting_location_states',
+    'scouting_cases', 'scouting_case_events', 'scouting_alert_events',
+  ].map(table => [table, sqlite.prepare(`SELECT * FROM ${table} ORDER BY id`).all()]));
+  const before = snapshot();
+  const body = { farmId: 'farm-a', fieldCheckId, correctionKind: 'REPLACE', reasonCode: 'MISCLICK' };
+  const rejected: { label: string; subject: TestIdentitySubject; patch: Record<string, unknown>; status: number }[] = [
+    { label: 'missing replacement', subject: 'worker-a', patch: {}, status: 400 },
+    { label: 'unknown replacement', subject: 'worker-a', patch: { replacementEvidenceCode: 'NOT_AN_EVIDENCE_CODE' }, status: 400 },
+    { label: 'invalid correction kind', subject: 'worker-a', patch: { correctionKind: 'DELETE' }, status: 422 },
+    { label: 'missing original', subject: 'worker-a', patch: { fieldCheckId: 'nonexistent-check' }, status: 400 },
+    { label: 'oversized note', subject: 'worker-a', patch: { note: 'x'.repeat(301) }, status: 400 },
+    { label: 'other farm member', subject: 'owner-b', patch: {}, status: 403 },
+    { label: 'own farm with foreign original', subject: 'owner-b', patch: { farmId: 'farm-b' }, status: 400 },
+  ];
+  for (const scenario of rejected) {
+    const response = await scoutingFieldCheckCorrections.POST(jsonRequest(
+      'scouting-field-check-corrections', 'POST', scenario.subject, { ...body, ...scenario.patch },
+    ));
+    assert.equal(response.status, scenario.status, scenario.label);
+    assert.ok((await response.json() as { error: string }).error, scenario.label);
+    assert.deepEqual(snapshot(), before, `${scenario.label} must not mutate evidence, projection, or audit`);
+  }
+
+  // A definite rejection is safe to correct manually; this is not a lost-response replay test.
+  const voided = await scoutingFieldCheckCorrections.POST(jsonRequest(
+    'scouting-field-check-corrections', 'POST', 'worker-a', { ...body, correctionKind: 'VOID' },
+  ));
+  assert.equal(voided.status, 201);
+  const result = await voided.json() as { correctionId: string; nextState: string; replacementEvidenceCode: string | null };
+  assert.equal(result.nextState, 'WATCH');
+  assert.equal(result.replacementEvidenceCode, null);
+  assert.equal(count('scouting_field_check_corrections'), correctionCount + 1);
+  assert.equal(count('scouting_case_events'), eventCount + 1);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM scouting_field_checks WHERE id = ?').get(fieldCheckId), original);
+  assert.deepEqual({ ...sqlite.prepare(`SELECT correction_kind, actor_member_id, reason_code, field_check_id
+    FROM scouting_field_check_corrections WHERE id = ?`).get(result.correctionId) }, {
+    correction_kind: 'VOID', actor_member_id: 'worker-a', reason_code: 'MISCLICK', field_check_id: fieldCheckId,
+  });
+  assert.deepEqual({ ...sqlite.prepare('SELECT current_state, state_version FROM scouting_location_states WHERE id = ?')
+    .get(locationStateId) }, { current_state: 'WATCH', state_version: stateBefore.state_version + 1 });
+});
+
 test('authorized scouting routes persist observation, review, correction, action, and resolution', async () => {
   const observationCount = count('scouting_observations');
   const fieldCheckCount = count('scouting_field_checks');
