@@ -44,6 +44,7 @@ const mutationContracts: Record<string, AuthBoundary> = {
   'scouting-actions#POST': 'FARM_PERMISSION',
   'scouting-field-check-corrections#POST': 'FARM_PERMISSION',
   'scouting-field-checks#POST': 'FARM_PERMISSION',
+  'scouting-mutation-status#POST': 'FARM_PERMISSION',
   'scouting-observations#POST': 'FARM_PERMISSION',
   'scouting-resolve#POST': 'FARM_PERMISSION',
   'vendor/farm-import#POST': 'SERVICE_TOKEN',
