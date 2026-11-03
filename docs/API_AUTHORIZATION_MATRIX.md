@@ -3,6 +3,8 @@
 이 문서는 변경성 API(`POST`, `PUT`, `PATCH`, `DELETE`)가 사용하는 서버 권한 경계를 분류한다.
 실제 권한 판정은 각 route와 `app/lib/farm-auth.ts`가 기준이며, 이 표는 누락 감시와 회귀 검증을 위한 인덱스다.
 
+격리 후속 후보: `scouting-mutation-status`는 수동 읽기 전용 POST다. URL에 key/payload를 넣지 않기 위해 POST를 쓰지만 저장·receipt 생성·quota 소비·bootstrap은 하지 않는다. 기존 변경 handler33개와 조회 POST1개, 총34개 POST/PUT/PATCH/DELETE 권한 표면을 분류하며 아래 과거33/33 성공 기록을34/34로 자동 승격하지 않는다. 새 조회는 별도 합성 회귀에서 검증하고 운영 활성화/실제 UI 수용으로 표현하지 않는다.
+
 ## 경계 유형
 
 - `FARM_MEMBER`: 요청 identity가 대상 농장의 활성 구성원이며, 작성자·대상 record 범위를 추가 확인한다.
@@ -34,6 +36,7 @@
 | `scouting-actions` | POST | FARM_PERMISSION | `reviewAlerts`, member identity |
 | `scouting-field-check-corrections` | POST | FARM_PERMISSION | `reviewAlerts`, member identity |
 | `scouting-field-checks` | POST | FARM_PERMISSION | `reviewAlerts`, member identity |
+| `scouting-mutation-status` | POST (read-only) | FARM_PERMISSION | 기본 비활성, `reviewAlerts`·현재 membership·farm/target ownership·원래 intent hash 일치, SELECT만 |
 | `scouting-observations` | POST | FARM_PERMISSION | `manageFarm` |
 | `scouting-resolve` | POST | FARM_PERMISSION | `reviewAlerts`, member identity |
 | `vendor/farm-import` | POST | SERVICE_TOKEN | `VENDOR_IMPORT_TOKEN` |

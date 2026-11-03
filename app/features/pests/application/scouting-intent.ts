@@ -52,6 +52,19 @@ function replay(row: ReceiptRow, hash: string) {
   if (row.payload_hash !== hash) throw new ScoutingIntentError(409, 'INTENT_CONFLICT', '같은 요청 키로 입력을 바꿀 수 없습니다.');
   return { status: row.http_status, body: JSON.parse(row.response_json) as Record<string, unknown> };
 }
+// Read only: no mutation plan, no receipt creation, quota consumption or bootstrap.
+export async function lookupScoutingIntent(db: D1Database, memberId: string, key: string,
+  intent: NormalizedScoutingIntent) {
+  const receipts = new ScoutingReceiptRepository(db);
+  if (!await receipts.schemaAvailable()) throw new ScoutingIntentError(503, 'RECEIPT_SCHEMA_UNAVAILABLE', '요청 기록 기능이 준비되지 않았습니다.');
+  if (!await receipts.ownsTarget(intent.farmId, intent.operation, intent.targetId))
+    throw new ScoutingIntentError(400, 'TARGET_NOT_FOUND', '이 농장의 기록을 찾을 수 없습니다.');
+  const scope = { farmId: intent.farmId, memberId, operation: intent.operation, keyDigest: await intentDigest(key) };
+  const row = await receipts.find(scope);
+  if (!row) return { state: 'UNCONFIRMED' as const };
+  const result = replay(row, await intentDigest(stableIntentJson(intent.fields)));
+  return { state: 'COMMITTED' as const, originalStatus: result.status, result: result.body };
+}
 export async function executeScoutingIntent(db: D1Database, memberId: string, key: string,
   intent: NormalizedScoutingIntent, limits: { farm: number; member: number }) {
   const receipts = new ScoutingReceiptRepository(db);
