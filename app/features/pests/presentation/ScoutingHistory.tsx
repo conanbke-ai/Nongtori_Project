@@ -5,6 +5,7 @@ import { localeForLanguage, type Language } from '@/app/lib/i18n';
 import { historyScope, ScoutingHistoryReader, type HistoryLoadState } from './scouting-history-reader';
 import './scouting-history.css';
 import { ScoutingOriginalCheck } from './ScoutingOriginalCheck';
+import { LegacyEvidenceReading } from './LegacyEvidenceReading';
 
 const copy = {
   ko: { title: '예찰 이력 보기', close: '이력 접기', refresh: '이력 새로고침', loading: '예찰 이력을 불러오는 중입니다.', error: '이력을 불러오지 못했습니다. 다시 조회해 주세요.', empty: '조회 범위에 저장된 이력이 없습니다. 병해충이 없다는 뜻은 아닙니다.', stale: '갱신하지 못해 이전 조회 결과를 표시합니다.', idle: '이력을 조회해 주세요.', limit: '종류별 최근 50건 · 더 이전 기록이 있을 수 있습니다. 새로고침으로 갱신합니다.', time: '시각 미상', unknown: '종류 미확인', original: '원본 확인 기록', outside: '원본 확인 기록은 조회 범위 밖에 있습니다.', replacement: '대체 관찰', types: ['관측', '현장 확인', '정정', '조치', '알림', 'CASE 이력'], codes: ['입력 대체', '입력 무효', '열화상 관측', '일반 사진 관측', '센서 관측', '수기 관측', 'CASE 시작', 'CASE 종료', '재발 CASE 시작', '현장 입력 정정', '알림 발행', '반복 알림 억제', '재확인 요청', '위험 변화 알림'] },
@@ -36,6 +37,7 @@ export function ScoutingHistoryPanel({ state, language, labelForCode = () => nul
     {state.entries.length > 0 && <ol tabIndex={0} aria-label={text.title}>{state.entries.map(entry => <li key={`${entry.kind}:${entry.id}`} id={entry.kind === 'fieldChecks' ? checkAnchor(entry.id) : undefined}>
       <div><strong>{text.types[kinds.indexOf(entry.kind)]} · {label(entry.code)}</strong>
         <time dateTime={entry.at ?? undefined}>{entry.at ? new Intl.DateTimeFormat(localeForLanguage(language), { dateStyle: 'short', timeStyle: 'short' }).format(new Date(entry.at)) : text.time}</time></div>
+      {entry.kind === 'fieldChecks' && <LegacyEvidenceReading code={entry.code} language={language} />}
       {entry.kind === 'corrections' && <p>{entry.originalCheckId && checks.has(entry.originalCheckId)
         ? <a href={`#${checkAnchor(entry.originalCheckId)}`}>{text.original}</a> : <>{text.outside}
           {entry.originalCheckId && farmId && locationId && state.status === 'ready' && <ScoutingOriginalCheck

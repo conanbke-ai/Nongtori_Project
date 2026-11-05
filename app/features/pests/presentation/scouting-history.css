@@ -10,4 +10,8 @@
 .scouting-history-panel li > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px; }
 .scouting-history-panel time { font-size: .8rem; }
 .scouting-original-check { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.scouting-legacy-reading { display: inline-grid; gap: 6px; min-width: 0; max-width: 100%; }
+.scouting-legacy-reading-content { display: grid; gap: 4px; overflow-wrap: anywhere; }
+.scouting-legacy-reading code { white-space: break-spaces; overflow-wrap: anywhere; unicode-bidi: isolate; }
+.scouting-legacy-reading button { min-height: 44px; }
 .scouting-history-panel a { display: inline-flex; align-items: center; min-height: 44px; padding: 4px 6px; color: var(--brand-dark, #47644b); }

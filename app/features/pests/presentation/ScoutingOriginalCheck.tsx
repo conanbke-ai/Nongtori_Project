@@ -2,6 +2,7 @@
 import { useLayoutEffect, useState } from 'react';
 import { localeForLanguage, type Language } from '@/app/lib/i18n';
 import { originalScope, ScoutingOriginalReader, type OriginalState } from './scouting-original-reader';
+import { LegacyEvidenceReading } from './LegacyEvidenceReading';
 
 const copy = {
   ko: ['원본 단건 조회', '원본을 불러오는 중입니다.', '이 농장·구역에서 원본을 찾을 수 없습니다.', '현재 원본을 볼 권한이 없습니다.', '원본을 불러오지 못했습니다. 다시 조회해 주세요.', '시각 미상', '종류 미확인', '원본 기록 · 정정 적용 전'],
@@ -24,5 +25,6 @@ export function ScoutingOriginalCheck({ farmId, locationId, checkId, language, l
     {current.status === 'loading' && <span role="status">{text[1]}</span>}
     {['missing', 'denied', 'error'].includes(current.status) && <span role="alert">{text[current.status === 'missing' ? 2 : current.status === 'denied' ? 3 : 4]}</span>}
     {current.entry && <span role="status">{text[7]} · {labelForCode(current.entry.code) ?? text[6]} · <time dateTime={current.entry.at ?? undefined}>{current.entry.at ? new Intl.DateTimeFormat(localeForLanguage(language), { dateStyle: 'short', timeStyle: 'short' }).format(new Date(current.entry.at)) : text[5]}</time></span>}
+    {current.entry && <LegacyEvidenceReading code={current.entry.code} language={language} />}
   </span>;
 }

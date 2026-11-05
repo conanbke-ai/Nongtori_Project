@@ -38,22 +38,28 @@ test('actual original component click, context switch and cleanup keep pending r
   globalThis.fetch = async () => new Promise<Response>(resolve => pending.push(resolve));
   try {
     const { ScoutingOriginalCheck } = await import('../app/features/pests/presentation/ScoutingOriginalCheck');
+    const { LegacyEvidenceReading } = await import('../app/features/pests/presentation/LegacyEvidenceReading');
     const render = (locationId = 'loc', farmId = 'farm-a') => {
       cursor = 0;
       return ScoutingOriginalCheck({farmId,locationId,checkId:'check-0',language:'ko',labelForCode:()=> '원본 판정'});
     };
     const button = (element: ReactElement) => (element.props as { children: ReactElement[] }).children[0].props as { onClick: () => void; disabled: boolean };
+    const hasReading = (element: ReactElement) => (element.props as {children: ReactElement[]}).children.some(child => child && child.type === LegacyEvidenceReading);
     const payload = (farm_id = 'farm-a', location_state_id = 'loc') => Response.json({original:{id:'check-0',farm_id,location_state_id,primary_evidence_code:'INCONCLUSIVE',checked_at:'2026-01-01T00:00:00Z'}});
     assert.equal(pending.length,0); const initial = render(); assert.equal(pending.length,0);
+    assert.equal(hasReading(initial),false);
     button(initial).onClick(); button(initial).onClick(); assert.equal(pending.length,1);
     assert.equal(button(render()).disabled,true);
     const switched = render('other','farm-b'); assert.equal(button(switched).disabled,false);
+    assert.equal(hasReading(switched),false);
     pending[0](payload()); await new Promise(resolve => setImmediate(resolve));
     assert.equal((values[1] as {status:string}).status,'loading'); // late success never publishes ready
     button(render('other','farm-b')).onClick(); assert.equal(pending.length,2);
     pending[1](payload('farm-b','other')); await new Promise(resolve => setImmediate(resolve));
     assert.equal((values[1] as {status:string}).status,'ready');
+    assert.equal(hasReading(render('other','farm-b')),true);
     button(render('other','farm-b')).onClick();
+    assert.equal(hasReading(render('other','farm-b')),false);
     effects.forEach(effect => effect?.cleanup?.()); const before = values[1];
     pending[2](new Response('',{status:404})); await new Promise(resolve => setImmediate(resolve));
     assert.equal(values[1],before);
