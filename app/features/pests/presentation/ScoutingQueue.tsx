@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { localeForLanguage, type Language } from '@/app/lib/i18n';
 import { ScoutingPendingIntent, type PendingScoutingIntent } from './scouting-pending-intent';
+import { ScoutingHistory } from './ScoutingHistory';
 
 export type ScoutingLocation = {
   id: string;
@@ -368,6 +369,11 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
               <span>{text.recentCheck} <b>{formatTime(selected.last_field_check_at, language)}</b></span>
               <span>{text.recentAction} <b>{formatTime(selected.last_action_at, language)}</b></span>
             </div>
+
+            <ScoutingHistory key={JSON.stringify([farmId, selected.id])} farmId={farmId} locationId={selected.id} language={language} labelForCode={(code) => {
+              const choice = [...evidenceOptions, ...actionOptions, ...resolveOptions].find(option => option.code === code) ?? stateLabels[code] ?? reasonLabels[code];
+              return choice ? localized(choice, language) : null;
+            }} />
 
             {canReview && <div className="scouting-detail-actions">
               <details><summary>{text.fieldCheck}</summary><div className="scouting-choice-grid">{evidenceOptions.map((option) => <button disabled={Boolean(sending)} key={option.code} onClick={() => void submitFieldCheck(selected, option.code)} type="button">{localized(option, language)}</button>)}</div></details>
