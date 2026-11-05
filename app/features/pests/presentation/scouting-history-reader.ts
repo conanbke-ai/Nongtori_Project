@@ -65,7 +65,8 @@ export class ScoutingHistoryReader {
     publish({ scope, status: 'loading', entries: previous });
     try {
       const query = new URLSearchParams({ farmId, locationStateId: locationId, limit: String(historyLimit) });
-      const response = await this.read(`/api/scouting-history?${query}`, { method: 'GET', cache: 'no-store' });
+      const read = this.read;
+      const response = await read(`/api/scouting-history?${query}`, { method: 'GET', cache: 'no-store' });
       if (!response.ok) throw new HistoryReadError([401, 403, 404, 422].includes(response.status));
       const entries = projectScoutingHistory(await response.json(), farmId, locationId);
       if (id !== this.sequence) return;

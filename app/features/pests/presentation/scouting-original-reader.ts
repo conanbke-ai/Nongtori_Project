@@ -20,7 +20,8 @@ export class ScoutingOriginalReader {
     emit('loading');
     try {
       const query = new URLSearchParams({ farmId, locationStateId: locationId, fieldCheckId: checkId });
-      const response = await this.read(`/api/scouting-original-check?${query}`, { method: 'GET', cache: 'no-store' });
+      const read = this.read;
+      const response = await read(`/api/scouting-original-check?${query}`, { method: 'GET', cache: 'no-store' });
       if (!response.ok) { emit(response.status === 404 ? 'missing' : [401, 403].includes(response.status) ? 'denied' : 'error'); return; }
       const data: unknown = await response.json();
       const row = data && typeof data === 'object' && 'original' in data ? data.original : null;
