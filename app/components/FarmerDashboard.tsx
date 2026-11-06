@@ -24,7 +24,7 @@ import { RevenueForecast, type ForecastJobRecord, type RevenueForecastRecord } f
 import { VideoUploadForm } from './VideoUploadForm';
 import { asLanguage, languageNames, languages, localeForLanguage, translate, type Language } from '@/app/lib/i18n';
 import { dashboardScreenFromSearch, writeDashboardScreen, type DashboardScreen } from '@/app/lib/dashboard-navigation';
-import { dashboardDataState } from '@/app/lib/dashboard-data-state';
+import { dashboardDataState, dashboardSelection } from '@/app/lib/dashboard-data-state';
 
 type Screen = DashboardScreen;
 type Farm = { id: string; name: string; timezone: string };
@@ -148,6 +148,7 @@ export function FarmerDashboard() {
   const [managementTab, setManagementTab] = useState<'overview' | 'harvest'>('overview');
   const [pestCode, setPestCode] = useState('');
   const dashboardRequestSequence = useRef(0);
+  const historyRequestSequence = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [hasSuccessfulData, setHasSuccessfulData] = useState(false);
@@ -206,8 +207,17 @@ export function FarmerDashboard() {
     setHasSuccessfulData(true);
     const storedLanguage = typeof window !== 'undefined' ? window.localStorage.getItem('farm-language') : null;
     setLanguage(asLanguage(storedLanguage || next.account.preferredLanguage));
-    if (next.selectedFarm) setFarmId(next.selectedFarm.id);
-    if (next.items.length > 0) setItemId((current) => next.items.some((item) => item.id === current) ? current : next.items[0].id);
+    const nextFarmId = next.selectedFarm?.id ?? '';
+    setFarmId(nextFarmId);
+    setItemId((current) => dashboardSelection({ farmId: nextFarmId, itemIds: next.items.map(item => item.id), currentItemId: current }).itemId);
+    if (!nextFarmId) {
+      // A confirmed absent farm ends its private scope; a failed refresh does not.
+      historyRequestSequence.current += 1;
+      setHistory({ rows: [], total: 0, page: 1, limit: 30, pageCount: 0 });
+      setHistoryError('');
+      setHistoryLoading(false);
+      setChatOpen(false);
+    }
     setLoading(false);
   }
 
@@ -277,6 +287,7 @@ export function FarmerDashboard() {
 
   async function loadHistory(page = 1) {
     if (!farmId || !selectedItem) return;
+    const sequence = ++historyRequestSequence.current;
     setHistoryLoading(true);
     setHistoryError('');
     const params = new URLSearchParams({ farmId, itemId: selectedItem.id, from: historyFrom, to: historyTo, page: String(page), limit: '30' });
@@ -286,31 +297,32 @@ export function FarmerDashboard() {
       const response = await fetch(`/api/operation-history?${params}`, { cache: 'no-store' });
       const result = await response.json() as HistoryResponse & { error?: string };
       if (!response.ok) throw new Error(result.error ?? '판독 이력을 불러오지 못했습니다.');
-      setHistory(result);
+      if (sequence === historyRequestSequence.current) setHistory(result);
     } catch (caught) {
-      setHistoryError(caught instanceof Error ? caught.message : '판독 이력을 불러오지 못했습니다.');
+      if (sequence === historyRequestSequence.current) setHistoryError(caught instanceof Error ? caught.message : '판독 이력을 불러오지 못했습니다.');
     } finally {
-      setHistoryLoading(false);
+      if (sequence === historyRequestSequence.current) setHistoryLoading(false);
     }
   }
 
   useEffect(() => {
     if (screen !== 'history' || !farmId || !selectedItemId) return;
     let cancelled = false;
+    const sequence = ++historyRequestSequence.current;
     const params = new URLSearchParams({ farmId, itemId: selectedItemId, from: dateDaysAgo(30), to: localDateKey(), page: '1', limit: '30' });
     void Promise.resolve().then(async () => {
-      if (cancelled) return;
+      if (cancelled || sequence !== historyRequestSequence.current) return;
       setHistoryLoading(true);
       setHistoryError('');
       try {
         const response = await fetch(`/api/operation-history?${params}`, { cache: 'no-store' });
         const result = await response.json() as HistoryResponse & { error?: string };
         if (!response.ok) throw new Error(result.error ?? '판독 이력을 불러오지 못했습니다.');
-        if (!cancelled) setHistory(result);
+        if (!cancelled && sequence === historyRequestSequence.current) setHistory(result);
       } catch (caught) {
-        if (!cancelled) setHistoryError(caught instanceof Error ? caught.message : '판독 이력을 불러오지 못했습니다.');
+        if (!cancelled && sequence === historyRequestSequence.current) setHistoryError(caught instanceof Error ? caught.message : '판독 이력을 불러오지 못했습니다.');
       } finally {
-        if (!cancelled) setHistoryLoading(false);
+        if (!cancelled && sequence === historyRequestSequence.current) setHistoryLoading(false);
       }
     });
     return () => { cancelled = true; };
