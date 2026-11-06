@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { ScoutingRepository } from '../app/features/pests/infrastructure/scouting-repository';
+import { projectScoutingHistory } from '../app/features/pests/presentation/scouting-history-reader';
 import {
   correctScoutingFieldCheck,
   processScoutingObservation,
@@ -181,4 +182,100 @@ test('post-treatment and monitoring states are not treated as immediate attentio
   assert.equal(response.status, 200);
   const payload = await response.json() as { rows: { id: string; current_state: string }[] };
   assert.equal(payload.rows.some((row) => row.id === location.id), false);
+});
+
+test('location history GET keeps original and correction evidence, projects actual SQL and rejects foreign/revoked members',async()=>{
+  insert('farms',{id:'history-farm',code:'HF',name:'SYNTHETIC',status:'ACTIVE',created_at:stamp,updated_at:stamp});
+  insert('houses',{id:'history-house',farm_id:'history-farm',code:'HH',name:'SYNTHETIC',status:'ACTIVE',created_at:stamp,updated_at:stamp});
+  insert('beds',{id:'history-bed',house_id:'history-house',code:'HB',name:'SYNTHETIC',status:'ACTIVE',created_at:stamp,updated_at:stamp});
+  insert('zones',{id:'history-zone',bed_id:'history-bed',code:'HZ',name:'SYNTHETIC',status:'ACTIVE',created_at:stamp,updated_at:stamp});
+  insert('farm_members',{id:'history-worker',farm_id:'history-farm',login_id:'history-worker',identity_provider:'SITES',identity_subject:'history-worker',role:'WORKER',status:'ACTIVE',created_at:stamp,updated_at:stamp,joined_at:stamp});
+  const observation=await processScoutingObservation(repo,{farmId:'history-farm',houseId:'history-house',bedId:'history-bed',zoneId:'history-zone',sourceType:'THERMAL',
+    observedAt:'2026-09-25T08:00:00Z',signals:{...baseSignals,hasMeaningfulNewEvidence:true}});
+  const check=await recordScoutingFieldCheck(repo,{farmId:'history-farm',locationStateId:observation.locationStateId,memberId:'history-worker',
+    evidenceCode:'NO_VISIBLE_EVIDENCE',checkedAt:'2026-09-25T08:10:00Z'});
+  await correctScoutingFieldCheck(repo,{farmId:'history-farm',fieldCheckId:check.fieldCheckId,memberId:'history-worker',
+    correctionKind:'REPLACE',replacementEvidenceCode:'DIRECT_MITE_OR_EGG_CONFIRMED',reasonCode:'MISCLICK',correctedAt:'2026-09-25T08:20:00Z'});
+  await recordScoutingAction(repo,{farmId:'history-farm',locationStateId:observation.locationStateId,memberId:'history-worker',actionCode:'OBSERVE_ONLY',actionAt:'2026-09-25T08:30:00Z'});
+  const {GET}=await import('../app/api/scouting-history/route');
+  const request=(actor:string|null)=>new Request('https://synthetic.test/api/scouting-history?farmId=history-farm&locationStateId='+observation.locationStateId+'&limit=50',
+    {headers:actor?{'oai-authenticated-user-id':actor}:{}});
+  const tables=['scouting_location_states','scouting_cases','scouting_observations','scouting_field_checks','scouting_field_check_corrections','scouting_actions','scouting_case_events','scouting_alert_events'];
+  const snapshot=()=>JSON.stringify(tables.map(t=>sqlite.prepare('SELECT * FROM '+t+' ORDER BY id').all()));
+  const before=snapshot(),response=await GET(request('history-worker'));assert.equal(response.status,200);
+  const data=await response.json(),entries=projectScoutingHistory(data,'history-farm',observation.locationStateId);
+  assert.equal(entries.find(x=>x.kind==='fieldChecks')?.code,'NO_VISIBLE_EVIDENCE');
+  assert.equal(entries.find(x=>x.kind==='corrections')?.replacementCode,'DIRECT_MITE_OR_EGG_CONFIRMED');
+  assert.ok(entries.some(x=>x.kind==='observations'));assert.ok(entries.some(x=>x.kind==='actions'));assert.ok(entries.some(x=>x.kind==='alerts'));
+  assert.equal(snapshot(),before,'history read must not rewrite source/projection/audit');
+  assert.equal((await GET(request(null))).status,403);assert.equal((await GET(request('worker-h'))).status,403);
+  sqlite.prepare("UPDATE farm_members SET status='INACTIVE' WHERE id='history-worker'").run();
+  assert.equal((await GET(request('history-worker'))).status,403);assert.equal(snapshot(),before);
+});
+
+// Valid SQL FKs but deliberately inconsistent tenant ownership. Memory fixture only.
+let tenantLocations: { a: string; b: string } | null = null;
+async function tenantFixture() {
+  if (tenantLocations) return tenantLocations;
+  const locations: Record<string, string> = {};
+  for (const s of ['a', 'b']) {
+    insert('farms', { id: `tenant-farm-${s}`, code: `TF-${s}`, name: 'SYNTHETIC', status: 'ACTIVE', created_at: stamp, updated_at: stamp });
+    insert('houses', { id: `tenant-house-${s}`, farm_id: `tenant-farm-${s}`, code: 'H', name: 'SYNTHETIC', status: 'ACTIVE', created_at: stamp, updated_at: stamp });
+    insert('beds', { id: `tenant-bed-${s}`, house_id: `tenant-house-${s}`, code: 'B', name: 'SYNTHETIC', status: 'ACTIVE', created_at: stamp, updated_at: stamp });
+    insert('zones', { id: `tenant-zone-${s}`, bed_id: `tenant-bed-${s}`, code: 'Z', name: 'SYNTHETIC', status: 'ACTIVE', created_at: stamp, updated_at: stamp });
+    locations[s] = (await repo.resolveLocation(`tenant-farm-${s}`, `tenant-house-${s}`, `tenant-bed-${s}`, `tenant-zone-${s}`, stamp)).id;
+    insert('scouting_cases', { id: `tenant-case-${s}`, farm_id: `tenant-farm-${s}`, location_state_id: locations[s], issue_family: 'UNKNOWN', status: 'OPEN', opened_at: stamp, opened_reason: 'SYNTHETIC', created_at: stamp, updated_at: stamp });
+    insert('scouting_observations', { id: `tenant-fk-observation-${s}`, farm_id: `tenant-farm-${s}`, location_state_id: locations[s], observed_at: stamp, source_type: 'MANUAL', created_at: stamp });
+    insert('scouting_field_checks', { id: `tenant-fk-check-${s}`, farm_id: `tenant-farm-${s}`, location_state_id: locations[s], checked_at: stamp, primary_evidence_code: 'INCONCLUSIVE', created_at: stamp });
+  }
+  for (const [id, farm, role] of [['tenant-worker-a', 'tenant-farm-a', 'WORKER'], ['tenant-owner-a', 'tenant-farm-a', 'OWNER'], ['tenant-admin-a', 'tenant-farm-a', 'ADMIN'], ['tenant-owner-b', 'tenant-farm-b', 'OWNER']]) {
+    insert('farm_members', { id, farm_id: farm, login_id: id, identity_provider: 'SITES', identity_subject: id, role, status: 'ACTIVE', created_at: stamp, updated_at: stamp, joined_at: stamp });
+  }
+  tenantLocations = { a: locations.a, b: locations.b }; return tenantLocations;
+}
+const tenantFamilies = [
+  { key: 'observations', table: 'scouting_observations', time: 'observed_at', values: () => ({ source_type: 'MANUAL', policy_input_json: '{"synthetic":"RAW"}' }) },
+  { key: 'fieldChecks', table: 'scouting_field_checks', time: 'checked_at', values: () => ({ primary_evidence_code: 'INCONCLUSIVE', note: 'SYNTHETIC_RAW_NOTE', secondary_evidence_json: '{"synthetic":"RAW"}' }) },
+  { key: 'corrections', table: 'scouting_field_check_corrections', time: 'created_at', values: (s: string) => ({ field_check_id: `tenant-fk-check-${s}`, correction_kind: 'VOID', reason_code: 'MISCLICK', note: 'SYNTHETIC_RAW_NOTE' }) },
+  { key: 'actions', table: 'scouting_actions', time: 'action_at', values: () => ({ action_code: 'OBSERVE_ONLY', detail_json: '{"synthetic":"RAW"}', note: 'SYNTHETIC_RAW_NOTE' }) },
+  { key: 'alerts', table: 'scouting_alert_events', time: 'created_at', values: (s: string) => ({ observation_id: `tenant-fk-observation-${s}`, alert_decision: 'ISSUED', alert_reason: 'SYNTHETIC', policy_version: 'SYNTHETIC' }) },
+  { key: 'caseEvents', table: 'scouting_case_events', time: 'created_at', values: (s: string) => ({ case_id: `tenant-case-${s}`, event_type: 'OPENED', detail_json: '{"synthetic":"RAW"}' }) },
+];
+for (const family of tenantFamilies) test(`tenant guard: ${family.key} rejects foreign rows before limit and preserves raw own rows`, async () => {
+  const locations = await tenantFixture();
+  for (const [label, farm, s, time] of [
+    ['own-old', 'tenant-farm-a', 'a', '2026-11-05T10:00:00Z'],
+    ['own-new', 'tenant-farm-a', 'a', '2026-11-05T10:01:00Z'],
+    ['foreign-newest', 'tenant-farm-b', 'b', '2026-11-05T10:02:00Z'],
+  ]) insert(family.table, { id: `tenant-${family.key}-${label}`, farm_id: farm, location_state_id: locations.a,
+    ...family.values(s), created_at: time, [family.time]: time });
+  assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(), []);
+  const snapshot = JSON.stringify(sqlite.prepare(`SELECT * FROM ${family.table} ORDER BY id`).all());
+  const { GET } = await import('../app/api/scouting-history/route');
+  const query = new URLSearchParams({ farmId: 'tenant-farm-a', locationStateId: locations.a, limit: '2' });
+  const response = await GET(new Request('https://synthetic.test/api/scouting-history?' + query, { headers: { 'oai-authenticated-user-id': 'tenant-worker-a' } }));
+  assert.equal(response.status, 200);
+  const payload = await response.json() as Record<string, { id: string; farm_id: string }[]>;
+  const rows = payload[family.key];
+  assert.deepEqual(rows.map(row => row.id), [`tenant-${family.key}-own-new`, `tenant-${family.key}-own-old`]);
+  assert.ok(rows.every(row => row.farm_id === 'tenant-farm-a'));
+  const expected = rows.map(row => sqlite.prepare(`SELECT * FROM ${family.table} WHERE id=?`).get(row.id));
+  assert.deepEqual(rows, JSON.parse(JSON.stringify(expected)), 'raw field shape must not be redacted');
+  assert.equal(JSON.stringify(sqlite.prepare(`SELECT * FROM ${family.table} ORDER BY id`).all()), snapshot, 'read must not repair/delete stored evidence');
+});
+
+test('tenant guard: own roles stay allowed and foreign, anonymous, inactive or foreign-location requests stay denied', async () => {
+  const locations = await tenantFixture();
+  const { GET } = await import('../app/api/scouting-history/route');
+  const request = (actor: string | null, location = locations.a) => new Request('https://synthetic.test/api/scouting-history?' + new URLSearchParams({ farmId: 'tenant-farm-a', locationStateId: location, limit: '2' }), { headers: actor ? { 'oai-authenticated-user-id': actor } : {} });
+  for (const actor of ['tenant-worker-a', 'tenant-owner-a', 'tenant-admin-a']) {
+    const response = await GET(request(actor)); assert.equal(response.status, 200);
+    const data = await response.json() as Record<string, { farm_id: string }[]>;
+    for (const family of tenantFamilies) assert.ok(data[family.key].every(row => row.farm_id === 'tenant-farm-a'));
+  }
+  assert.equal((await GET(request(null))).status, 403);
+  assert.equal((await GET(request('tenant-owner-b'))).status, 403);
+  assert.equal((await GET(request('tenant-worker-a', locations.b))).status, 404);
+  sqlite.exec("UPDATE farm_members SET status='INACTIVE' WHERE id='tenant-worker-a'");
+  assert.equal((await GET(request('tenant-worker-a'))).status, 403);
 });

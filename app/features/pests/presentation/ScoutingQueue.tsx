@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { localeForLanguage, type Language } from '@/app/lib/i18n';
 import { ScoutingPendingIntent, type PendingScoutingIntent } from './scouting-pending-intent';
+import { ScoutingHistory } from './ScoutingHistory';
+import { ScoutingFindingPicker } from './ScoutingFindingPicker';
 
 export type ScoutingLocation = {
   id: string;
@@ -369,8 +371,16 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
               <span>{text.recentAction} <b>{formatTime(selected.last_action_at, language)}</b></span>
             </div>
 
+            <ScoutingHistory key={JSON.stringify([farmId, selected.id])} farmId={farmId} locationId={selected.id} language={language} labelForCode={(code) => {
+              const choice = [...evidenceOptions, ...actionOptions, ...resolveOptions].find(option => option.code === code) ?? stateLabels[code] ?? reasonLabels[code];
+              return choice ? localized(choice, language) : null;
+            }} />
+
             {canReview && <div className="scouting-detail-actions">
-              <details><summary>{text.fieldCheck}</summary><div className="scouting-choice-grid">{evidenceOptions.map((option) => <button disabled={Boolean(sending)} key={option.code} onClick={() => void submitFieldCheck(selected, option.code)} type="button">{localized(option, language)}</button>)}</div></details>
+              <details><summary>{text.fieldCheck}</summary><ScoutingFindingPicker key={JSON.stringify([farmId, selected.id])}
+                scope={JSON.stringify([farmId, selected.id])} language={language} disabled={Boolean(sending)}
+                options={evidenceOptions.map(option => ({ code: option.code, label: localized(option, language) }))}
+                onSelect={code => void submitFieldCheck(selected, code)} /></details>
               <details><summary>{text.action}</summary><div className="scouting-choice-grid compact">{actionOptions.map((option) => <button disabled={Boolean(sending)} key={option.code} onClick={() => void submitAction(selected, option.code)} type="button">{localized(option, language)}</button>)}</div></details>
               <details className="secondary"><summary>{text.resolve}</summary><div className="scouting-choice-grid compact">{resolveOptions.map((option) => <button disabled={Boolean(sending)} key={option.code} onClick={() => void resolve(selected, option.code)} type="button">{localized(option, language)}</button>)}</div></details>
             </div>}
