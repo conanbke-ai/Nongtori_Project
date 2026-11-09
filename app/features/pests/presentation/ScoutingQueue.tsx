@@ -168,7 +168,13 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
   const [loadFailure, setLoadFailure] = useState({ farmId: '', message: '' });
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [sending, setSending] = useState('');
+  const sendingScope = JSON.stringify([farmId, mutationMemberId, canReview, keyedMutations]);
+  const [sendingState, setSendingState] = useState({ scope: sendingScope, value: '' });
+  // Adjust only local busy presentation when props change, not the pending intent.
+  // Clearing the stale scope also prevents an A -> B -> A roundtrip reviving its lock.
+  if (sendingState.scope !== sendingScope) setSendingState({ scope: sendingScope, value: '' });
+  const sending = sendingState.scope === sendingScope ? sendingState.value : '';
+  function setSending(value: string) { setSendingState(current => current.scope === sendingScope ? { scope: sendingScope, value } : current); }
   const [recentFieldCheck, setRecentFieldCheck] = useState<RecentFieldCheck | null>(null);
   const loadRequestId = useRef(0);
   const readBlockedRef = useRef(readBlocked);
@@ -229,12 +235,13 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
     let cancelled = false;
     void Promise.resolve().then(async () => { if (!cancelled) await load(); });
     return () => { cancelled = true; loadRequestId.current += 1; };
-  }, [load]);
+  }, [load, mutationMemberId]);
 
   // Invalidate at commit, before passive effects or a previous promise resumes.
   useLayoutEffect(() => {
     pendingContextId.current += 1;
-    return () => { pendingContextId.current += 1; };
+    loadRequestId.current += 1;
+    return () => { pendingContextId.current += 1; loadRequestId.current += 1; };
   }, [farmId, mutationMemberId, canReview, keyedMutations]);
 
   async function post(path: string, body: Record<string, unknown>) {
@@ -274,7 +281,7 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
       if (result.state === 'COMMITTED') await applyPendingResult(result.result, body, contextId);
       else setMessage(pendingCopy[4]);
     } catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : pendingCopy[4]); }
-    finally { setPendingIntent(keyedClient.current.snapshot()); setSending(''); }
+    finally { setPendingIntent(keyedClient.current.snapshot()); if (contextId === pendingContextId.current) setSending(''); }
   }
 
   async function retryPending() {
@@ -287,44 +294,58 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
       const result = await post(pendingIntent.path, body);
       await applyPendingResult(result, body, contextId);
     } catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : text.saveError); }
-    finally { setSending(''); }
+    finally { if (contextId === pendingContextId.current) setSending(''); }
   }
 
   async function submitFieldCheck(row: ScoutingLocation, code: string) {
+    const contextId = pendingContextId.current;
     setSending(`${row.id}:${code}`); setMessage(''); setError('');
     try {
       const result = await post('/api/scouting-field-checks', { farmId, locationStateId: row.id, evidenceCode: code });
+      if (contextId !== pendingContextId.current) return;
       if (result.fieldCheckId) setRecentFieldCheck({ fieldCheckId: result.fieldCheckId, label: locationLabel(row), farmId });
-      setMessage(result.message ?? text.saved); await load(); onChanged?.();
-    } catch (caught) { setError(caught instanceof Error ? caught.message : text.saveError); }
-    finally { setSending(''); }
+      setMessage(result.message ?? text.saved); await load(); if (contextId === pendingContextId.current) onChanged?.();
+    } catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : text.saveError); }
+    finally { if (contextId === pendingContextId.current) setSending(''); }
   }
 
   async function submitAction(row: ScoutingLocation, code: string) {
+    const contextId = pendingContextId.current;
     setSending(`${row.id}:${code}`); setMessage(''); setError('');
-    try { const result = await post('/api/scouting-actions', { farmId, locationStateId: row.id, actionCode: code }); setMessage(result.message ?? text.saved); await load(); onChanged?.(); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : text.saveError); }
-    finally { setSending(''); }
+    try {
+      const result = await post('/api/scouting-actions', { farmId, locationStateId: row.id, actionCode: code });
+      if (contextId !== pendingContextId.current) return;
+      setMessage(result.message ?? text.saved); await load(); if (contextId === pendingContextId.current) onChanged?.();
+    }
+    catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : text.saveError); }
+    finally { if (contextId === pendingContextId.current) setSending(''); }
   }
 
   async function correctRecent(code: string | null) {
     if (!recentFieldCheck || recentFieldCheck.farmId !== farmId) return;
+    const contextId = pendingContextId.current;
     setSending(`correction:${recentFieldCheck.fieldCheckId}`); setMessage(''); setError('');
     try {
       const result = await post('/api/scouting-field-check-corrections', {
         farmId, fieldCheckId: recentFieldCheck.fieldCheckId,
         correctionKind: code ? 'REPLACE' : 'VOID', replacementEvidenceCode: code, reasonCode: 'MISCLICK',
       });
-      setMessage(result.message ?? text.saved); setRecentFieldCheck(null); await load(); onChanged?.();
-    } catch (caught) { setError(caught instanceof Error ? caught.message : text.saveError); }
-    finally { setSending(''); }
+      if (contextId !== pendingContextId.current) return;
+      setMessage(result.message ?? text.saved); setRecentFieldCheck(null); await load(); if (contextId === pendingContextId.current) onChanged?.();
+    } catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : text.saveError); }
+    finally { if (contextId === pendingContextId.current) setSending(''); }
   }
 
   async function resolve(row: ScoutingLocation, reasonCode: string) {
+    const contextId = pendingContextId.current;
     setSending(`resolve:${row.id}`); setMessage(''); setError('');
-    try { const result = await post('/api/scouting-resolve', { farmId, locationStateId: row.id, reasonCode }); setMessage(result.message ?? text.saved); closeDetail(); await load(); onChanged?.(); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : text.saveError); }
-    finally { setSending(''); }
+    try {
+      const result = await post('/api/scouting-resolve', { farmId, locationStateId: row.id, reasonCode });
+      if (contextId !== pendingContextId.current) return;
+      setMessage(result.message ?? text.saved); closeDetail(); await load(); if (contextId === pendingContextId.current) onChanged?.();
+    }
+    catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : text.saveError); }
+    finally { if (contextId === pendingContextId.current) setSending(''); }
   }
 
   function closeDetail() {

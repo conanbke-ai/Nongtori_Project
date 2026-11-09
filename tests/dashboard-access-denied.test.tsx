@@ -55,6 +55,7 @@ const { FarmerDashboard } = await import('../app/components/FarmerDashboard');
 const { PestAlertReview } = await import('../app/components/PestAlertReview');
 const { FarmMiniChat } = await import('../app/components/FarmMiniChat');
 const { ScoutingQueue } = await import('../app/features/pests/presentation/ScoutingQueue');
+const { ScoutingFindingPicker } = await import('../app/features/pests/presentation/ScoutingFindingPicker');
 const { ScoutingPendingIntent } = await import('../app/features/pests/presentation/scouting-pending-intent');
 
 function nodes(node: ReactNode): Element[] {
@@ -67,7 +68,7 @@ function one(tree: ReactNode, predicate: (node: Element) => boolean) { const nod
 function call(node: Element, name = 'onClick', argument?: unknown) { const fn = node.props[name]; assert.equal(typeof fn, 'function'); return (fn as (arg?: unknown) => unknown)(argument); }
 const flush = () => new Promise<void>(resolve => setImmediate(resolve));
 type Pending = { url: string; method: string; resolve: (response: Response) => void; reject: (error: Error) => void };
-async function fixture(run: (f: { render: () => Element; pending: Pending[]; snapshot: (farm?: string) => Record<string, unknown>; denied: () => boolean; refresh: () => void; h: ReturnType<typeof harness> }) => Promise<void>, screen = 'alerts') {
+async function fixture(run: (f: { render: () => Element; pending: Pending[]; snapshot: (farm?: string) => Record<string, unknown>; denied: () => boolean; refresh: () => void; h: ReturnType<typeof harness> }) => Promise<void>, screen = 'alerts', explicitPostCount = 0) {
   const previousFetch = globalThis.fetch, previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window'), previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
   active = harness(); const h = active, pending: Pending[] = [];
   const location = { href: `http://synthetic.invalid/?screen=${screen}`, search: `?screen=${screen}` };
@@ -92,7 +93,7 @@ async function fixture(run: (f: { render: () => Element; pending: Pending[]; sna
   try { await run({ render, pending, snapshot, h,
     denied: () => one(render(), n => 'data-private-dashboard' in n.props).props.hidden === true,
     refresh: () => { call(one(render(), n => n.props.className === 'refresh-button')); },
-  }); assert.ok(pending.every(p => p.method === 'GET'), 'no automatic mutation or new write key'); }
+  }); assert.equal(pending.filter(p => p.method !== 'GET').length, explicitPostCount, 'only the explicitly invoked mutation callbacks may write'); }
   finally { h.cleanup(); globalThis.fetch = previousFetch;
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow); else Reflect.deleteProperty(globalThis, 'window');
     if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument); else Reflect.deleteProperty(globalThis, 'document');
@@ -306,3 +307,126 @@ test('403 suppresses the delivered actor but transient errors retain the same-fa
     assert.equal(review.props.readBlocked, outcome === '403');
   });
 });
+
+for (const kind of ['CHECK', 'ACTION', 'CORRECTION', 'RESOLVE'] as const) {
+  for (const outcome of ['success', 'error']) for (const timing of ['before-current', 'during-current']) {
+  test(`ordinary ${kind} ${outcome}/${timing} completion preserves the current member context`, async () => {
+      await fixture(async f => {
+        const parent = active, q = harness(); let member = 'member-a', changed = 0;
+        const row = { id: 'loc', farm_id: 'farm-a', location_key: 'H:B:Z', display_location: 'SYNTHETIC_LOCATION',
+          house_code: 'H', bed_code: 'B', zone_code: 'Z', current_state: 'FIELD_CHECK_REQUIRED', active_case_id: 'case',
+          primary_issue_code: null, issue_family: 'PEST', case_status: 'OPEN', observation_count: 1,
+          latest_humidity: null, latest_leaf_temp: null, latest_reference_temp: null, latest_ambient_temp: null,
+          latest_risk_signal: null, last_alert_reason: null, last_alert_at: null, last_observed_at: null,
+          last_field_check_at: null, last_action_at: null };
+        const render = () => { active = q; q.reset(); const tree = ScoutingQueue({ farmId: 'farm-a', mutationMemberId: member,
+          canReview: true, language: 'ko', onChanged: () => { changed++; } }); q.commit(); return tree; };
+        const pick = (code: string) => {
+          const picker = one(render(), n => n.type === ScoutingFindingPicker);
+          call(picker, 'onSelect', code);
+        };
+        const finishRead = async () => {
+          const request = f.pending.at(-1)!; assert.equal(request.method, 'GET');
+          assert.ok(request.url.startsWith('/api/scouting-locations'));
+          request.resolve(Response.json({ rows: [row] })); await flush(); render();
+        };
+        try {
+          render(); await flush(); await finishRead();
+          call(one(render(), n => typeof n.props.className === 'string' && n.props.className.startsWith('scouting-location-row')));
+          if (kind === 'CORRECTION') {
+            pick('NO_VISIBLE_EVIDENCE'); await flush();
+            f.pending.at(-1)!.resolve(Response.json({ fieldCheckId: 'seed-check', message: 'SEED_SAVED' }));
+            await flush(); await finishRead(); changed = 0;
+          }
+          const submit = () => {
+            if (kind === 'CHECK') pick('NO_VISIBLE_EVIDENCE');
+            else if (kind === 'ACTION') call(one(render(), n => n.type === 'button' && n.props.children === '방제'));
+            else if (kind === 'RESOLVE') call(one(render(), n => n.type === 'button' && n.props.children === '추가 이상 없음'));
+            else {
+              const panel = one(render(), n => n.props.className === 'scouting-correction-panel');
+              call(one(panel, n => n.type === 'button' && n.props.children === '특별한 이상 못 찾음'));
+            }
+          };
+          submit();
+          await flush(); const old = f.pending.at(-1)!; assert.equal(old.method, 'POST');
+          member = 'member-b'; render(); await flush();
+          member = 'member-a'; render();
+          member = 'member-b'; render(); await flush(); // returning to an old actor cannot revive an abandoned lock
+          await finishRead(); // the new member's fresh list must finish before its controls are exercised
+          let current: Pending | undefined;
+          const startCurrent = async () => {
+            assert.equal(one(render(), n => n.type === ScoutingFindingPicker).props.disabled, false, 'new member must not inherit an orphaned busy lock');
+            submit(); await flush(); current = f.pending.at(-1)!;
+            assert.equal(current.method, 'POST'); assert.notEqual(current, old);
+            assert.equal(one(render(), n => n.type === ScoutingFindingPicker).props.disabled, true);
+          };
+          if (timing === 'during-current') await startCurrent();
+          const calls = f.pending.length;
+          old.resolve(outcome === 'success'
+            ? Response.json({ fieldCheckId: 'OLD_PRIVATE_CHECK', message: 'OLD_PRIVATE_SAVED', state: 'RESOLVED' })
+            : Response.json({ error: 'OLD_PRIVATE_ERROR' }, { status: 503 }));
+          await flush(); const tree = render();
+          assert.equal(JSON.stringify(tree).includes('OLD_PRIVATE'), false, 'old response cannot set feedback or correction target');
+          assert.equal(f.pending.length, calls, 'old completion cannot refresh its list'); assert.equal(changed, 0);
+          assert.ok(nodes(tree).some(n => n.type === ScoutingFindingPicker), 'old resolve cannot close current details');
+          if (kind === 'CORRECTION') assert.ok(q.states.some(s => s.value && typeof s.value === 'object' && 'fieldCheckId' in s.value && s.value.fieldCheckId === 'seed-check'), 'old correction cannot clear the current target');
+          if (timing === 'during-current') assert.equal(one(tree, n => n.type === ScoutingFindingPicker).props.disabled, true, 'old finally cannot unlock the current request');
+          else await startCurrent();
+          current!.resolve(Response.json({ message: 'NEW_CURRENT_SAVED', ...(kind === 'CHECK' ? { fieldCheckId: 'NEW_CURRENT_CHECK' }
+            : kind === 'CORRECTION' ? { correctionId: 'new-correction', correctionKind: 'REPLACE' }
+              : kind === 'RESOLVE' ? { caseId: 'case', state: 'RESOLVED' } : { actionCode: 'TREATMENT_APPLIED' }) }));
+          await flush(); await finishRead();
+          const fresh = render(); assert.ok(JSON.stringify(fresh).includes('NEW_CURRENT_SAVED')); assert.equal(changed, 1);
+          if (kind === 'CHECK') assert.ok(q.states.some(s => s.value && typeof s.value === 'object' && 'fieldCheckId' in s.value && s.value.fieldCheckId === 'NEW_CURRENT_CHECK'));
+          if (kind === 'CORRECTION') assert.equal(q.states.some(s => s.value && typeof s.value === 'object' && 'fieldCheckId' in s.value), false);
+          if (kind === 'RESOLVE') assert.equal(nodes(fresh).some(n => n.type === ScoutingFindingPicker), false, 'current resolve still closes its details');
+          else assert.equal(one(fresh, n => n.type === ScoutingFindingPicker).props.disabled, false);
+          assert.equal(q.refs.some(ref => ref.current instanceof ScoutingPendingIntent), false, 'keyed default stays off, no intent/key created');
+        } finally { q.cleanup(); active = parent; }
+      }, 'alerts', kind === 'CORRECTION' ? 3 : 2);
+  });
+  }
+}
+
+for (const kind of ['CHECK', 'ACTION', 'CORRECTION', 'RESOLVE'] as const) for (const outcome of ['success', 'error']) {
+  test(`refresh tail ${kind}/${outcome} cannot replace a new member's completed list`, async () => {
+    await fixture(async f => {
+      const parent = active, q = harness(); let member = 'member-a', changed = 0;
+      const row = { id: 'loc', farm_id: 'farm-a', location_key: 'H:B:Z', display_location: 'CURRENT_LOCATION',
+        house_code: 'H', bed_code: 'B', zone_code: 'Z', current_state: 'FIELD_CHECK_REQUIRED', active_case_id: 'case',
+        primary_issue_code: null, issue_family: 'PEST', case_status: 'OPEN', observation_count: 1,
+        latest_humidity: null, latest_leaf_temp: null, latest_reference_temp: null, latest_ambient_temp: null,
+        latest_risk_signal: null, last_alert_reason: null, last_alert_at: null, last_observed_at: null,
+        last_field_check_at: null, last_action_at: null };
+      const render = () => { active = q; q.reset(); const tree = ScoutingQueue({ farmId: 'farm-a', mutationMemberId: member,
+        canReview: true, language: 'ko', onChanged: () => { changed++; } }); q.commit(); return tree; };
+      const pick = () => call(one(render(), n => n.type === ScoutingFindingPicker), 'onSelect', 'NO_VISIBLE_EVIDENCE');
+      const finishRead = async () => { const r = f.pending.at(-1)!; assert.equal(r.method, 'GET'); r.resolve(Response.json({ rows: [row] })); await flush(); render(); };
+      try {
+        render(); await flush(); await finishRead();
+        call(one(render(), n => typeof n.props.className === 'string' && n.props.className.startsWith('scouting-location-row')));
+        if (kind === 'CORRECTION') {
+          pick(); await flush(); f.pending.at(-1)!.resolve(Response.json({ fieldCheckId: 'seed-check' }));
+          await flush(); await finishRead(); changed = 0;
+        }
+        if (kind === 'CHECK') pick();
+        else if (kind === 'ACTION') call(one(render(), n => n.type === 'button' && n.props.children === '방제'));
+        else if (kind === 'RESOLVE') call(one(render(), n => n.type === 'button' && n.props.children === '추가 이상 없음'));
+        else call(one(one(render(), n => n.props.className === 'scouting-correction-panel'), n => n.type === 'button' && n.props.children === '특별한 이상 못 찾음'));
+        await flush(); const post = f.pending.at(-1)!; assert.equal(post.method, 'POST');
+        post.resolve(Response.json({ fieldCheckId: 'check', message: 'SAVED_BEFORE_SWITCH' })); await flush();
+        const oldRead = f.pending.at(-1)!; assert.equal(oldRead.method, 'GET');
+        member = 'member-b'; render(); await flush();
+        const newRead = f.pending.at(-1)!;
+        assert.notEqual(newRead, oldRead, 'new member must own a fresh read');
+        await finishRead(); const before = JSON.stringify(q.states), calls = f.pending.length;
+        oldRead.resolve(outcome === 'success' ? Response.json({ rows: [{ ...row, id: 'OLD_REFRESH', display_location: 'OLD_REFRESH' }] })
+          : Response.json({ error: 'OLD_REFRESH_ERROR' }, { status: 503 }));
+        await flush(); const tree = render();
+        assert.equal(JSON.stringify(q.states), before, 'late old list completion cannot mutate current state');
+        assert.equal(JSON.stringify(tree).includes('OLD_REFRESH'), false); assert.equal(changed, 0);
+        assert.equal(f.pending.length, calls); assert.ok(JSON.stringify(tree).includes('CURRENT_LOCATION'));
+      } finally { q.cleanup(); active = parent; }
+    }, 'alerts', kind === 'CORRECTION' ? 2 : 1);
+  });
+}
