@@ -157,11 +157,12 @@ export function scoutingQueueViewState({
   return 'READY';
 }
 
-export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMutations = false, mutationMemberId = '' }: {
-  farmId: string; canReview: boolean; language: Language; onChanged?: () => void; keyedMutations?: boolean; mutationMemberId?: string;
+export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMutations = false, mutationMemberId = '', readBlocked = false, readEpoch = 0 }: {
+  farmId: string; canReview: boolean; language: Language; onChanged?: () => void; keyedMutations?: boolean; mutationMemberId?: string; readBlocked?: boolean; readEpoch?: number;
 }) {
   const [storedRows, setStoredRows] = useState<ScoutingLocation[]>([]);
   const [loadedFarmId, setLoadedFarmId] = useState('');
+  const [loadedReadEpoch, setLoadedReadEpoch] = useState(readEpoch);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(farmId));
   const [loadFailure, setLoadFailure] = useState({ farmId: '', message: '' });
@@ -170,6 +171,8 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
   const [sending, setSending] = useState('');
   const [recentFieldCheck, setRecentFieldCheck] = useState<RecentFieldCheck | null>(null);
   const loadRequestId = useRef(0);
+  const readBlockedRef = useRef(readBlocked);
+  const readEpochRef = useRef(readEpoch);
   const pendingContextId = useRef(0);
   const keyedClient = useRef<ScoutingPendingIntent | null>(null);
   const [pendingIntent, setPendingIntent] = useState<PendingScoutingIntent | null>(null);
@@ -180,12 +183,13 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
     'zh-CN': ['需要确认保存结果，请先仅查询。刷新后不会自动恢复。', '使用同一键重试保存', '重新填写被拒绝的输入', '仅查询保存结果', '尚未确认结果，不能判定为失败，将保留原请求键。'],
   }[language];
   const text = copy[language];
-  const rows = scoutingRowsForFarm(storedRows, loadedFarmId, farmId);
+  const rows = useMemo(() => readBlocked || loadedReadEpoch !== readEpoch ? [] : scoutingRowsForFarm(storedRows, loadedFarmId, farmId), [readBlocked, loadedReadEpoch, readEpoch, storedRows, loadedFarmId, farmId]);
   const loadError = loadFailure.farmId === farmId ? loadFailure.message : '';
-  const viewState = scoutingQueueViewState({ farmId, loadedFarmId, loading, loadError, rowCount: rows.length });
+  const viewState = scoutingQueueViewState({ farmId, loadedFarmId: loadedReadEpoch === readEpoch ? loadedFarmId : '', loading, loadError, rowCount: rows.length });
   const selected = useMemo(() => rows.find((row) => row.id === selectedId) ?? null, [rows, selectedId]);
 
   const load = useCallback(async () => {
+    if (readBlocked || readBlockedRef.current || readEpoch !== readEpochRef.current) return;
     const requestId = ++loadRequestId.current;
     if (!farmId) {
       setStoredRows([]); setLoadedFarmId(''); setSelectedId(null);
@@ -201,7 +205,7 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
       const result = await response.json() as QueueResponse;
       if (!response.ok) throw new Error(result.error ?? text.loadError);
       if (requestId !== loadRequestId.current) return;
-      setStoredRows(result.rows); setLoadedFarmId(farmId);
+      setStoredRows(result.rows); setLoadedFarmId(farmId); setLoadedReadEpoch(readEpoch);
       setSelectedId((current) => {
         if (focus && result.rows.some((row) => row.id === focus)) return focus;
         return current && result.rows.some((row) => row.id === current) ? current : null;
@@ -211,7 +215,15 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
     } finally {
       if (requestId === loadRequestId.current) setLoading(false);
     }
-  }, [farmId, text.loadError]);
+  }, [farmId, text.loadError, readBlocked, readEpoch]);
+
+  // Only read state is revoked; the mounted pending-intent owner and its keys remain intact.
+  useLayoutEffect(() => {
+    readBlockedRef.current = readBlocked;
+    readEpochRef.current = readEpoch;
+    if (!readBlocked) return;
+    loadRequestId.current += 1;
+  }, [readBlocked, readEpoch]);
 
   useEffect(() => {
     let cancelled = false;

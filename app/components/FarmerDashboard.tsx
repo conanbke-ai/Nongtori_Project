@@ -64,7 +64,7 @@ type DashboardData = {
 
 const emptyData: DashboardData = {
   farms: [], account: {
-    authenticated: true, loginId: null, email: null, displayName: null, publicName: null, accountCode: null,
+    authenticated: true, memberId: null, loginId: null, email: null, displayName: null, publicName: null, accountCode: null,
     phone: null, phoneVerified: false,
     notificationsEnabled: false, preferredLanguage: 'ko', role: null, roleLabel: null,
     permissions: { viewRevenue: false, manageMembers: false, manageFarm: false, uploadMedia: false, reviewAlerts: false, viewHistory: false },
@@ -127,6 +127,8 @@ function sessionStatus(status: string, language: Language) {
   return labels[status] ? translate(language, labels[status]) : status;
 }
 
+class DashboardAccessDenied extends Error {}
+
 async function requestDashboard(selectedFarmId = '', alertStatus: 'OPEN' | 'DONE' = 'OPEN', alertPage = 1, pestCode = '') {
   const params = new URLSearchParams({ date: localDateKey() });
   if (selectedFarmId) params.set('farmId', selectedFarmId);
@@ -134,6 +136,7 @@ async function requestDashboard(selectedFarmId = '', alertStatus: 'OPEN' | 'DONE
   params.set('alertPage', String(alertPage));
   if (pestCode) params.set('pestCode', pestCode);
   const response = await fetch(`/api/farmer-dashboard?${params}`, { cache: 'no-store' });
+  if (response.status === 403) throw new DashboardAccessDenied('이 농장의 사용 권한을 확인할 수 없습니다. 다시 확인하거나 다른 농장을 선택해 주세요.');
   if (!response.ok) throw new Error('농장 정보를 불러오지 못했습니다.');
   return response.json() as Promise<DashboardData>;
 }
@@ -149,6 +152,10 @@ export function FarmerDashboard() {
   const [pestCode, setPestCode] = useState('');
   const dashboardRequestSequence = useRef(0);
   const historyRequestSequence = useRef(0);
+  const privateAccessDenied = useRef(false);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [privateReadEpoch, setPrivateReadEpoch] = useState(0);
+  const [recheckFarmId, setRecheckFarmId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [hasSuccessfulData, setHasSuccessfulData] = useState(false);
@@ -203,6 +210,9 @@ export function FarmerDashboard() {
   }, [screen, loading]);
 
   function apply(next: DashboardData) {
+    privateAccessDenied.current = false;
+    setAccessDenied(false);
+    setRecheckFarmId('');
     setData(next);
     setHasSuccessfulData(true);
     const storedLanguage = typeof window !== 'undefined' ? window.localStorage.getItem('farm-language') : null;
@@ -221,7 +231,20 @@ export function FarmerDashboard() {
     setLoading(false);
   }
 
-  function reload(selectedFarmId = farmId, alertStatus: 'OPEN' | 'DONE' = 'OPEN', alertPage = 1, selectedPestCode = pestCode) {
+  function denyPrivateAccess(selectedFarmId: string) {
+    privateAccessDenied.current = true;
+    setAccessDenied(true);
+    setPrivateReadEpoch(current => current + 1);
+    setRecheckFarmId(selectedFarmId);
+    historyRequestSequence.current += 1;
+    setHistory({ rows: [], total: 0, page: 1, limit: 30, pageCount: 0 });
+    setHistoryError('');
+    setHistoryLoading(false);
+  }
+
+  function reload(selectedFarmId = farmId, alertStatus: 'OPEN' | 'DONE' = 'OPEN', alertPage = 1, selectedPestCode = pestCode, explicit = false) {
+    // In-flight mutation callbacks may request a refresh, but cannot reopen a denied scope.
+    if (privateAccessDenied.current && !explicit) return;
     setLoading(true);
     setError('');
     const sequence = ++dashboardRequestSequence.current;
@@ -229,24 +252,23 @@ export function FarmerDashboard() {
       if (sequence === dashboardRequestSequence.current) apply(next);
     }).catch((caught) => {
       if (sequence !== dashboardRequestSequence.current) return;
+      if (caught instanceof DashboardAccessDenied) denyPrivateAccess(selectedFarmId);
       setError(caught instanceof Error ? caught.message : '화면을 새로고침해 주세요.');
       setLoading(false);
     });
   }
 
   useEffect(() => {
+    const sequence = ++dashboardRequestSequence.current;
     void requestDashboard().then((next) => {
-      setData(next);
-      setHasSuccessfulData(true);
-      const storedLanguage = window.localStorage.getItem('farm-language');
-      setLanguage(asLanguage(storedLanguage || next.account.preferredLanguage));
-      if (next.selectedFarm) setFarmId(next.selectedFarm.id);
-      if (next.items.length > 0) setItemId(next.items[0].id);
-      setLoading(false);
+      if (sequence === dashboardRequestSequence.current) apply(next);
     }).catch((caught) => {
+      if (sequence !== dashboardRequestSequence.current) return;
+      if (caught instanceof DashboardAccessDenied) denyPrivateAccess('');
       setError(caught instanceof Error ? caught.message : '화면을 새로고침해 주세요.');
       setLoading(false);
     });
+    return () => { dashboardRequestSequence.current += 1; historyRequestSequence.current += 1; };
   }, []);
 
   const selectedItem = data.items.find((item) => item.id === itemId) ?? data.items[0] ?? null;
@@ -255,6 +277,12 @@ export function FarmerDashboard() {
   const selectedGuides = useMemo(() => data.guides.filter((guide) => guide.crop_code === selectedItem?.crop_code && (!guide.cultivar_code || guide.cultivar_code === selectedItem?.cultivar_code)), [data.guides, selectedItem?.crop_code, selectedItem?.cultivar_code]);
   const selectedModelReady = selectedItem?.crop_code === 'STRAWBERRY' && selectedItem.cultivar_code === 'SEOLHYANG';
   const canViewRevenue = data.account.permissions.viewRevenue;
+  // A pending farm selection must not borrow the previous snapshot's actor.
+  // This is UI scope correlation only; every request still reauthorizes on the server.
+  const mutationMemberId = !accessDenied && data.account.authenticated && data.account.permissions.reviewAlerts
+    && Boolean(farmId) && data.selectedFarm?.id === farmId
+    && typeof data.account.memberId === 'string' && data.account.memberId.trim()
+    ? data.account.memberId : '';
   const effectiveFruitTab = !canViewRevenue && fruitTab === 'forecast' ? 'video' : fruitTab;
   const accountRoleName = data.account.role === 'ADMIN' ? translate(language, 'role.admin')
     : data.account.role === 'OWNER' ? translate(language, 'role.owner')
@@ -286,7 +314,7 @@ export function FarmerDashboard() {
   const selectedForecastJobs = useMemo(() => (data.forecastJobs ?? []).filter((job) => job.item_id === selectedItem?.id), [data.forecastJobs, selectedItem?.id]);
 
   async function loadHistory(page = 1) {
-    if (!farmId || !selectedItem) return;
+    if (privateAccessDenied.current || !farmId || !selectedItem) return;
     const sequence = ++historyRequestSequence.current;
     setHistoryLoading(true);
     setHistoryError('');
@@ -306,7 +334,7 @@ export function FarmerDashboard() {
   }
 
   useEffect(() => {
-    if (screen !== 'history' || !farmId || !selectedItemId) return;
+    if (accessDenied || screen !== 'history' || !farmId || !selectedItemId) return;
     let cancelled = false;
     const sequence = ++historyRequestSequence.current;
     const params = new URLSearchParams({ farmId, itemId: selectedItemId, from: dateDaysAgo(30), to: localDateKey(), page: '1', limit: '30' });
@@ -326,7 +354,7 @@ export function FarmerDashboard() {
       }
     });
     return () => { cancelled = true; };
-  }, [screen, farmId, selectedItemId]);
+  }, [accessDenied, screen, farmId, selectedItemId]);
 
   function open(next: Screen) {
     if (screen !== next) {
@@ -399,17 +427,26 @@ export function FarmerDashboard() {
     return <AuthGateway />;
   }
 
-  return (
+  return (<>
+    {accessDenied && <section className="dashboard-access-denied module-workspace" role="alert">
+      <h1>이 농장 정보를 표시할 수 없습니다.</h1>
+      <p>현재 농장의 사용 권한을 다시 확인해 주세요. 이전 기록은 표시하지 않습니다.</p>
+      <label>농장<select aria-label="다시 확인할 농장" disabled={loading || data.farms.length === 0} value={recheckFarmId || farmId} onChange={(event) => { setRecheckFarmId(event.target.value); reload(event.target.value, 'OPEN', 1, pestCode, true); }}>{data.farms.map((farm) => <option key={farm.id} value={farm.id}>{farm.name}</option>)}</select></label>
+      <button disabled={loading} onClick={() => reload(recheckFarmId || farmId, 'OPEN', 1, pestCode, true)} type="button">{loading ? '권한 확인 중' : '사용 권한 다시 확인'}</button>
+      {error && <p>{error}</p>}
+    </section>}
+    {/* Retain mounted mutation owners and their uncertain request keys; revoke display, not intent. */}
+    <div hidden={accessDenied} inert={accessDenied} data-private-dashboard="">
     <main className="farmer-app" id="page-top">
       <header className="app-topbar">
         <button className="app-brand" onClick={() => open('home')} type="button"><span aria-hidden="true" className="app-brand-mark"><Image alt="" fill priority sizes="48px" src="/nongtori-app-icon-512.png" /></span><span className="app-brand-copy"><strong>농토리 운영센터</strong><span>재배 · 수확 · 예찰을 한곳에서</span></span></button>
         <div className="app-context-selectors">
-          <label className="farm-select-wrap"><span>{translate(language, 'common.farm')}</span><select disabled={data.farms.length === 0} onChange={(event) => { setFarmId(event.target.value); setItemId(''); reload(event.target.value); }} value={farmId}>{data.farms.length === 0 && <option value="">{hasSuccessfulData ? '연결된 농장 없음' : `농장 ${unavailableSelectorState}`}</option>}{data.farms.map((farm) => <option key={farm.id} value={farm.id}>{farm.name}</option>)}</select></label>
+          <label className="farm-select-wrap"><span>{translate(language, 'common.farm')}</span><select disabled={data.farms.length === 0} onChange={(event) => { setFarmId(event.target.value); setItemId(''); reload(event.target.value, 'OPEN', 1, pestCode, true); }} value={farmId}>{data.farms.length === 0 && <option value="">{hasSuccessfulData ? '연결된 농장 없음' : `농장 ${unavailableSelectorState}`}</option>}{data.farms.map((farm) => <option key={farm.id} value={farm.id}>{farm.name}</option>)}</select></label>
           <label className="crop-select-wrap"><span>{translate(language, 'common.crop')}</span><select disabled={cropOptions.length === 0} onChange={(event) => { const nextItem = data.items.find((item) => item.crop_code === event.target.value); if (nextItem) setItemId(nextItem.id); }} value={selectedItem?.crop_code ?? ''}>{cropOptions.length === 0 && <option value="">{hasSuccessfulData ? '작물 없음' : `작물 ${unavailableSelectorState}`}</option>}{cropOptions.map((crop) => <option key={crop.code} value={crop.code}>{crop.name}</option>)}</select></label>
           <label className="item-select-wrap"><span>{translate(language, 'common.cultivar')}</span><select disabled={cultivarOptions.length === 0} onChange={(event) => setItemId(event.target.value)} value={selectedItem?.id ?? ''}>{cultivarOptions.length === 0 && <option value="">{hasSuccessfulData ? '품종 없음' : `품종 ${unavailableSelectorState}`}</option>}{cultivarOptions.map((item) => <option key={item.id} value={item.id}>{item.cultivar_name ?? item.display_name}</option>)}</select></label>
         </div>
         <label className="language-select"><span>{translate(language, 'common.language')}</span><select aria-label={translate(language, 'common.language')} onChange={(event) => changeLanguage(asLanguage(event.target.value))} value={language}>{languages.map((item) => <option key={item} value={item}>{languageNames[item]}</option>)}</select></label>
-        <button className="refresh-button" disabled={loading} onClick={() => reload()} type="button">{loading ? translate(language, 'common.loading') : translate(language, 'common.refresh')}</button>
+        <button className="refresh-button" disabled={loading} onClick={() => reload(farmId, 'OPEN', 1, pestCode, true)} type="button">{loading ? translate(language, 'common.loading') : translate(language, 'common.refresh')}</button>
         <PwaInstallButton />
         <button className="user-button" aria-label={`${accountPublicName} 계정`} onClick={() => open('account')} title={`${accountPublicName} · ${accountMeta}`} type="button"><span>{accountPublicName.slice(0, 1).toUpperCase() || '농'}</span><span className="user-button-copy"><b>{accountPublicName}</b><small>{accountMeta}</small></span></button>
       </header>
@@ -421,7 +458,7 @@ export function FarmerDashboard() {
       </aside>
 
       <div className="app-content">
-        {error && <div className="error-banner" role="alert"><div><strong>{error}</strong>{dataState === 'stale' && <span>마지막으로 불러온 정보를 표시합니다. 최신 상태가 아닐 수 있습니다.</span>}</div><button onClick={() => reload()} type="button">다시 시도</button></div>}
+        {error && <div className="error-banner" role="alert"><div><strong>{error}</strong>{dataState === 'stale' && <span>마지막으로 불러온 정보를 표시합니다. 최신 상태가 아닐 수 있습니다.</span>}</div><button onClick={() => reload(farmId, 'OPEN', 1, pestCode, true)} type="button">다시 시도</button></div>}
         {dataState === 'refreshing' && <div className="data-refresh-banner" role="status">새 정보를 확인하는 동안 마지막 조회 결과를 표시합니다.</div>}
         {hasSuccessfulData && data.membershipRequired && data.farms.length === 0 && (
           <div className="account-link-banner"><strong>계약 농장 연결 대기</strong><span>이 로그인 계정에 농장 정보가 등록되면 자동으로 표시됩니다.</span></div>
@@ -480,7 +517,7 @@ export function FarmerDashboard() {
                   {data.summary.pestBreakdown.map((target) => <button key={target.code} aria-pressed={pestCode === target.code} type="button" onClick={() => { setPestCode(target.code); reload(farmId, 'OPEN', 1, target.code); }}><strong>{pestLabel(target.code, language)}</strong><b>{target.openCount}</b><small>{pestText(language, 'recordOnly')}</small></button>)}
                 </div>
                 <div className="module-tabs"><button className={pestTab === 'status' ? 'selected' : ''} onClick={() => setPestTab('status')} type="button">{translate(language, 'alert.open')}</button><button className={pestTab === 'photo' ? 'selected' : ''} onClick={() => setPestTab('photo')} type="button">{translate(language, 'upload.photo')}</button></div>
-                {pestTab === 'status' && <PestAlertReview alerts={data.alerts} canReview={data.account.permissions.reviewAlerts} farmId={farmId} key={`${farmId}:${pestCode}`} language={language} onPageChange={(status, page) => reload(farmId, status, page)} onReviewed={() => reload(farmId, data.alertPagination.status, 1)} pagination={data.alertPagination} />}
+                {pestTab === 'status' && <PestAlertReview mutationMemberId={mutationMemberId} readBlocked={accessDenied} readEpoch={privateReadEpoch} alerts={data.alerts} canReview={data.account.permissions.reviewAlerts} farmId={farmId} key={`${farmId}:${pestCode}`} language={language} onPageChange={(status, page) => reload(farmId, status, page)} onReviewed={() => reload(farmId, data.alertPagination.status, 1)} pagination={data.alertPagination} />}
                 {pestTab === 'photo' && <div className="module-workspace"><div className="workspace-heading"><span>가지고 있는 사진 사용</span><h2>일반 잎 사진과 열화상 사진 접수</h2><p>같은 잎을 비슷한 위치에서 찍은 일반 사진과 열화상을 한 번에 올립니다. 열화상이 없어도 일반 사진만 올릴 수 있습니다.</p></div>{farmId && selectedItem ? <PestCaptureForm defaultPestCode={pestCode || 'OTHER'} key={`${farmId}:${selectedItem.id}:${pestCode}`} farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /> : <div className="screen-empty compact"><strong>농장과 품목 연결이 필요합니다.</strong></div>}</div>}
                 <p className="capture-safety"><strong>{translate(language, 'alert.safetyTitle')}</strong> {translate(language, 'alert.safetyText')}</p>
               </section>
@@ -540,5 +577,7 @@ export function FarmerDashboard() {
       </nav>
       {navigation(true)}
     </main>
+    </div>
+    </>
   );
 }

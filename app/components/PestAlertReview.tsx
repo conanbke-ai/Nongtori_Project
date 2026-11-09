@@ -87,6 +87,9 @@ export function PestAlertReview({
   pagination,
   onPageChange,
   onReviewed,
+  readBlocked = false,
+  readEpoch = 0,
+  mutationMemberId = '',
 }: {
   alerts: PestAlertRecord[];
   farmId: string;
@@ -95,6 +98,9 @@ export function PestAlertReview({
   pagination: PestAlertPagination;
   onPageChange: (status: 'OPEN' | 'DONE', page: number) => void;
   onReviewed: () => void;
+  readBlocked?: boolean;
+  readEpoch?: number;
+  mutationMemberId?: string;
 }) {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [quickNotes, setQuickNotes] = useState<Record<string, string>>({});
@@ -145,7 +151,7 @@ export function PestAlertReview({
 
   return (
     <>
-      <ScoutingQueue farmId={farmId} canReview={canReview} language={language} onChanged={onReviewed} />
+      <ScoutingQueue mutationMemberId={mutationMemberId} readBlocked={readBlocked} readEpoch={readEpoch} farmId={farmId} canReview={canReview} language={language} onChanged={onReviewed} />
       <section className="alert-review-board legacy-alert-review">
         <header className="alert-review-heading">
           <div>
