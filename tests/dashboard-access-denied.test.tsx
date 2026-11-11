@@ -115,6 +115,27 @@ test('actual dashboard 403 hides/inerts retained private tree, including chat an
   });
 });
 
+test('미종료 403 본문에서도 private scope를 차단하고 이전 조회가 복구하지 못한다', async () => {
+  await fixture(async f => {
+    f.refresh(); const oldRequest = f.pending.at(-1)!;
+    f.refresh(); let cancelled = false;
+    // 생산자는 close/error를 호출하지 않습니다. 본문 완료를 기다리는 구현이면 실패해야 합니다.
+    const response = new Response(new ReadableStream<Uint8Array>({ cancel() { cancelled = true; } }), { status: 403 });
+    try {
+      f.pending.at(-1)!.resolve(response); await flush();
+      const gate = one(f.render(), n => 'data-private-dashboard' in n.props);
+      assert.equal(gate.props.hidden, true); assert.equal(gate.props.inert, true);
+      assert.equal(response.bodyUsed, false); assert.equal(response.body?.locked, false); assert.equal(cancelled, false);
+      oldRequest.resolve(Response.json(f.snapshot('farm-b'))); await flush();
+      assert.equal(f.denied(), true, '이전 조회 성공은 명시적 권한 재확인이 아님');
+      assert.equal(response.bodyUsed, false); assert.equal(response.body?.locked, false);
+    } finally {
+      await response.body?.cancel('합성 회귀 종료');
+      assert.equal(cancelled, true);
+    }
+  });
+});
+
 test('actual dashboard transient 503 and network errors retain the normal stale scope', async () => {
   for (const error of ['503', 'network']) await fixture(async f => {
     f.refresh(); const request = f.pending.at(-1)!;
