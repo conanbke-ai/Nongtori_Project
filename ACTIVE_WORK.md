@@ -1,3 +1,11 @@
+## 권한 재확인 화면의 기존 언어 연결 — 격리 제품 후보
+
+- 기준: 부모가 확인한 #109 HEAD `35f4c00457793f27a1a4b67992bcbf298afd5463`, parent `b0080d0c951f4a47f0f27c9510af0e108a44a924`. 게시된 검사/실행기/문서7파일의 로컬 핀을 대조한 복원본이며 실행자가 원격을 직접 조회한 것은 아니다. 아래 오래된 미게시 표기는 당시 기록으로 보존한다.
+- 기존 403 차단·대기 비활성화·실패 후 재시도·현재 성공 복귀·늦은 응답 무효화는 이미 구현/검증돼 있어 다시 구현하지 않았다. README의 외국인 현장 작업자 목표와 DESIGN_GUIDE의 해결 행동 중심 오류 안내에 따라, 한국어로 고정돼 있던 복구 패널을 기존 ko/vi/th/zh-CN 언어 선택에 연결했다. 제목·안내·농장 선택 접근성 이름·대기/재시도·오류 안내와 lang 속성만 바꿨다.
+- 제품 후보는 FarmerDashboard.tsx/i18n.ts, 기존 dashboard-access-denied 회귀 및 이 상태 hunk의 고유4파일이다. 권한/API/DB·요청 sequence·저장·pending key·기능 flag·CSS는 바꾸지 않았다. 실패 안내는 패널에서만 현 언어의 재시도 행동으로 표시하며 서버 응답/권한 판정 변경이 아니다.
+- 신규 회귀는 수정 전 베트남어 선택에서도 한국어 제목이 나오는 FAIL을 재현했고, 수정 후1개 테스트의 기존4언어 조건·타입·대상 lint가 통과했다. 별도 합성 Chromium1/1은 390px 베트남어에서 차단→명시 재확인 대기/중복 억제→503 안내→현재 정상 응답 복귀를 확인했다. 합성 GET7건·쓰기/추가 자동 요청/오류0, mount/context/browser 정리 완료. 검사 준비의 합성 언어설정 PATCH로 쓰기0 단언에 걸린 중간 실패도 보존하고, 허용값을 늘리지 않고 초기 preferredLanguage 입력으로 보정했다.
+- 새 전체 workflow/빌드/CSS 검사는 반복하지 않았다. 번역문 원어민 검수·태국어/중국어 실제 브라우저·새 독립 검수는 미완료다. HTTP 완료 BLOCKED·BFCache HOLD·실제 인증/DB 미검증은 유지한다. 원본/index·기존 실패·두 CSS 후보 보존, 새 에이전트/원격 게시/PR 변경/병합/배포/운영 접근0. 근거: `/workspace/scratch/nongtori-recovery-language-ZK3AdW/`의 red/fixture 실패·formal/ui 영수증과 한국어 결과.
+
 ## Explicit dashboard 403 private-display guard — isolated, unpublished candidate
 
 - Baseline is parent-confirmed PR #109 HEAD `a3113eda97b13157b494ff4a8ad93d7718193785` / main `3547c552b12a17e050bb11160415906eb467fa42`. The prior approved no-farm 5-file change is now published with successful CI; the earlier "not yet remote" note below is historical. This separate candidate is `/workspace/scratch/nongtori-explicit403-2ll1OS`, no branch/commit/push/PR/main/DB/deploy changes.

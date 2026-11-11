@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { registerHooks } from 'node:module';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement, ReactNode } from 'react';
+import type { Language } from '../app/lib/i18n';
 
 type Props = Record<string, unknown>;
 type Element = ReactElement<Props>;
@@ -68,7 +69,7 @@ function one(tree: ReactNode, predicate: (node: Element) => boolean) { const nod
 function call(node: Element, name = 'onClick', argument?: unknown) { const fn = node.props[name]; assert.equal(typeof fn, 'function'); return (fn as (arg?: unknown) => unknown)(argument); }
 const flush = () => new Promise<void>(resolve => setImmediate(resolve));
 type Pending = { url: string; method: string; resolve: (response: Response) => void; reject: (error: Error) => void };
-async function fixture(run: (f: { render: () => Element; pending: Pending[]; snapshot: (farm?: string) => Record<string, unknown>; denied: () => boolean; refresh: () => void; h: ReturnType<typeof harness> }) => Promise<void>, screen = 'alerts', explicitPostCount = 0) {
+async function fixture(run: (f: { render: () => Element; pending: Pending[]; snapshot: (farm?: string) => Record<string, unknown>; denied: () => boolean; refresh: () => void; h: ReturnType<typeof harness> }) => Promise<void>, screen = 'alerts', explicitPostCount = 0, preferredLanguage: Language = 'ko') {
   const previousFetch = globalThis.fetch, previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window'), previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
   active = harness(); const h = active, pending: Pending[] = [];
   const location = { href: `http://synthetic.invalid/?screen=${screen}`, search: `?screen=${screen}` };
@@ -85,7 +86,7 @@ async function fixture(run: (f: { render: () => Element; pending: Pending[]; sna
   function snapshot(farm = 'farm-a') {
     const data = structuredClone(empty), farms = [{ id: 'farm-a', name: 'SYNTHETIC_A', timezone: 'Asia/Seoul' }, { id: 'farm-b', name: 'SYNTHETIC_B', timezone: 'Asia/Seoul' }];
     data.farms = farms; data.selectedFarm = farms.find(f => f.id === farm);
-    data.account = { ...(data.account as Props), memberId: farm + '-member', authenticated: true, publicName: 'SYNTHETIC_MEMBER', preferredLanguage: 'ko', role: 'OWNER', permissions: { viewHistory: true, reviewAlerts: true, viewRevenue: false } };
+    data.account = { ...(data.account as Props), memberId: farm + '-member', authenticated: true, publicName: 'SYNTHETIC_MEMBER', preferredLanguage, role: 'OWNER', permissions: { viewHistory: true, reviewAlerts: true, viewRevenue: false } };
     data.items = [{ id: farm + '-item', crop_code: 'STRAWBERRY', crop_name: '딸기', cultivar_code: 'SEOLHYANG', cultivar_name: '설향', display_name: 'SYNTHETIC_ITEM', crop_image_uri: null, crop_description: null }];
     return data;
   }
@@ -134,6 +135,36 @@ test('미종료 403 본문에서도 private scope를 차단하고 이전 조회�
       assert.equal(cancelled, true);
     }
   });
+});
+
+test('권한 복구 패널은 기존 네 언어와 대기·실패·정상 복귀를 유지한다', async () => {
+  const expected = {
+    vi: ['Không thể hiển thị thông tin nông trại này.', 'Nông trại cần kiểm tra lại', 'Kiểm tra lại quyền truy cập', 'Đang kiểm tra quyền truy cập', 'Chưa kiểm tra lại được. Hãy thử lại hoặc chọn nông trại khác.'],
+    th: ['ไม่สามารถแสดงข้อมูลฟาร์มนี้ได้', 'ฟาร์มที่ต้องการตรวจสอบอีกครั้ง', 'ตรวจสอบสิทธิ์อีกครั้ง', 'กำลังตรวจสอบสิทธิ์', 'ยังตรวจสอบไม่ได้ โปรดลองอีกครั้งหรือเลือกฟาร์มอื่น'],
+    'zh-CN': ['无法显示此农场的信息。', '要重新确认的农场', '重新确认访问权限', '正在确认访问权限', '暂时无法重新确认。请重试或选择其他农场。'],
+    ko: ['이 농장 정보를 표시할 수 없습니다.', '다시 확인할 농장', '사용 권한 다시 확인', '권한 확인 중', '다시 확인하지 못했습니다. 다시 시도하거나 다른 농장을 선택해 주세요.'],
+  };
+  for (const [language, text] of Object.entries(expected)) await fixture(async f => {
+    f.refresh(); f.pending.at(-1)!.resolve(new Response('', { status: 403 })); await flush();
+    const panel = () => one(f.render(), n => n.props.className === 'dashboard-access-denied module-workspace');
+    assert.equal(panel().props.lang, language);
+    assert.equal(one(panel(), n => n.type === 'h1').props.children, text[0]);
+    assert.equal(one(panel(), n => n.type === 'select').props['aria-label'], text[1]);
+    assert.equal(one(panel(), n => n.type === 'button').props.children, text[2]);
+    call(one(panel(), n => n.type === 'button')); await flush();
+    assert.equal(one(panel(), n => n.type === 'button').props.disabled, true);
+    assert.equal(one(panel(), n => n.type === 'select').props.disabled, true);
+    assert.equal(one(panel(), n => n.type === 'button').props.children, text[3]);
+    assert.equal(f.denied(), true);
+    f.pending.at(-1)!.resolve(new Response('', { status: 503 })); await flush();
+    assert.ok(renderToStaticMarkup(panel()).includes(text[4]));
+    assert.equal(one(panel(), n => n.type === 'button').props.disabled, false);
+    assert.equal(f.denied(), true);
+    call(one(panel(), n => n.type === 'button'));
+    const current = f.snapshot(); (current.account as Props).preferredLanguage = language;
+    f.pending.at(-1)!.resolve(Response.json(current)); await flush();
+    assert.equal(f.denied(), false, '현재 사용자의 명시적 정상 재확인으로만 복귀');
+  }, 'alerts', 0, language as Language);
 });
 
 test('actual dashboard transient 503 and network errors retain the normal stale scope', async () => {

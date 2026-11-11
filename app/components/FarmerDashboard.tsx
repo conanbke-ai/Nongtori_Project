@@ -428,12 +428,12 @@ export function FarmerDashboard() {
   }
 
   return (<>
-    {accessDenied && <section className="dashboard-access-denied module-workspace" role="alert">
-      <h1>이 농장 정보를 표시할 수 없습니다.</h1>
-      <p>현재 농장의 사용 권한을 다시 확인해 주세요. 이전 기록은 표시하지 않습니다.</p>
-      <label>농장<select aria-label="다시 확인할 농장" disabled={loading || data.farms.length === 0} value={recheckFarmId || farmId} onChange={(event) => { setRecheckFarmId(event.target.value); reload(event.target.value, 'OPEN', 1, pestCode, true); }}>{data.farms.map((farm) => <option key={farm.id} value={farm.id}>{farm.name}</option>)}</select></label>
-      <button disabled={loading} onClick={() => reload(recheckFarmId || farmId, 'OPEN', 1, pestCode, true)} type="button">{loading ? '권한 확인 중' : '사용 권한 다시 확인'}</button>
-      {error && <p>{error}</p>}
+    {accessDenied && <section className="dashboard-access-denied module-workspace" lang={language} role="alert">
+      <h1>{translate(language, 'dashboard.accessTitle')}</h1>
+      <p>{translate(language, 'dashboard.accessHelp')}</p>
+      <label>{translate(language, 'common.farm')}<select aria-label={translate(language, 'dashboard.accessFarm')} disabled={loading || data.farms.length === 0} value={recheckFarmId || farmId} onChange={(event) => { setRecheckFarmId(event.target.value); reload(event.target.value, 'OPEN', 1, pestCode, true); }}>{data.farms.map((farm) => <option key={farm.id} value={farm.id}>{farm.name}</option>)}</select></label>
+      <button disabled={loading} onClick={() => reload(recheckFarmId || farmId, 'OPEN', 1, pestCode, true)} type="button">{translate(language, loading ? 'dashboard.accessChecking' : 'dashboard.accessRetry')}</button>
+      {error && <p>{translate(language, 'dashboard.accessError')}</p>}
     </section>}
     {/* Retain mounted mutation owners and their uncertain request keys; revoke display, not intent. */}
     <div hidden={accessDenied} inert={accessDenied} data-private-dashboard="">
