@@ -124,9 +124,15 @@ test('accepted photo receipt cannot become a failed upload when the refresh call
       if(change==='item')props={...props,itemId:'item-b'};
       if(change==='scope-collision')props={...props,farmId:'farm',itemId:'a:item'};
       if(change==='unmount'){for(const effect of effects.values())effect.cleanup?.();}else render(props);
+      const sendingView=change==='unmount'?'':renderToStaticMarkup(render(props));
       complete(Response.json(change==='uncertain'||change==='rejected'?{error:'PRIVATE_ERROR'}:receipt(),{status:change==='uncertain'?503:change==='rejected'?422:201}));
       await pending;
       const same=change==='none'||change==='uncertain'||change==='rejected';
+      if(change!=='unmount')for(const [tag,name]of [['select','pestCode'],['input','rgbImage'],['input','thermalImage']]){
+        const control=sendingView.match(new RegExp('<'+tag+'[^>]*name="'+name+'"[^>]*>'))?.[0];
+        assert.ok(control,'선택 컨트롤이 유지돼야 함: '+name);
+        assert.equal(control.includes('disabled=""'),same,'전송 중 같은 입력만 잠금: '+change+'/'+name);
+      }
       assert.equal(refreshes,change==='none'?1:0);assert.equal(resets,change==='none'?1:0);assert.equal(calls,1);
       if(change==='uncertain'){
         const raced=firstTree.props.onSubmit(event);
@@ -135,6 +141,10 @@ test('accepted photo receipt cannot become a failed upload when the refresh call
       }
       if(change!=='unmount'){
         const nextTree=render(props),view=renderToStaticMarkup(nextTree);
+        for(const [tag,name]of [['select','pestCode'],['input','rgbImage'],['input','thermalImage']]){
+          const control=view.match(new RegExp('<'+tag+'[^>]*name="'+name+'"[^>]*>'))?.[0];
+          assert.ok(control);assert.equal(control.includes('disabled=""'),false,'응답 뒤 입력 잠금 해제: '+change+'/'+name);
+        }
         assert.equal(view.includes('PRIVATE_ERROR'),false);
         if(!same)assert.equal(view.includes('AI 판독 대기'),false,'foreign-scope result must not appear');
         if(change==='uncertain'){

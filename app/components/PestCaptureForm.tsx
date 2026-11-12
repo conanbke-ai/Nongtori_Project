@@ -42,10 +42,10 @@ export function PestCaptureForm({ farmId, itemId, language, onUploaded, defaultP
 
   return (
     <form className="mite-capture-form" onSubmit={submit}>
-      <label><span>{pestText(language, 'target')}</span><select name="pestCode" defaultValue={defaultPestCode} required>{pestTargets.map((target) => <option value={target.code} key={target.code}>{pestLabel(target.code, language)}</option>)}</select></label>
+      <label><span>{pestText(language, 'target')}</span><select name="pestCode" defaultValue={defaultPestCode} disabled={current.kind === 'sending'} required>{pestTargets.map((target) => <option value={target.code} key={target.code}>{pestLabel(target.code, language)}</option>)}</select></label>
       <p>{pestText(language, 'unknownHelp')} {pestText(language, 'scope')}</p>
-      <label><span>{translate(language, 'upload.rgb')} <b>{translate(language, 'upload.required')}</b></span><input accept="image/*" capture="environment" name="rgbImage" required type="file" /></label>
-      <label><span>{translate(language, 'upload.thermal')} <small>{translate(language, 'common.optional')}</small></span><input accept="image/*" name="thermalImage" type="file" /></label>
+      <label><span>{translate(language, 'upload.rgb')} <b>{translate(language, 'upload.required')}</b></span><input accept="image/*" capture="environment" disabled={current.kind === 'sending'} name="rgbImage" required type="file" /></label>
+      <label><span>{translate(language, 'upload.thermal')} <small>{translate(language, 'common.optional')}</small></span><input accept="image/*" disabled={current.kind === 'sending'} name="thermalImage" type="file" /></label>
       <p>{translate(language, 'upload.photoHelp')}</p>
       <button disabled={!farmId || current.kind === 'sending' || current.kind === 'uncertain'} type="submit">{current.kind === 'sending' ? translate(language, 'common.loading') : translate(language, 'upload.submit')}</button>
       {current.kind === 'sending' && <div className="upload-status sending" role="status">{translate(language, 'upload.photoSending')}</div>}
