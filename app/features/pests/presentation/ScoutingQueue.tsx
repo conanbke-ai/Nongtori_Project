@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { localeForLanguage, type Language } from '@/app/lib/i18n';
 import { ScoutingPendingIntent, type PendingScoutingIntent } from './scouting-pending-intent';
+import { ScoutingHistory } from './ScoutingHistory';
+import { ScoutingFindingPicker } from './ScoutingFindingPicker';
 
 export type ScoutingLocation = {
   id: string;
@@ -155,19 +157,28 @@ export function scoutingQueueViewState({
   return 'READY';
 }
 
-export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMutations = false, mutationMemberId = '' }: {
-  farmId: string; canReview: boolean; language: Language; onChanged?: () => void; keyedMutations?: boolean; mutationMemberId?: string;
+export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMutations = false, mutationMemberId = '', readBlocked = false, readEpoch = 0 }: {
+  farmId: string; canReview: boolean; language: Language; onChanged?: () => void; keyedMutations?: boolean; mutationMemberId?: string; readBlocked?: boolean; readEpoch?: number;
 }) {
   const [storedRows, setStoredRows] = useState<ScoutingLocation[]>([]);
   const [loadedFarmId, setLoadedFarmId] = useState('');
+  const [loadedReadEpoch, setLoadedReadEpoch] = useState(readEpoch);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(farmId));
   const [loadFailure, setLoadFailure] = useState({ farmId: '', message: '' });
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [sending, setSending] = useState('');
+  const sendingScope = JSON.stringify([farmId, mutationMemberId, canReview, keyedMutations]);
+  const [sendingState, setSendingState] = useState({ scope: sendingScope, value: '' });
+  // Adjust only local busy presentation when props change, not the pending intent.
+  // Clearing the stale scope also prevents an A -> B -> A roundtrip reviving its lock.
+  if (sendingState.scope !== sendingScope) setSendingState({ scope: sendingScope, value: '' });
+  const sending = sendingState.scope === sendingScope ? sendingState.value : '';
+  function setSending(value: string) { setSendingState(current => current.scope === sendingScope ? { scope: sendingScope, value } : current); }
   const [recentFieldCheck, setRecentFieldCheck] = useState<RecentFieldCheck | null>(null);
   const loadRequestId = useRef(0);
+  const readBlockedRef = useRef(readBlocked);
+  const readEpochRef = useRef(readEpoch);
   const pendingContextId = useRef(0);
   const keyedClient = useRef<ScoutingPendingIntent | null>(null);
   const [pendingIntent, setPendingIntent] = useState<PendingScoutingIntent | null>(null);
@@ -178,12 +189,13 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
     'zh-CN': ['需要确认保存结果，请先仅查询。刷新后不会自动恢复。', '使用同一键重试保存', '重新填写被拒绝的输入', '仅查询保存结果', '尚未确认结果，不能判定为失败，将保留原请求键。'],
   }[language];
   const text = copy[language];
-  const rows = scoutingRowsForFarm(storedRows, loadedFarmId, farmId);
+  const rows = useMemo(() => readBlocked || loadedReadEpoch !== readEpoch ? [] : scoutingRowsForFarm(storedRows, loadedFarmId, farmId), [readBlocked, loadedReadEpoch, readEpoch, storedRows, loadedFarmId, farmId]);
   const loadError = loadFailure.farmId === farmId ? loadFailure.message : '';
-  const viewState = scoutingQueueViewState({ farmId, loadedFarmId, loading, loadError, rowCount: rows.length });
+  const viewState = scoutingQueueViewState({ farmId, loadedFarmId: loadedReadEpoch === readEpoch ? loadedFarmId : '', loading, loadError, rowCount: rows.length });
   const selected = useMemo(() => rows.find((row) => row.id === selectedId) ?? null, [rows, selectedId]);
 
   const load = useCallback(async () => {
+    if (readBlocked || readBlockedRef.current || readEpoch !== readEpochRef.current) return;
     const requestId = ++loadRequestId.current;
     if (!farmId) {
       setStoredRows([]); setLoadedFarmId(''); setSelectedId(null);
@@ -199,7 +211,7 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
       const result = await response.json() as QueueResponse;
       if (!response.ok) throw new Error(result.error ?? text.loadError);
       if (requestId !== loadRequestId.current) return;
-      setStoredRows(result.rows); setLoadedFarmId(farmId);
+      setStoredRows(result.rows); setLoadedFarmId(farmId); setLoadedReadEpoch(readEpoch);
       setSelectedId((current) => {
         if (focus && result.rows.some((row) => row.id === focus)) return focus;
         return current && result.rows.some((row) => row.id === current) ? current : null;
@@ -209,18 +221,27 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
     } finally {
       if (requestId === loadRequestId.current) setLoading(false);
     }
-  }, [farmId, text.loadError]);
+  }, [farmId, text.loadError, readBlocked, readEpoch]);
+
+  // Only read state is revoked; the mounted pending-intent owner and its keys remain intact.
+  useLayoutEffect(() => {
+    readBlockedRef.current = readBlocked;
+    readEpochRef.current = readEpoch;
+    if (!readBlocked) return;
+    loadRequestId.current += 1;
+  }, [readBlocked, readEpoch]);
 
   useEffect(() => {
     let cancelled = false;
     void Promise.resolve().then(async () => { if (!cancelled) await load(); });
     return () => { cancelled = true; loadRequestId.current += 1; };
-  }, [load]);
+  }, [load, mutationMemberId]);
 
   // Invalidate at commit, before passive effects or a previous promise resumes.
   useLayoutEffect(() => {
     pendingContextId.current += 1;
-    return () => { pendingContextId.current += 1; };
+    loadRequestId.current += 1;
+    return () => { pendingContextId.current += 1; loadRequestId.current += 1; };
   }, [farmId, mutationMemberId, canReview, keyedMutations]);
 
   async function post(path: string, body: Record<string, unknown>) {
@@ -260,7 +281,7 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
       if (result.state === 'COMMITTED') await applyPendingResult(result.result, body, contextId);
       else setMessage(pendingCopy[4]);
     } catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : pendingCopy[4]); }
-    finally { setPendingIntent(keyedClient.current.snapshot()); setSending(''); }
+    finally { setPendingIntent(keyedClient.current.snapshot()); if (contextId === pendingContextId.current) setSending(''); }
   }
 
   async function retryPending() {
@@ -273,44 +294,58 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
       const result = await post(pendingIntent.path, body);
       await applyPendingResult(result, body, contextId);
     } catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : text.saveError); }
-    finally { setSending(''); }
+    finally { if (contextId === pendingContextId.current) setSending(''); }
   }
 
   async function submitFieldCheck(row: ScoutingLocation, code: string) {
+    const contextId = pendingContextId.current;
     setSending(`${row.id}:${code}`); setMessage(''); setError('');
     try {
       const result = await post('/api/scouting-field-checks', { farmId, locationStateId: row.id, evidenceCode: code });
+      if (contextId !== pendingContextId.current) return;
       if (result.fieldCheckId) setRecentFieldCheck({ fieldCheckId: result.fieldCheckId, label: locationLabel(row), farmId });
-      setMessage(result.message ?? text.saved); await load(); onChanged?.();
-    } catch (caught) { setError(caught instanceof Error ? caught.message : text.saveError); }
-    finally { setSending(''); }
+      setMessage(result.message ?? text.saved); await load(); if (contextId === pendingContextId.current) onChanged?.();
+    } catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : text.saveError); }
+    finally { if (contextId === pendingContextId.current) setSending(''); }
   }
 
   async function submitAction(row: ScoutingLocation, code: string) {
+    const contextId = pendingContextId.current;
     setSending(`${row.id}:${code}`); setMessage(''); setError('');
-    try { const result = await post('/api/scouting-actions', { farmId, locationStateId: row.id, actionCode: code }); setMessage(result.message ?? text.saved); await load(); onChanged?.(); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : text.saveError); }
-    finally { setSending(''); }
+    try {
+      const result = await post('/api/scouting-actions', { farmId, locationStateId: row.id, actionCode: code });
+      if (contextId !== pendingContextId.current) return;
+      setMessage(result.message ?? text.saved); await load(); if (contextId === pendingContextId.current) onChanged?.();
+    }
+    catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : text.saveError); }
+    finally { if (contextId === pendingContextId.current) setSending(''); }
   }
 
   async function correctRecent(code: string | null) {
     if (!recentFieldCheck || recentFieldCheck.farmId !== farmId) return;
+    const contextId = pendingContextId.current;
     setSending(`correction:${recentFieldCheck.fieldCheckId}`); setMessage(''); setError('');
     try {
       const result = await post('/api/scouting-field-check-corrections', {
         farmId, fieldCheckId: recentFieldCheck.fieldCheckId,
         correctionKind: code ? 'REPLACE' : 'VOID', replacementEvidenceCode: code, reasonCode: 'MISCLICK',
       });
-      setMessage(result.message ?? text.saved); setRecentFieldCheck(null); await load(); onChanged?.();
-    } catch (caught) { setError(caught instanceof Error ? caught.message : text.saveError); }
-    finally { setSending(''); }
+      if (contextId !== pendingContextId.current) return;
+      setMessage(result.message ?? text.saved); setRecentFieldCheck(null); await load(); if (contextId === pendingContextId.current) onChanged?.();
+    } catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : text.saveError); }
+    finally { if (contextId === pendingContextId.current) setSending(''); }
   }
 
   async function resolve(row: ScoutingLocation, reasonCode: string) {
+    const contextId = pendingContextId.current;
     setSending(`resolve:${row.id}`); setMessage(''); setError('');
-    try { const result = await post('/api/scouting-resolve', { farmId, locationStateId: row.id, reasonCode }); setMessage(result.message ?? text.saved); closeDetail(); await load(); onChanged?.(); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : text.saveError); }
-    finally { setSending(''); }
+    try {
+      const result = await post('/api/scouting-resolve', { farmId, locationStateId: row.id, reasonCode });
+      if (contextId !== pendingContextId.current) return;
+      setMessage(result.message ?? text.saved); closeDetail(); await load(); if (contextId === pendingContextId.current) onChanged?.();
+    }
+    catch (caught) { if (contextId === pendingContextId.current) setError(caught instanceof Error ? caught.message : text.saveError); }
+    finally { if (contextId === pendingContextId.current) setSending(''); }
   }
 
   function closeDetail() {
@@ -369,8 +404,16 @@ export function ScoutingQueue({ farmId, canReview, language, onChanged, keyedMut
               <span>{text.recentAction} <b>{formatTime(selected.last_action_at, language)}</b></span>
             </div>
 
+            <ScoutingHistory key={JSON.stringify([farmId, selected.id])} farmId={farmId} locationId={selected.id} language={language} labelForCode={(code) => {
+              const choice = [...evidenceOptions, ...actionOptions, ...resolveOptions].find(option => option.code === code) ?? stateLabels[code] ?? reasonLabels[code];
+              return choice ? localized(choice, language) : null;
+            }} />
+
             {canReview && <div className="scouting-detail-actions">
-              <details><summary>{text.fieldCheck}</summary><div className="scouting-choice-grid">{evidenceOptions.map((option) => <button disabled={Boolean(sending)} key={option.code} onClick={() => void submitFieldCheck(selected, option.code)} type="button">{localized(option, language)}</button>)}</div></details>
+              <details><summary>{text.fieldCheck}</summary><ScoutingFindingPicker key={JSON.stringify([farmId, selected.id])}
+                scope={JSON.stringify([farmId, selected.id])} language={language} disabled={Boolean(sending)}
+                options={evidenceOptions.map(option => ({ code: option.code, label: localized(option, language) }))}
+                onSelect={code => void submitFieldCheck(selected, code)} /></details>
               <details><summary>{text.action}</summary><div className="scouting-choice-grid compact">{actionOptions.map((option) => <button disabled={Boolean(sending)} key={option.code} onClick={() => void submitAction(selected, option.code)} type="button">{localized(option, language)}</button>)}</div></details>
               <details className="secondary"><summary>{text.resolve}</summary><div className="scouting-choice-grid compact">{resolveOptions.map((option) => <button disabled={Boolean(sending)} key={option.code} onClick={() => void resolve(selected, option.code)} type="button">{localized(option, language)}</button>)}</div></details>
             </div>}

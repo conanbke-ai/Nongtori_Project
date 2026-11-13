@@ -24,7 +24,7 @@ import { RevenueForecast, type ForecastJobRecord, type RevenueForecastRecord } f
 import { VideoUploadForm } from './VideoUploadForm';
 import { asLanguage, languageNames, languages, localeForLanguage, translate, type Language } from '@/app/lib/i18n';
 import { dashboardScreenFromSearch, writeDashboardScreen, type DashboardScreen } from '@/app/lib/dashboard-navigation';
-import { dashboardDataState } from '@/app/lib/dashboard-data-state';
+import { dashboardDataState, dashboardSelection } from '@/app/lib/dashboard-data-state';
 
 type Screen = DashboardScreen;
 type Farm = { id: string; name: string; timezone: string };
@@ -64,7 +64,7 @@ type DashboardData = {
 
 const emptyData: DashboardData = {
   farms: [], account: {
-    authenticated: true, loginId: null, email: null, displayName: null, publicName: null, accountCode: null,
+    authenticated: true, memberId: null, loginId: null, email: null, displayName: null, publicName: null, accountCode: null,
     phone: null, phoneVerified: false,
     notificationsEnabled: false, preferredLanguage: 'ko', role: null, roleLabel: null,
     permissions: { viewRevenue: false, manageMembers: false, manageFarm: false, uploadMedia: false, reviewAlerts: false, viewHistory: false },
@@ -127,6 +127,8 @@ function sessionStatus(status: string, language: Language) {
   return labels[status] ? translate(language, labels[status]) : status;
 }
 
+class DashboardAccessDenied extends Error {}
+
 async function requestDashboard(selectedFarmId = '', alertStatus: 'OPEN' | 'DONE' = 'OPEN', alertPage = 1, pestCode = '') {
   const params = new URLSearchParams({ date: localDateKey() });
   if (selectedFarmId) params.set('farmId', selectedFarmId);
@@ -134,6 +136,7 @@ async function requestDashboard(selectedFarmId = '', alertStatus: 'OPEN' | 'DONE
   params.set('alertPage', String(alertPage));
   if (pestCode) params.set('pestCode', pestCode);
   const response = await fetch(`/api/farmer-dashboard?${params}`, { cache: 'no-store' });
+  if (response.status === 403) throw new DashboardAccessDenied('이 농장의 사용 권한을 확인할 수 없습니다. 다시 확인하거나 다른 농장을 선택해 주세요.');
   if (!response.ok) throw new Error('농장 정보를 불러오지 못했습니다.');
   return response.json() as Promise<DashboardData>;
 }
@@ -148,6 +151,11 @@ export function FarmerDashboard() {
   const [managementTab, setManagementTab] = useState<'overview' | 'harvest'>('overview');
   const [pestCode, setPestCode] = useState('');
   const dashboardRequestSequence = useRef(0);
+  const historyRequestSequence = useRef(0);
+  const privateAccessDenied = useRef(false);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [privateReadEpoch, setPrivateReadEpoch] = useState(0);
+  const [recheckFarmId, setRecheckFarmId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [hasSuccessfulData, setHasSuccessfulData] = useState(false);
@@ -202,16 +210,41 @@ export function FarmerDashboard() {
   }, [screen, loading]);
 
   function apply(next: DashboardData) {
+    privateAccessDenied.current = false;
+    setAccessDenied(false);
+    setRecheckFarmId('');
     setData(next);
     setHasSuccessfulData(true);
     const storedLanguage = typeof window !== 'undefined' ? window.localStorage.getItem('farm-language') : null;
     setLanguage(asLanguage(storedLanguage || next.account.preferredLanguage));
-    if (next.selectedFarm) setFarmId(next.selectedFarm.id);
-    if (next.items.length > 0) setItemId((current) => next.items.some((item) => item.id === current) ? current : next.items[0].id);
+    const nextFarmId = next.selectedFarm?.id ?? '';
+    setFarmId(nextFarmId);
+    setItemId((current) => dashboardSelection({ farmId: nextFarmId, itemIds: next.items.map(item => item.id), currentItemId: current }).itemId);
+    if (!nextFarmId) {
+      // A confirmed absent farm ends its private scope; a failed refresh does not.
+      historyRequestSequence.current += 1;
+      setHistory({ rows: [], total: 0, page: 1, limit: 30, pageCount: 0 });
+      setHistoryError('');
+      setHistoryLoading(false);
+      setChatOpen(false);
+    }
     setLoading(false);
   }
 
-  function reload(selectedFarmId = farmId, alertStatus: 'OPEN' | 'DONE' = 'OPEN', alertPage = 1, selectedPestCode = pestCode) {
+  function denyPrivateAccess(selectedFarmId: string) {
+    privateAccessDenied.current = true;
+    setAccessDenied(true);
+    setPrivateReadEpoch(current => current + 1);
+    setRecheckFarmId(selectedFarmId);
+    historyRequestSequence.current += 1;
+    setHistory({ rows: [], total: 0, page: 1, limit: 30, pageCount: 0 });
+    setHistoryError('');
+    setHistoryLoading(false);
+  }
+
+  function reload(selectedFarmId = farmId, alertStatus: 'OPEN' | 'DONE' = 'OPEN', alertPage = 1, selectedPestCode = pestCode, explicit = false) {
+    // In-flight mutation callbacks may request a refresh, but cannot reopen a denied scope.
+    if (privateAccessDenied.current && !explicit) return;
     setLoading(true);
     setError('');
     const sequence = ++dashboardRequestSequence.current;
@@ -219,24 +252,23 @@ export function FarmerDashboard() {
       if (sequence === dashboardRequestSequence.current) apply(next);
     }).catch((caught) => {
       if (sequence !== dashboardRequestSequence.current) return;
+      if (caught instanceof DashboardAccessDenied) denyPrivateAccess(selectedFarmId);
       setError(caught instanceof Error ? caught.message : '화면을 새로고침해 주세요.');
       setLoading(false);
     });
   }
 
   useEffect(() => {
+    const sequence = ++dashboardRequestSequence.current;
     void requestDashboard().then((next) => {
-      setData(next);
-      setHasSuccessfulData(true);
-      const storedLanguage = window.localStorage.getItem('farm-language');
-      setLanguage(asLanguage(storedLanguage || next.account.preferredLanguage));
-      if (next.selectedFarm) setFarmId(next.selectedFarm.id);
-      if (next.items.length > 0) setItemId(next.items[0].id);
-      setLoading(false);
+      if (sequence === dashboardRequestSequence.current) apply(next);
     }).catch((caught) => {
+      if (sequence !== dashboardRequestSequence.current) return;
+      if (caught instanceof DashboardAccessDenied) denyPrivateAccess('');
       setError(caught instanceof Error ? caught.message : '화면을 새로고침해 주세요.');
       setLoading(false);
     });
+    return () => { dashboardRequestSequence.current += 1; historyRequestSequence.current += 1; };
   }, []);
 
   const selectedItem = data.items.find((item) => item.id === itemId) ?? data.items[0] ?? null;
@@ -245,6 +277,12 @@ export function FarmerDashboard() {
   const selectedGuides = useMemo(() => data.guides.filter((guide) => guide.crop_code === selectedItem?.crop_code && (!guide.cultivar_code || guide.cultivar_code === selectedItem?.cultivar_code)), [data.guides, selectedItem?.crop_code, selectedItem?.cultivar_code]);
   const selectedModelReady = selectedItem?.crop_code === 'STRAWBERRY' && selectedItem.cultivar_code === 'SEOLHYANG';
   const canViewRevenue = data.account.permissions.viewRevenue;
+  // A pending farm selection must not borrow the previous snapshot's actor.
+  // This is UI scope correlation only; every request still reauthorizes on the server.
+  const mutationMemberId = !accessDenied && data.account.authenticated && data.account.permissions.reviewAlerts
+    && Boolean(farmId) && data.selectedFarm?.id === farmId
+    && typeof data.account.memberId === 'string' && data.account.memberId.trim()
+    ? data.account.memberId : '';
   const effectiveFruitTab = !canViewRevenue && fruitTab === 'forecast' ? 'video' : fruitTab;
   const accountRoleName = data.account.role === 'ADMIN' ? translate(language, 'role.admin')
     : data.account.role === 'OWNER' ? translate(language, 'role.owner')
@@ -276,7 +314,8 @@ export function FarmerDashboard() {
   const selectedForecastJobs = useMemo(() => (data.forecastJobs ?? []).filter((job) => job.item_id === selectedItem?.id), [data.forecastJobs, selectedItem?.id]);
 
   async function loadHistory(page = 1) {
-    if (!farmId || !selectedItem) return;
+    if (privateAccessDenied.current || !farmId || !selectedItem) return;
+    const sequence = ++historyRequestSequence.current;
     setHistoryLoading(true);
     setHistoryError('');
     const params = new URLSearchParams({ farmId, itemId: selectedItem.id, from: historyFrom, to: historyTo, page: String(page), limit: '30' });
@@ -286,35 +325,36 @@ export function FarmerDashboard() {
       const response = await fetch(`/api/operation-history?${params}`, { cache: 'no-store' });
       const result = await response.json() as HistoryResponse & { error?: string };
       if (!response.ok) throw new Error(result.error ?? '판독 이력을 불러오지 못했습니다.');
-      setHistory(result);
+      if (sequence === historyRequestSequence.current) setHistory(result);
     } catch (caught) {
-      setHistoryError(caught instanceof Error ? caught.message : '판독 이력을 불러오지 못했습니다.');
+      if (sequence === historyRequestSequence.current) setHistoryError(caught instanceof Error ? caught.message : '판독 이력을 불러오지 못했습니다.');
     } finally {
-      setHistoryLoading(false);
+      if (sequence === historyRequestSequence.current) setHistoryLoading(false);
     }
   }
 
   useEffect(() => {
-    if (screen !== 'history' || !farmId || !selectedItemId) return;
+    if (accessDenied || screen !== 'history' || !farmId || !selectedItemId) return;
     let cancelled = false;
+    const sequence = ++historyRequestSequence.current;
     const params = new URLSearchParams({ farmId, itemId: selectedItemId, from: dateDaysAgo(30), to: localDateKey(), page: '1', limit: '30' });
     void Promise.resolve().then(async () => {
-      if (cancelled) return;
+      if (cancelled || sequence !== historyRequestSequence.current) return;
       setHistoryLoading(true);
       setHistoryError('');
       try {
         const response = await fetch(`/api/operation-history?${params}`, { cache: 'no-store' });
         const result = await response.json() as HistoryResponse & { error?: string };
         if (!response.ok) throw new Error(result.error ?? '판독 이력을 불러오지 못했습니다.');
-        if (!cancelled) setHistory(result);
+        if (!cancelled && sequence === historyRequestSequence.current) setHistory(result);
       } catch (caught) {
-        if (!cancelled) setHistoryError(caught instanceof Error ? caught.message : '판독 이력을 불러오지 못했습니다.');
+        if (!cancelled && sequence === historyRequestSequence.current) setHistoryError(caught instanceof Error ? caught.message : '판독 이력을 불러오지 못했습니다.');
       } finally {
-        if (!cancelled) setHistoryLoading(false);
+        if (!cancelled && sequence === historyRequestSequence.current) setHistoryLoading(false);
       }
     });
     return () => { cancelled = true; };
-  }, [screen, farmId, selectedItemId]);
+  }, [accessDenied, screen, farmId, selectedItemId]);
 
   function open(next: Screen) {
     if (screen !== next) {
@@ -387,17 +427,26 @@ export function FarmerDashboard() {
     return <AuthGateway />;
   }
 
-  return (
+  return (<>
+    {accessDenied && <section className="dashboard-access-denied module-workspace" lang={language} role="alert">
+      <h1>{translate(language, 'dashboard.accessTitle')}</h1>
+      <p>{translate(language, 'dashboard.accessHelp')}</p>
+      <label>{translate(language, 'common.farm')}<select aria-label={translate(language, 'dashboard.accessFarm')} disabled={loading || data.farms.length === 0} value={recheckFarmId || farmId} onChange={(event) => { setRecheckFarmId(event.target.value); reload(event.target.value, 'OPEN', 1, pestCode, true); }}>{data.farms.map((farm) => <option key={farm.id} value={farm.id}>{farm.name}</option>)}</select></label>
+      <button disabled={loading} onClick={() => reload(recheckFarmId || farmId, 'OPEN', 1, pestCode, true)} type="button">{translate(language, loading ? 'dashboard.accessChecking' : 'dashboard.accessRetry')}</button>
+      {error && <p>{translate(language, 'dashboard.accessError')}</p>}
+    </section>}
+    {/* Retain mounted mutation owners and their uncertain request keys; revoke display, not intent. */}
+    <div hidden={accessDenied} inert={accessDenied} data-private-dashboard="">
     <main className="farmer-app" id="page-top">
       <header className="app-topbar">
         <button className="app-brand" onClick={() => open('home')} type="button"><span aria-hidden="true" className="app-brand-mark"><Image alt="" fill priority sizes="48px" src="/nongtori-app-icon-512.png" /></span><span className="app-brand-copy"><strong>농토리 운영센터</strong><span>재배 · 수확 · 예찰을 한곳에서</span></span></button>
         <div className="app-context-selectors">
-          <label className="farm-select-wrap"><span>{translate(language, 'common.farm')}</span><select disabled={data.farms.length === 0} onChange={(event) => { setFarmId(event.target.value); setItemId(''); reload(event.target.value); }} value={farmId}>{data.farms.length === 0 && <option value="">{hasSuccessfulData ? '연결된 농장 없음' : `농장 ${unavailableSelectorState}`}</option>}{data.farms.map((farm) => <option key={farm.id} value={farm.id}>{farm.name}</option>)}</select></label>
+          <label className="farm-select-wrap"><span>{translate(language, 'common.farm')}</span><select disabled={data.farms.length === 0} onChange={(event) => { setFarmId(event.target.value); setItemId(''); reload(event.target.value, 'OPEN', 1, pestCode, true); }} value={farmId}>{data.farms.length === 0 && <option value="">{hasSuccessfulData ? '연결된 농장 없음' : `농장 ${unavailableSelectorState}`}</option>}{data.farms.map((farm) => <option key={farm.id} value={farm.id}>{farm.name}</option>)}</select></label>
           <label className="crop-select-wrap"><span>{translate(language, 'common.crop')}</span><select disabled={cropOptions.length === 0} onChange={(event) => { const nextItem = data.items.find((item) => item.crop_code === event.target.value); if (nextItem) setItemId(nextItem.id); }} value={selectedItem?.crop_code ?? ''}>{cropOptions.length === 0 && <option value="">{hasSuccessfulData ? '작물 없음' : `작물 ${unavailableSelectorState}`}</option>}{cropOptions.map((crop) => <option key={crop.code} value={crop.code}>{crop.name}</option>)}</select></label>
           <label className="item-select-wrap"><span>{translate(language, 'common.cultivar')}</span><select disabled={cultivarOptions.length === 0} onChange={(event) => setItemId(event.target.value)} value={selectedItem?.id ?? ''}>{cultivarOptions.length === 0 && <option value="">{hasSuccessfulData ? '품종 없음' : `품종 ${unavailableSelectorState}`}</option>}{cultivarOptions.map((item) => <option key={item.id} value={item.id}>{item.cultivar_name ?? item.display_name}</option>)}</select></label>
         </div>
         <label className="language-select"><span>{translate(language, 'common.language')}</span><select aria-label={translate(language, 'common.language')} onChange={(event) => changeLanguage(asLanguage(event.target.value))} value={language}>{languages.map((item) => <option key={item} value={item}>{languageNames[item]}</option>)}</select></label>
-        <button className="refresh-button" disabled={loading} onClick={() => reload()} type="button">{loading ? translate(language, 'common.loading') : translate(language, 'common.refresh')}</button>
+        <button className="refresh-button" disabled={loading} onClick={() => reload(farmId, 'OPEN', 1, pestCode, true)} type="button">{loading ? translate(language, 'common.loading') : translate(language, 'common.refresh')}</button>
         <PwaInstallButton />
         <button className="user-button" aria-label={`${accountPublicName} 계정`} onClick={() => open('account')} title={`${accountPublicName} · ${accountMeta}`} type="button"><span>{accountPublicName.slice(0, 1).toUpperCase() || '농'}</span><span className="user-button-copy"><b>{accountPublicName}</b><small>{accountMeta}</small></span></button>
       </header>
@@ -409,7 +458,7 @@ export function FarmerDashboard() {
       </aside>
 
       <div className="app-content">
-        {error && <div className="error-banner" role="alert"><div><strong>{error}</strong>{dataState === 'stale' && <span>마지막으로 불러온 정보를 표시합니다. 최신 상태가 아닐 수 있습니다.</span>}</div><button onClick={() => reload()} type="button">다시 시도</button></div>}
+        {error && <div className="error-banner" role="alert"><div><strong>{error}</strong>{dataState === 'stale' && <span>마지막으로 불러온 정보를 표시합니다. 최신 상태가 아닐 수 있습니다.</span>}</div><button onClick={() => reload(farmId, 'OPEN', 1, pestCode, true)} type="button">다시 시도</button></div>}
         {dataState === 'refreshing' && <div className="data-refresh-banner" role="status">새 정보를 확인하는 동안 마지막 조회 결과를 표시합니다.</div>}
         {hasSuccessfulData && data.membershipRequired && data.farms.length === 0 && (
           <div className="account-link-banner"><strong>계약 농장 연결 대기</strong><span>이 로그인 계정에 농장 정보가 등록되면 자동으로 표시됩니다.</span></div>
@@ -468,8 +517,8 @@ export function FarmerDashboard() {
                   {data.summary.pestBreakdown.map((target) => <button key={target.code} aria-pressed={pestCode === target.code} type="button" onClick={() => { setPestCode(target.code); reload(farmId, 'OPEN', 1, target.code); }}><strong>{pestLabel(target.code, language)}</strong><b>{target.openCount}</b><small>{pestText(language, 'recordOnly')}</small></button>)}
                 </div>
                 <div className="module-tabs"><button className={pestTab === 'status' ? 'selected' : ''} onClick={() => setPestTab('status')} type="button">{translate(language, 'alert.open')}</button><button className={pestTab === 'photo' ? 'selected' : ''} onClick={() => setPestTab('photo')} type="button">{translate(language, 'upload.photo')}</button></div>
-                {pestTab === 'status' && <PestAlertReview alerts={data.alerts} canReview={data.account.permissions.reviewAlerts} farmId={farmId} key={`${farmId}:${pestCode}`} language={language} onPageChange={(status, page) => reload(farmId, status, page)} onReviewed={() => reload(farmId, data.alertPagination.status, 1)} pagination={data.alertPagination} />}
-                {pestTab === 'photo' && <div className="module-workspace"><div className="workspace-heading"><span>가지고 있는 사진 사용</span><h2>일반 잎 사진과 열화상 사진 접수</h2><p>같은 잎을 비슷한 위치에서 찍은 일반 사진과 열화상을 한 번에 올립니다. 열화상이 없어도 일반 사진만 올릴 수 있습니다.</p></div>{farmId && selectedItem ? <PestCaptureForm defaultPestCode={pestCode || 'OTHER'} key={`${farmId}:${selectedItem.id}:${pestCode}`} farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /> : <div className="screen-empty compact"><strong>농장과 품목 연결이 필요합니다.</strong></div>}</div>}
+                {pestTab === 'status' && <PestAlertReview mutationMemberId={mutationMemberId} readBlocked={accessDenied} readEpoch={privateReadEpoch} alerts={data.alerts} canReview={data.account.permissions.reviewAlerts} farmId={farmId} key={`${farmId}:${pestCode}`} language={language} onPageChange={(status, page) => reload(farmId, status, page)} onReviewed={() => reload(farmId, data.alertPagination.status, 1)} pagination={data.alertPagination} />}
+                {pestTab === 'photo' && <div className="module-workspace"><div className="workspace-heading"><span>가지고 있는 사진 사용</span><h2>일반 잎 사진과 열화상 사진 접수</h2><p>같은 잎을 비슷한 위치에서 찍은 일반 사진과 열화상을 한 번에 올립니다. 열화상이 없어도 일반 사진만 올릴 수 있습니다.</p></div>{farmId && data.selectedFarm?.id !== farmId ? <p role="status">{translate(language, "common.loading")}</p> : farmId && selectedItem ? <PestCaptureForm defaultPestCode={pestCode || 'OTHER'} key={`${farmId}:${selectedItem.id}:${pestCode}`} farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /> : <div className="screen-empty compact"><strong>농장과 품목 연결이 필요합니다.</strong></div>}</div>}
                 <p className="capture-safety"><strong>{translate(language, 'alert.safetyTitle')}</strong> {translate(language, 'alert.safetyText')}</p>
               </section>
             )}
@@ -492,7 +541,7 @@ export function FarmerDashboard() {
             )}
 
             {screen === 'capture' && (
-              <section className="app-screen capture-screen"><div className="screen-heading"><div><p>{translate(language, 'capture.subtitle')}</p><h1>{translate(language, 'screen.captureTitle')}</h1><span>{selectedItem?.crop_name ?? '작물'} · {selectedItem?.cultivar_name ?? '품종 미지정'}</span></div></div><div className="module-tabs"><button className={effectiveFruitTab === 'video' ? 'selected' : ''} onClick={() => setFruitTab('video')} type="button">{translate(language, 'upload.video')}</button><button className={effectiveFruitTab === 'photo' ? 'selected' : ''} onClick={() => setFruitTab('photo')} type="button">{translate(language, 'upload.photo')}</button>{canViewRevenue && <button className={effectiveFruitTab === 'forecast' ? 'selected' : ''} onClick={() => setFruitTab('forecast')} type="button">예상 수익</button>}</div><div className="module-workspace">{!farmId || !selectedItem ? <div className="screen-empty"><span>!</span><strong>농장과 품목 연결이 필요합니다.</strong><p>계약 정보가 계정에 연결되면 기능을 사용할 수 있습니다.</p></div> : effectiveFruitTab === 'video' ? <><div className="workspace-heading"><span>{translate(language, 'capture.uploadOnce')}</span><h2>{translate(language, 'capture.combinedVideoTitle')}</h2><p>{translate(language, 'capture.combinedVideoDescription')}</p></div><div className="analysis-scope-grid"><article><b>{translate(language, 'capture.rgbRequired')}</b><span>{translate(language, 'capture.findFruitScenes')}</span><span>{translate(language, 'capture.ripenessAndGrade')}</span><span>{translate(language, 'alert.suspiciousLeaf')}</span></article><article><b>{translate(language, 'capture.thermalOptional')}</b><span>{translate(language, 'capture.thermalForMites')}</span><span>{translate(language, 'capture.leafTemperatureDifference')}</span><span>{translate(language, 'capture.matchFrames')}</span></article></div><VideoUploadForm farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /><p className="data-scope-note"><strong>{translate(language, 'capture.afterSubmit')}</strong> {translate(language, 'capture.afterSubmitDescription')}</p></> : effectiveFruitTab === 'photo' ? <div className="photo-analysis-stack"><section><div className="workspace-heading"><span>과실 사진</span><h2>익은 정도·품질 등급 판독</h2><p>현재는 설향 사진을 판독할 수 있습니다. 다른 품종은 충분한 사진과 판독 기준이 준비되면 사용할 수 있습니다.</p></div><CameraCapture enabled={selectedModelReady} farmId={farmId} cultivarCode={selectedItem.cultivar_code ?? ''} cultivarName={selectedItem.display_name} onUploaded={() => reload()} /></section><section><div className="workspace-heading"><span>잎 사진</span><h2>{pestText(language, 'photoTitle')}</h2><p>일반 잎 사진은 꼭 필요합니다. 같은 잎의 열화상 사진이 있으면 함께 올릴 수 있습니다.</p></div><PestCaptureForm defaultPestCode={pestCode || 'OTHER'} key={`${farmId}:${selectedItem.id}:${pestCode}`} farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /></section></div> : <><div className="workspace-heading"><span>영상 판독이 끝나면 자동으로 계산</span><h2>예상 수익 결과</h2><p>영상에 같은 딸기가 여러 번 보여도 한 개로 세고, 등급별 수량과 예상 시세를 합쳐 계산합니다. 농민이 값을 따로 입력할 필요가 없습니다.</p></div><RevenueForecast forecasts={selectedRevenueForecasts} itemName={selectedItem.display_name} jobs={selectedForecastJobs} /></>}</div><p className="capture-safety"><strong>결과 안내</strong> 판독 결과는 농장 운영을 돕기 위한 값입니다.{canViewRevenue && ' 실제 정산 등급·시세·수수료에 따라 예상 수익이 달라질 수 있습니다.'}</p></section>
+              <section className="app-screen capture-screen"><div className="screen-heading"><div><p>{translate(language, 'capture.subtitle')}</p><h1>{translate(language, 'screen.captureTitle')}</h1><span>{selectedItem?.crop_name ?? '작물'} · {selectedItem?.cultivar_name ?? '품종 미지정'}</span></div></div><div className="module-tabs"><button className={effectiveFruitTab === 'video' ? 'selected' : ''} onClick={() => setFruitTab('video')} type="button">{translate(language, 'upload.video')}</button><button className={effectiveFruitTab === 'photo' ? 'selected' : ''} onClick={() => setFruitTab('photo')} type="button">{translate(language, 'upload.photo')}</button>{canViewRevenue && <button className={effectiveFruitTab === 'forecast' ? 'selected' : ''} onClick={() => setFruitTab('forecast')} type="button">예상 수익</button>}</div><div className="module-workspace">{!farmId || !selectedItem ? <div className="screen-empty"><span>!</span><strong>농장과 품목 연결이 필요합니다.</strong><p>계약 정보가 계정에 연결되면 기능을 사용할 수 있습니다.</p></div> : effectiveFruitTab === 'video' ? <><div className="workspace-heading"><span>{translate(language, 'capture.uploadOnce')}</span><h2>{translate(language, 'capture.combinedVideoTitle')}</h2><p>{translate(language, 'capture.combinedVideoDescription')}</p></div><div className="analysis-scope-grid"><article><b>{translate(language, 'capture.rgbRequired')}</b><span>{translate(language, 'capture.findFruitScenes')}</span><span>{translate(language, 'capture.ripenessAndGrade')}</span><span>{translate(language, 'alert.suspiciousLeaf')}</span></article><article><b>{translate(language, 'capture.thermalOptional')}</b><span>{translate(language, 'capture.thermalForMites')}</span><span>{translate(language, 'capture.leafTemperatureDifference')}</span><span>{translate(language, 'capture.matchFrames')}</span></article></div><VideoUploadForm farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /><p className="data-scope-note"><strong>{translate(language, 'capture.afterSubmit')}</strong> {translate(language, 'capture.afterSubmitDescription')}</p></> : effectiveFruitTab === 'photo' ? <div className="photo-analysis-stack"><section><div className="workspace-heading"><span>과실 사진</span><h2>익은 정도·품질 등급 판독</h2><p>현재는 설향 사진을 판독할 수 있습니다. 다른 품종은 충분한 사진과 판독 기준이 준비되면 사용할 수 있습니다.</p></div><CameraCapture enabled={selectedModelReady} farmId={farmId} cultivarCode={selectedItem.cultivar_code ?? ''} cultivarName={selectedItem.display_name} onUploaded={() => reload()} /></section><section><div className="workspace-heading"><span>잎 사진</span><h2>{pestText(language, 'photoTitle')}</h2><p>일반 잎 사진은 꼭 필요합니다. 같은 잎의 열화상 사진이 있으면 함께 올릴 수 있습니다.</p></div>{data.selectedFarm?.id === farmId ? <PestCaptureForm defaultPestCode={pestCode || 'OTHER'} key={`${farmId}:${selectedItem.id}:${pestCode}`} farmId={farmId} itemId={selectedItem.id} language={language} onUploaded={() => reload()} /> : <p role="status">{translate(language, "common.loading")}</p>}</section></div> : <><div className="workspace-heading"><span>영상 판독이 끝나면 자동으로 계산</span><h2>예상 수익 결과</h2><p>영상에 같은 딸기가 여러 번 보여도 한 개로 세고, 등급별 수량과 예상 시세를 합쳐 계산합니다. 농민이 값을 따로 입력할 필요가 없습니다.</p></div><RevenueForecast forecasts={selectedRevenueForecasts} itemName={selectedItem.display_name} jobs={selectedForecastJobs} /></>}</div><p className="capture-safety"><strong>결과 안내</strong> 판독 결과는 농장 운영을 돕기 위한 값입니다.{canViewRevenue && ' 실제 정산 등급·시세·수수료에 따라 예상 수익이 달라질 수 있습니다.'}</p></section>
             )}
 
             {screen === 'management' && (
@@ -528,5 +577,7 @@ export function FarmerDashboard() {
       </nav>
       {navigation(true)}
     </main>
+    </div>
+    </>
   );
 }

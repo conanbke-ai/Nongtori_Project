@@ -1,0 +1,17 @@
+.scouting-history { display: grid; gap: 10px; min-width: 0; }
+.scouting-history button { min-height: 44px; padding: 10px 12px; border: 1px solid var(--line, #dce7e4); border-radius: 10px; background: var(--surface, #fff); color: inherit; font: inherit; cursor: pointer; }
+.scouting-history button:disabled { opacity: .55; cursor: default; }
+.scouting-history button:focus-visible, .scouting-history a:focus-visible, .scouting-history ol:focus-visible { outline: 3px solid var(--brand-dark, #47644b); outline-offset: 3px; }
+.scouting-history-panel { display: grid; gap: 10px; min-width: 0; }
+.scouting-history-panel p { margin: 0; overflow-wrap: anywhere; }
+.scouting-history-limit { font-size: .8rem; }
+.scouting-history-panel ol { display: grid; gap: 8px; margin: 0; padding: 0 0 0 22px; max-height: 28rem; overflow-y: auto; overflow-wrap: anywhere; }
+.scouting-history-panel li { padding: 10px 4px; border-bottom: 1px solid var(--line, #dce7e4); scroll-margin-top: 20px; }
+.scouting-history-panel li > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px; }
+.scouting-history-panel time { font-size: .8rem; }
+.scouting-original-check { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.scouting-legacy-reading { display: inline-grid; gap: 6px; min-width: 0; max-width: 100%; }
+.scouting-legacy-reading-content { display: grid; gap: 4px; overflow-wrap: anywhere; }
+.scouting-legacy-reading code { white-space: break-spaces; overflow-wrap: anywhere; unicode-bidi: isolate; }
+.scouting-legacy-reading button { min-height: 44px; }
+.scouting-history-panel a { display: inline-flex; align-items: center; min-height: 44px; padding: 4px 6px; color: var(--brand-dark, #47644b); }
