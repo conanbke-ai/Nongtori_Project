@@ -53,6 +53,7 @@ registerHooks({
   },
 });
 const { FarmerDashboard } = await import('../app/components/FarmerDashboard');
+const { PestCaptureForm } = await import('../app/components/PestCaptureForm');
 const { PestAlertReview } = await import('../app/components/PestAlertReview');
 const { FarmMiniChat } = await import('../app/components/FarmMiniChat');
 const { ScoutingQueue } = await import('../app/features/pests/presentation/ScoutingQueue');
@@ -100,6 +101,24 @@ async function fixture(run: (f: { render: () => Element; pending: Pending[]; sna
     if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument); else Reflect.deleteProperty(globalThis, 'document');
   }
 }
+
+test('사진 접수는 농장 전환 snapshot 대기 중 이전 품목을 새 농장에 연결하지 않는다',async()=>{
+  for(const screen of ['alerts','capture']){
+  await fixture(async f=>{
+    const tabs=one(f.render(),n=>n.props.className==='module-tabs');
+    call(nodes(tabs).filter(n=>n.type==='button')[1]);
+    const initial=one(f.render(),n=>n.type===PestCaptureForm);
+    assert.equal(initial.props.farmId,'farm-a');assert.equal(initial.props.itemId,'farm-a-item');
+    const farmSelect=one(one(f.render(),n=>n.props.className==='farm-select-wrap'),n=>n.type==='select');
+    call(farmSelect,'onChange',{target:{value:'farm-b'}});
+    assert.equal(nodes(f.render()).filter(n=>n.type===PestCaptureForm).length,0,'새 농장 snapshot 전에는 혼합 문맥 접수 폼이 없어야 함');
+    const request=f.pending.findLast(p=>p.url.includes('/api/farmer-dashboard')&&p.url.includes('farm-b'));assert.ok(request);
+    request.resolve(Response.json(f.snapshot('farm-b')));await flush();
+    const current=one(f.render(),n=>n.type===PestCaptureForm);
+    assert.equal(current.props.farmId,'farm-b');assert.equal(current.props.itemId,'farm-b-item');assert.notEqual(current.key,initial.key);
+  },screen);
+  }
+});
 
 test('actual dashboard 403 hides/inerts retained private tree, including chat and portal host, without consuming denied body', async () => {
   await fixture(async f => {
