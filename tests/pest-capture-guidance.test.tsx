@@ -5,6 +5,32 @@ import type { FormEvent, ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { submitPestCapture, pestCaptureGuidance } from '../app/features/pests/presentation/pest-capture-submission';
 import { pestTargets, type PestLanguage } from '../app/features/pests/domain/catalog';
+import { captureFileIssue, MAX_CAPTURE_TOTAL_BYTES } from '../app/features/pests/domain/capture-file-rules';
+import { pestText } from '../app/features/pests/presentation/text';
+
+test('사진 사전 점검은 기존 합계 경계·선택 열화상·빈 MIME 위임을 유지한다',()=>{
+  const image=(size:number,type='image/png')=>({size,type});
+  assert.equal(MAX_CAPTURE_TOTAL_BYTES,40*1024*1024);
+  assert.equal(captureFileIssue(null,null),'fileRequired');
+  assert.equal(captureFileIssue(image(0),image(1)),'fileRequired');
+  assert.equal(captureFileIssue(image(MAX_CAPTURE_TOTAL_BYTES),null),null);
+  assert.equal(captureFileIssue(image(MAX_CAPTURE_TOTAL_BYTES-1),image(1)),null);
+  assert.equal(captureFileIssue(image(MAX_CAPTURE_TOTAL_BYTES),image(1)),'fileSize');
+  assert.equal(captureFileIssue(image(1,'application/pdf'),null),'fileImage');
+  assert.equal(captureFileIssue(image(1),image(1,'video/mp4')),'fileImage');
+  assert.equal(captureFileIssue(image(1),image(0,'application/octet-stream')),null);
+  assert.equal(captureFileIssue(image(1,''),image(1,'')),null,'빈 MIME은 서버에서 최종 판단');
+});
+
+test('사진 사전 점검 안내는 기존 지원 언어 모두에서 합계·재선택 행동을 제공한다',()=>{
+  const serverChecks={ko:'파일 정보와 업로드 조건',vi:'thông tin tệp và điều kiện tải lên',th:'ข้อมูลไฟล์และเงื่อนไขการอัปโหลด','zh-CN':'文件信息和上传条件'};
+  for(const language of ['ko','vi','th','zh-CN'] as PestLanguage[]){
+    assert.match(pestText(language,'fileHelp'),/40MB/);
+    assert.ok(pestText(language,'fileHelp').includes(serverChecks[language]),'서버가 실제 검사하는 정보/조건만 안내');
+    assert.doesNotMatch(pestText(language,'fileHelp'),/내용|nội dung|เนื้อหา|内容/,'실제 파일 내용 검사를 약속하지 않음');
+    for(const key of ['fileRequired','fileImage','fileSize'] as const)assert.ok(pestText(language,key).length>0);
+  }
+});
 
 function bodyFor(pestCode='MITE') { const body=new FormData();body.set('farmId','SYNTHETIC_FARM');body.set('itemId','SYNTHETIC_ITEM');body.set('pestCode',pestCode);return body; }
 const receipt=(pestCode='MITE')=>({sessionId:'a7ea25a0-9a42-4e92-980f-9467ccf9967e',pestCode,processingStatus:'UPLOADED_AWAITING_MODEL'});
@@ -94,7 +120,8 @@ test('accepted photo receipt cannot become a failed upload when the refresh call
   const originalFetch=globalThis.fetch,OriginalFormData=globalThis.FormData;
   let resets=0,calls=0;
   const form={reset(){resets++;}};
-  globalThis.FormData=class extends OriginalFormData{constructor(){super();this.set('pestCode','MITE');}};
+  let rgbFile=new File(['SYNTHETIC'],'rgb.png',{type:'image/png'});
+  globalThis.FormData=class extends OriginalFormData{constructor(){super();this.set('pestCode','MITE');this.set('rgbImage',rgbFile);}};
   globalThis.fetch=async()=>{calls++;return Response.json({sessionId:'a7ea25a0-9a42-4e92-980f-9467ccf9967e',pestCode:'MITE',processingStatus:'UPLOADED_AWAITING_MODEL'},{status:201});};
   try{
     const {PestCaptureForm}=await import('../app/components/PestCaptureForm');
@@ -103,6 +130,7 @@ test('accepted photo receipt cannot become a failed upload when the refresh call
     const event={preventDefault(){},currentTarget:form} as unknown as FormEvent<HTMLFormElement>;
     const initial:Props={farmId:'farm-a',itemId:'item-a',language:'ko',onUploaded:()=>{throw Error('PRIVATE_REFRESH_STACK');}};
     const tree=render(initial);
+    assert.match(renderToStaticMarkup(tree),/40MB/,'서버의 합계 제한을 접수 전에 안내해야 함');
     await tree.props.onSubmit(event);
     const result=values[0] as {kind:string;refreshFailed?:boolean};
     assert.notEqual(result.kind,'error','a successful server receipt must survive a refresh error');
@@ -159,5 +187,13 @@ test('accepted photo receipt cannot become a failed upload when the refresh call
         }
       }
     }
+    values.length=0;effects.clear();calls=resets=0;
+    rgbFile=new File(['SYNTHETIC'],'not-image.pdf',{type:'application/pdf'});
+    await render(initial).props.onSubmit(event);
+    assert.equal(calls,0,'명확한 형식 오류는 실제 접수 전에 중단');assert.equal(resets,0);
+    assert.match(renderToStaticMarkup(render(initial)),/이미지 파일을 다시 선택/);
+    rgbFile=new File(['SYNTHETIC'],'unknown.bin',{type:''});
+    globalThis.fetch=async()=>{calls++;return Response.json(receipt(),{status:201});};
+    await render(initial).props.onSubmit(event);assert.equal(calls,1,'빈 MIME은 서버 판단으로 위임');
   }finally{globalThis.fetch=originalFetch;globalThis.FormData=OriginalFormData;hook.deregister();Reflect.deleteProperty(globalThis,key);}
 });
