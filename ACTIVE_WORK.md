@@ -1,3 +1,33 @@
+## 2026-11-20 ML optimization adoption and GPU throughput workstream
+
+Status: **DOCS_INTEGRATED / BENCHMARK_NOT_RUN / LOCAL_RUNTIME_REQUIRED**.
+Requested scope: AWSKRUG Superb AI ZERO scratch VFM, zero-shot/few-shot and benchmarks; apply useful techniques to Nongtori; improve historical half-day training time with realistic single RTX 4060 optimization. Target 2027-03, contingency 2027-06.
+
+### Completed in this session (GitHub main, documentation-only)
+
+- `docs/MODEL_IMPROVEMENT_STRATEGY.md`: detailed adoption strategy, gating, priority, acceptance, few-shot/zero-shot distinction; commit `921d9fc862329d9b517e56006009ca84072983a9`.
+- `docs/ML_EXECUTION_ENVIRONMENT_POLICY.md`: A0–A5 CPU worker/cache/AMP/batch/prefetch profiling, controlled GPU speed measurement; commit `3de5be909ef6abb65e0f2568d846f7638e3f1f3f`.
+- GitHub main static code inventory (not local runtime proof): YOLO11 Large source-reference workers 4 / 100 epochs / 1024 imgsz; mite field PyTorch DataLoader workers 4 and CUDA pin_memory; ripeness v001 workers 2 and pin_memory false; existing validated crop cache reuse. Reuse existing logging and metrics instead of implementing a duplicate system.
+- Remote GitHub branch budget was **main + 4 feature branches = 5/5**, open PRs #26, #97, #102, #109. No new branch or PR, no deletion/merge or activation.
+- Scope respects existing mite morphology PR #102; model performance baseline and local latest assets/checkpoints remain **UNVERIFIED**.
+
+### First execution gate (next local GPU task)
+
+1. Reconcile `ACTIVE_WORK.md`, current local uncommitted changes, branch/PR #102 and model code; mark ALREADY_DONE/IN_PROGRESS/NEW/BLOCKED. Do not replace/overwrite current work.
+2. Locate original half-day run log and identify stage durations; if missing, capture new A0 measured baseline (do not assume 12 hours precisely).
+3. Confirm canonical snapshot readiness and freeze checkpoint/config/seed/split, then run a short same-data benchmark with worker 0/2/4/8 followed by cold/warm cache, AMP verification, batch/prefetch as supported.
+4. Capture wall-clock vs epoch durations, image throughput, load wait, GPU utilization/VRAM, validation quality; separate warmup and cache build. Use immutable artifacts and SHA.
+5. Select A5 full-run candidate only if screening supports speed improvement without metric regression. No fixed test tuning, no paid cloud GPU and no simulated PASS.
+6. After baseline, evaluate small-object tiled inference and conditional few-shot experiments only if field label/split readiness meets gates.
+
+### Evidence and pending status
+
+- NOT_RUN: local GPU benchmark, training jobs, dataset re-acquisition, actual model performance comparison, full app tests/browser QA.
+- NOT_DONE: new application/model code, new dataset snapshot, inference worker enablement, deployment, main merge of open PRs.
+- Follow canonical `docs/MODEL_EXPERIMENT_EVIDENCE_POLICY.md`; real run evidence is required before any claimed metric or portfolio outcome.
+- Sources: AWS https://aws.amazon.com/ko/blogs/tech/amazon-sagemaker-hyperpod-superbai-zero-foundation-model/ and user-supplied AWSKRUG 2026-11-26 session agenda.
+
+---
 ## Manual confirmation publication preparation — no remote writes
 
 - Exact scope remains the11 files inventoried in `LOOKUP_REVIEW.md`; detached local source `d012be6`, parent-confirmed main `7ef6e546a18c6cd9267d8d4986d5439ca39a5476`/tree `8595d1a93f6c9d16222ef8ffb80220506910d684`. Current remote main/heads/open PRs/rules are UNKNOWN: no GitHub connector is callable here and prior denied remote paths were not retried. Cached origin/main57c7e01 and local branch labels are not current remote evidence.
