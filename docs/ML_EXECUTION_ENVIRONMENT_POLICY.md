@@ -127,3 +127,45 @@ validation experiment
 ```
 
 GPU가 빠르다는 이유로 frozen test를 반복 조회하면서 tuning하지 않는다.
+
+---
+## 8. Single-GPU training throughput optimization protocol (2026-11-20)
+
+Status: **BENCHMARK PLANNED / GPU NOT RUN**. Goal: reduce historical half-day training cycle (user recollection; no confirmed run ID) **without** losing acceptance-quality model metrics or compromising the immutable dataset boundary. Target is local NVIDIA RTX 4060, exact RAM/VRAM/disk/driver and local environment to be read from runtime, not assumed.
+
+### Verified code audit (GitHub main)
+
+- `ml/detector_baseline/mite_yolo11_reference_v001.py`: YOLO11-Large `yolo11l.pt`, 100 epochs, image size 1024, `--workers` default 4, CUDA required, wall-clock `elapsed_sec`; confirm actual Ultralytics defaults for AMP/cache/batch at runtime.
+- `ml/detector_baseline/mite_field_v001.py`: PyTorch DataLoader `num_workers=args.workers` default 4, CUDA `pin_memory=True`, epoch `elapsed_sec`.
+- `ml/ripeness_baseline/train_v001.py`: DataLoader batch 32, workers 2, `pin_memory=False`, epoch duration recorded; do not change without verifying current canonical ripeness experiment and cache semantics.
+- `ml/ripeness_baseline/cache_io.py`: existing crop cache validation/reuse; do not recreate verified caches unnecessarily.
+- These are **repository code facts**, not proof that a specific historic run used them.
+
+### Profiling before optimization
+
+1. Locate historical half-day run logs/config, identify whether it included data acquisition, decode/crops, cache creation, training, validation or download; if unavailable, document baseline as `UNKNOWN`, run a new measured A0.
+2. Freeze source/manifest/snapshot IDs, assignment checksum, checkpoint/architecture, seed, epochs, image size, LR/optimizer, batch, software versions, hardware and thermal/power settings. Ensure GPU is actually used; don't silently fall back to CPU.
+3. Instrument separate durations: acquisition/audit (if applicable), cache preparation, DataLoader wait and transforms, H2D copies, forward/backward/optimizer, validation, checkpoint I/O, full elapsed. GPU async timings require `torch.cuda.synchronize()` or CUDA events; don't synchronize each batch in final optimized run.
+4. Log GPU utilization, VRAM peak, CPU, RAM, disk throughput, images/sec and epoch time; warmup and cold-cache vs warm-cache results must be labeled separately.
+5. Conduct short-screening benchmarks on a **fixed subset with no leakage** and enough warmup; then run complete training for final check. Keep results in local raw artifacts and only meaningful decisions in model log.
+
+### Controlled A0–A5 matrix
+
+| ID | Tested variable | Hold fixed / risk |
+|---|---|---|
+| A0 | unchanged canonical implementation | true baseline, wall-clock + model performance |
+| A1 | DataLoader workers 0 / 2 / 4 / 8 (only feasible values) | RAM and Windows spawn overhead; more workers need not be faster |
+| A2 | cache off / disk / RAM *where supported* | disk/RAM budget, snapshot identity, cold/warm cache distinction |
+| A3 | AMP off / on (only if supported and stable) | validate loss, metrics, numeric stability and actual dtype; default may already be on |
+| A4 | batch and CPU prefetch/persistent_workers/pinned memory where supported | batch impacts optimization; isolate and monitor VRAM/OOM, LR and metrics |
+| A5 | winning combination + full same-budget training | multiple seeds/confirmation if performance comparison materially changes |
+
+Optional `torch.compile`: consider only when long enough training amortizes compilation and runtime/framework compatible; record compile warmup separately. Early stopping is **algorithmic budget reduction**, not faster per-epoch throughput; report separately, never mislabel as hardware speedup. Distributed Data Parallel needs multiple CUDA GPUs and is **out of scope** with one RTX 4060. SageMaker HyperPod is study/reference only unless separately authorized and budgeted.
+
+### Acceptance / reporting
+
+- Primary: total full-run wall-clock, epoch seconds, images/sec, relative speed-up and percent time saved.
+- Safety: same data split, unchanged test lock, validation mAP/Recall or ripeness Macro F1/Ordinal MAE, GPU peak VRAM and reproducibility.
+- Formula: `time_saved_pct = 100 * (baseline_seconds - candidate_seconds) / baseline_seconds`; `speedup_x = baseline_seconds / candidate_seconds`.
+- Screen target ≥30% time reduction, stretch ≥50%; these are **candidate goals, not achieved results**.
+- Keep an explicit `NOT_RUN` marker until actual local GPU execution evidence is present. No paid GPU/cloud or production-worker activation without approval.
