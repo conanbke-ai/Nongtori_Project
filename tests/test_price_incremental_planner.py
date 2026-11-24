@@ -18,7 +18,8 @@ R2 = replace(R1, settlement_day=DAY2)
 
 
 def source(request, rows=(), *, digest="a", complete=True, available=FIRST):
-    return Receipt(request, digest * 64, complete, available, tuple(rows))
+    return Receipt(request, digest * 64, complete, available,
+                   tuple(replace(row, source_sha256=digest * 64) for row in rows))
 
 
 def run(targets, receipts=(), models=()):
@@ -33,7 +34,7 @@ class IncrementalPlanTests(unittest.TestCase):
     def test_overlapping_origins_share_only_the_input(self):
         targets = (target(A), target(B))
         self.assertEqual(run(targets).fetch, (R1,))
-        saved = source(R1, [Observation(A, DAY1, FIRST), Observation(B, DAY1, None)])
+        saved = source(R1, [Observation(A, DAY1, FIRST, "a" * 64), Observation(B, DAY1, None, "a" * 64)])
         result = run(targets, [saved], [A])
         self.assertEqual(result.fetch, ())
         self.assertEqual([(d.series.origin, d.state, d.new_days) for d in result.decisions], [
@@ -67,28 +68,56 @@ class IncrementalPlanTests(unittest.TestCase):
 
     def test_same_digest_conflicting_metadata_fails_closed(self):
         with self.assertRaises(ValueError):
-            run([target()], [source(R1), source(R1, [Observation(A, DAY1, FIRST)])])
+            run([target()], [source(R1), source(R1, [Observation(A, DAY1, FIRST, "a" * 64)])])
 
     def test_unique_trade_days_aggregate_across_settlement_dates(self):
-        spill = Observation(A, DAY0, FIRST)
-        current = Observation(A, DAY2, NOW)
-        result = run([target(requests=(R1, R2), minimum=2)], [source(R1, [spill]), source(R2, [spill, current])])
+        spill = Observation(A, DAY0, FIRST, "a" * 64)
+        current = Observation(A, DAY2, NOW, "a" * 64)
+        result = run([target(requests=(R1, R2), minimum=2)], [source(R1, [spill]), source(R2, [spill, current], available=NOW)])
         self.assertEqual((result.decisions[0].state, result.decisions[0].new_days), ("RETRAIN_CANDIDATE", 2))
 
     def test_missing_date_blocks_partial_retraining(self):
-        result = run([target(requests=(R1, R2))], [source(R1, [Observation(A, DAY1, FIRST)])], [A])
+        result = run([target(requests=(R1, R2))], [source(R1, [Observation(A, DAY1, FIRST, "a" * 64)])], [A])
         self.assertEqual((result.fetch, result.decisions[0].state), ((R2,), "AWAITING_ACQUISITION"))
 
     def test_unavailable_and_already_counted_rows_do_not_train(self):
-        rows = [Observation(A, DAY0, BEFORE), Observation(A, DAY1, FUTURE),
-                Observation(A, DAY1, None), Observation(A, DAY2, NOW)]
+        rows = [Observation(A, DAY0, BEFORE, "a" * 64), Observation(A, DAY1, None, "a" * 64)]
         result = run([replace(target(), previous_cutoff=FIRST)], [source(R1, rows)], [A])
         self.assertEqual((result.decisions[0].state, result.decisions[0].new_days), ("REUSE_APPROVED_MODEL", 0))
 
     def test_fresh_edition_does_not_make_an_old_observation_new(self):
         result = run([replace(target(), previous_cutoff=FIRST)],
-                     [source(R1, [Observation(A, DAY0, BEFORE)], available=NOW)], [A])
+                     [source(R1, [Observation(A, DAY0, BEFORE, "a" * 64)], available=NOW)], [A])
         self.assertEqual((result.decisions[0].state, result.decisions[0].new_days), ("REUSE_APPROVED_MODEL", 0))
+
+    def test_settlement_day_waits_until_kst_midnight(self):
+        before_kst = datetime(2026, 1, 1, 14, 59, tzinfo=timezone.utc)
+        at_kst = datetime(2026, 1, 1, 15, tzinfo=timezone.utc)
+        forged = source(R1, [Observation(A, DAY1, before_kst, "a" * 64)], available=before_kst)
+        result = plan_updates((target(),), (forged,), frozenset(), as_of=before_kst)
+        self.assertEqual((result.decisions[0].state, result.fetch), ("AWAITING_SETTLEMENT_DAY", ()))
+        result = plan_updates((target(),), (), frozenset(), as_of=at_kst)
+        self.assertEqual((result.decisions[0].state, result.fetch), ("AWAITING_ACQUISITION", (R1,)))
+        self.assertEqual(run([target()], [forged]).decisions[0].state, "UNVERIFIED_ACQUISITION")
+
+    def test_unparsed_differs_from_verified_empty(self):
+        for receipt, state in ((replace(source(R1), eligible_rows=None), "UNVERIFIED_ACQUISITION"),
+                               (source(R1), "REUSE_APPROVED_MODEL")):
+            result = run([target()], [receipt], [A])
+            self.assertEqual((result.decisions[0].state, result.decisions[0].new_days), (state, 0))
+
+    def test_chronology_or_lineage_fault_holds_whole_receipt(self):
+        valid = Observation(A, DAY1, FIRST, "a" * 64)
+        for invalid in (replace(valid, source_sha256="b" * 64),
+                        replace(valid, trade_day=DAY2),
+                        replace(valid, available_at=BEFORE),
+                        replace(valid, available_at=NOW),
+                        replace(valid, available_at=datetime(2026, 1, 2))):
+            with self.subTest(invalid=invalid):
+                receipt = replace(source(R1), eligible_rows=(valid, invalid))
+                result = run([target()], [receipt], [A])
+                self.assertEqual((result.decisions[0].state, result.decisions[0].new_days),
+                                 ("UNVERIFIED_ACQUISITION", 0))
 
     def test_cutoffs_and_target_conflicts_fail_closed(self):
         with self.assertRaises(ValueError):

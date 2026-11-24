@@ -1,7 +1,9 @@
 """Pure pricing work planner. No network, persistence, or model execution."""
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+
+KST = timezone(timedelta(hours=9), name="KST")
 
 
 def _identifier(value: str) -> None:
@@ -33,7 +35,7 @@ class Acquisition:
                 _identifier(identifier)
         if type(self.settlement_day) is not date:
             raise ValueError("Expected an exact settlement date")
-        if "origin" not in self.fields or not isinstance(self.fields, frozenset):
+        if not isinstance(self.fields, frozenset) or "origin" not in self.fields:
             raise ValueError("Expected a frozen field selection including origin")
         for field in self.fields:
             _identifier(field)
@@ -84,15 +86,19 @@ class Receipt:
     request: Acquisition
     sha256: str
     complete: bool
-    available_at: datetime | None
-    eligible_rows: tuple["Observation", ...] = ()
+    # Local verification time, not provider publication.
+    verified_at: datetime | None
+    # None is unverified; () is verified empty.
+    eligible_rows: tuple["Observation", ...] | None = None
 
 
 @dataclass(frozen=True)
 class Observation:
     series: Series
     trade_day: date
+    # Independent availability evidence; never inferred from verified_at.
     available_at: datetime | None
+    source_sha256: str
 
 
 @dataclass(frozen=True)
@@ -112,6 +118,27 @@ def _has_digest(value: str) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
 
 
+def _verified_rows(receipt: Receipt, verified: datetime) -> bool:
+    if not isinstance(receipt.eligible_rows, tuple):
+        return False
+    for row in receipt.eligible_rows:
+        if (
+            not isinstance(row, Observation)
+            or row.source_sha256 != receipt.sha256
+            or type(row.trade_day) is not date
+            or row.trade_day > receipt.request.settlement_day
+        ):
+            return False
+        if row.available_at is not None:
+            try:
+                available = _instant(row.available_at)
+            except ValueError:
+                return False
+            if available > verified or row.trade_day > available.astimezone(KST).date():
+                return False
+    return True
+
+
 def plan_updates(
     targets: tuple[Target, ...],
     receipts: tuple[Receipt, ...],
@@ -119,8 +146,14 @@ def plan_updates(
     *,
     as_of: datetime,
 ) -> Plan:
-    """Use only complete, verified, already available receipts for the exact request."""
+    """Plan from trusted parse receipts for exact requests.
+
+    KST guards calendar dates, not publication times. Only the adapter can
+    establish independent row availability and complete pagination.
+    """
     now = _instant(as_of)
+    today = now.astimezone(KST).date()
+    unverified: set[Acquisition] = set()
     pending: dict[Acquisition, None] = {}
     decisions: list[Decision] = []
     requests = {r for target in targets if target.source_and_units_confirmed for r in target.requests}
@@ -128,7 +161,17 @@ def plan_updates(
     for receipt in receipts:
         if receipt.request not in requests or receipt.complete is not True or not _has_digest(receipt.sha256):
             continue
-        if receipt.available_at is None or _instant(receipt.available_at) > now:
+        if receipt.verified_at is None:
+            continue
+        try:
+            verified = _instant(receipt.verified_at)
+        except ValueError:
+            unverified.add(receipt.request)
+            continue
+        if verified > now:
+            continue
+        if receipt.request.settlement_day > verified.astimezone(KST).date() or not _verified_rows(receipt, verified):
+            unverified.add(receipt.request)
             continue
         versions = by_request.setdefault(receipt.request, {})
         existing = versions.get(receipt.sha256)
@@ -147,6 +190,12 @@ def plan_updates(
         if not target.source_and_units_confirmed:
             decisions.append(Decision(s, "UNVERIFIED_SOURCE"))
             continue
+        if any(r.settlement_day > today for r in target.requests):
+            decisions.append(Decision(s, "AWAITING_SETTLEMENT_DAY"))
+            continue
+        if any(r in unverified for r in target.requests):
+            decisions.append(Decision(s, "UNVERIFIED_ACQUISITION"))
+            continue
         missing = tuple(r for r in target.requests if not by_request.get(r))
         for r in missing:
             pending[r] = None
@@ -159,11 +208,11 @@ def plan_updates(
         days: set[date] = set()
         for r in target.requests:
             receipt = next(iter(by_request[r].values()))
-            for row in receipt.eligible_rows:
+            for row in receipt.eligible_rows or ():
                 if row.series != s or row.available_at is None:
                     continue
                 instant = _instant(row.available_at)
-                if cutoff < instant <= now and type(row.trade_day) is date and row.trade_day <= r.settlement_day:
+                if cutoff < instant <= now:
                     days.add(row.trade_day)
         state = (
             "RETRAIN_CANDIDATE" if len(days) >= target.minimum_new_days
