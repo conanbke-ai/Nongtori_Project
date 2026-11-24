@@ -1,3 +1,14 @@
+## 2026-11-24 pest catalog readiness and thermal-first policy alignment
+
+Status: **POLICY_DOCUMENTS_UPDATED / APP_AND_MODEL_RUNTIME_UNCHANGED**.
+
+- `docs/PEST_AND_RECORD_WORKFLOWS.md` policy update commit `2b729276fa8e1fc72ca4b17f621ab638d90393a8`: six record-only pest/disease catalog entries are not inferred as trained/validated inference capabilities. Confirmed public RGB dataset evidence is separated from missing/unknown per-class data readiness; readiness stages and inference/deployment stages are independent future contracts. New pest-specific data is source/license/split audited rather than silently treated as ready.
+- `docs/THERMAL_MITE_RISK_V001.md` policy update commit `ab5bc5611aa3eb415f9b230977105ac9f1adf80d`: thermal/env/history mite-risk early scouting remains primary. RGB direct mite detection and ZERO/VFM few-shot are auxiliary and research only. Radiometric units/reference, independently confirmed labels and temporal/farm holdouts are required; no sign-fixed thermal assumption, fabricated species diagnosis, or training before label/split readiness.
+- Respect paper-aligned RGB benchmark architecture and epochs/patience; later independent tuning only with validated evidence. Existing public reference datasets and incomplete/unknown local field assets are not silently upgraded to operational field-ready status.
+- Pending: inspect current local media & label linkage and runtime; evaluate missing disease/pest datasets separately, implement readiness state UI/model contracts only after design/QA gates and branch lease. No new inference worker, dataset collection, training job, migration, branch, deployment or GPU benchmark was performed in this policy-only update.
+- Existing main and open PR workstreams are preserved. No source data, secrets or model weights changed.
+
+---
 ## 2026-11-20 ML optimization adoption and GPU throughput workstream
 
 Status: **DOCS_INTEGRATED / BENCHMARK_NOT_RUN / LOCAL_RUNTIME_REQUIRED**.
