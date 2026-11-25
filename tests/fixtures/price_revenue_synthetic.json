@@ -1,0 +1,95 @@
+{
+  "fixture_kind": "SYNTHETIC",
+  "price_unit": "KRW/kg",
+  "harvest_weight_unit": "g",
+  "usage_assignment": "SYNTHETIC_SCENARIO_DECISION",
+  "harvest": {
+    "runId": "synthetic-harvest-001",
+    "farmId": "synthetic-farm-001",
+    "itemId": "synthetic-seolhyang-001",
+    "startedAt": "2026-02-09T08:00:00+09:00",
+    "completedAt": "2026-02-09T09:00:00+09:00",
+    "grades": [
+      { "gradeCode": "HI", "fruitCount": 600, "totalWeightG": 12500 },
+      { "gradeCode": "JM", "fruitCount": 500, "totalWeightG": 3750 }
+    ]
+  },
+  "claim": {
+    "job": {
+      "id": "synthetic-price-job-001",
+      "harvest_run_id": "synthetic-harvest-001",
+      "farm_id": "synthetic-farm-001",
+      "item_id": "synthetic-seolhyang-001",
+      "completed_at": "2026-02-09T00:00:00.000Z",
+      "crop_code": "STRAWBERRY",
+      "cultivar_code": "SEOLHYANG",
+      "harvested_count": 1100,
+      "total_weight_g": 16250
+    },
+    "grades": [
+      { "grade_code": "HI", "fruit_count": 600, "total_weight_g": 12500 },
+      { "grade_code": "JM", "fruit_count": 500, "total_weight_g": 3750 }
+    ],
+    "activeModels": [
+      {
+        "model_name": "synthetic-price-model",
+        "model_version": "fixture-v1",
+        "algorithm": "FIXTURE",
+        "metrics_json": null,
+        "artifact_uri": "fixture://price_revenue_synthetic"
+      }
+    ]
+  },
+  "sale_channels": [
+    {
+      "harvest_grade_code": "HI",
+      "usage": "FRESH",
+      "price_series": {
+        "provider": "synthetic-fresh-quote",
+        "market": "synthetic-fresh-market",
+        "corporation": "synthetic-fresh-buyer",
+        "product": "STRAWBERRY",
+        "origin": "synthetic-origin",
+        "cultivar": "SEOLHYANG",
+        "grade": "synthetic-retail-grade",
+        "unit": "synthetic-1kg-box"
+      }
+    },
+    {
+      "harvest_grade_code": "JM",
+      "usage": "PROCESSING_JAM",
+      "price_series": {
+        "provider": "synthetic-processing-quote",
+        "market": "synthetic-processing-channel",
+        "corporation": "synthetic-processing-buyer",
+        "product": "STRAWBERRY",
+        "origin": "synthetic-origin",
+        "cultivar": "SEOLHYANG",
+        "grade": "synthetic-processing-grade",
+        "unit": "synthetic-5kg-crate"
+      }
+    }
+  ],
+  "worker_result": {
+    "jobId": "synthetic-price-job-001",
+    "harvestRunId": "synthetic-harvest-001",
+    "targetDate": "2026-02-10",
+    "horizonDays": 1,
+    "modelName": "synthetic-price-model",
+    "modelVersion": "fixture-v1",
+    "predictions": [
+      { "gradeCode": "HI", "p10": 8000, "p50": 10000, "p90": 12000 },
+      { "gradeCode": "JM", "p10": 1000, "p50": 1600, "p90": 2200 }
+    ]
+  },
+  "expected": {
+    "worker_status_without_cost_settings": "PRICE_ONLY",
+    "expected_fresh_gross_won": 125000,
+    "expected_processing_jam_gross_won": 6000,
+    "estimated_gross_won": 131000,
+    "gross_scenario_low_won": 103750,
+    "gross_scenario_high_won": 158250,
+    "range_interpretation": "MATCHED_GRADE_PRICE_SCENARIOS",
+    "actual_settlement_won": null
+  }
+}
