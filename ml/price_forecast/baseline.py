@@ -102,6 +102,16 @@ def _metrics(actual: list[float], predicted: list[float]) -> dict[str, float | N
     }
 
 
+def _score_predictions(predictions: list[dict], baselines: tuple[str, ...]) -> dict | None:
+    if not predictions:
+        return None
+    actual_prices = [row["actual_krw_per_kg"] for row in predictions]
+    return {
+        name: _metrics(actual_prices, [row[f"{name}_krw_per_kg"] for row in predictions])
+        for name in baselines
+    }
+
+
 def _evaluate_series(
     series: Series,
     versions: list[DailyPrice],
@@ -109,6 +119,7 @@ def _evaluate_series(
     end: date,
     horizon_days: int,
     window: int,
+    seasonal_period_days: int,
 ) -> dict:
     # Each ordered version updates the price for its day at its own availability.
     actual_by_day = {row.trade_day: row.price_krw_per_kg for row in versions}
@@ -117,6 +128,7 @@ def _evaluate_series(
     next_version = 0
     no_actual_days = withdrawn_actual_days = insufficient_history_days = 0
     predictions = []
+    seasonal_predictions = []
     for offset in range((end - start).days + 1):
         target = start + timedelta(days=offset)
         cutoff_day = target - timedelta(days=horizon_days - 1)
@@ -144,27 +156,41 @@ def _evaluate_series(
             insufficient_history_days += 1
             continue
         prices = [history[day] for day in ordered_days[stop - window:stop]]
-        predictions.append({
+        prediction = {
             "trade_day": target.isoformat(),
             "history_cutoff_exclusive": cutoff.isoformat(),
             "latest_history_trade_day": ordered_days[stop - 1].isoformat(),
             "actual_krw_per_kg": actual,
             "latest_krw_per_kg": prices[-1],
             "moving_average_krw_per_kg": fmean(prices),
-        })
+        }
+        predictions.append(prediction)
 
-    actual_prices = [row["actual_krw_per_kg"] for row in predictions]
+        seasonal_ordinal = target.toordinal() - seasonal_period_days
+        if seasonal_ordinal > 0:
+            seasonal_day = date.fromordinal(seasonal_ordinal)
+            seasonal_price = history.get(seasonal_day)
+            if seasonal_price is not None:
+                seasonal_predictions.append({
+                    **prediction,
+                    "seasonal_history_trade_day": seasonal_day.isoformat(),
+                    "seasonal_naive_krw_per_kg": seasonal_price,
+                })
+
     return {
         "series": asdict(series),
         "scored_days": len(predictions),
         "no_actual_days": no_actual_days,
         "withdrawn_actual_days": withdrawn_actual_days,
         "insufficient_history_days": insufficient_history_days,
-        "metrics": {
-            name: _metrics(actual_prices, [row[f"{name}_krw_per_kg"] for row in predictions])
-            for name in ("latest", "moving_average")
-        } if predictions else None,
+        "metrics": _score_predictions(predictions, ("latest", "moving_average")),
         "predictions": predictions,
+        "seasonal_comparison": {
+            "scored_days": len(seasonal_predictions),
+            "missing_seasonal_history_days": len(predictions) - len(seasonal_predictions),
+            "metrics": _score_predictions(seasonal_predictions, ("latest", "moving_average", "seasonal_naive")),
+            "predictions": seasonal_predictions,
+        },
     }
 
 
@@ -176,14 +202,17 @@ def evaluate_baselines(
     labels_as_of: datetime,
     horizon_days: int = 1,
     window: int = 7,
+    seasonal_period_days: int = 7,
 ) -> dict:
-    """Replay a fixed holdout, scoring both baselines on each identical target."""
+    """Replay a fixed holdout and compare baselines on shared target dates."""
     if type(start) is not date or type(end) is not date or start > end:
         raise ValueError("Expected an inclusive holdout date range")
     if type(horizon_days) is not int or horizon_days < 1 or horizon_days > start.toordinal():
         raise ValueError("horizon_days must be a positive calendar-day lead")
     if type(window) is not int or window < 2:
         raise ValueError("window must contain at least two trade observations")
+    if type(seasonal_period_days) is not int or seasonal_period_days < 1:
+        raise ValueError("seasonal_period_days must be a positive number of calendar days")
     if (
         not isinstance(labels_as_of, datetime)
         or labels_as_of.utcoffset() is None
@@ -217,6 +246,7 @@ def evaluate_baselines(
         "labels_as_of": labels_as_of.isoformat(),
         "horizon_days": horizon_days,
         "moving_average_window": window,
+        "seasonal_period_days": seasonal_period_days,
         "input_rows": input_rows,
         "duplicate_rows": duplicate_rows,
         "after_labels_as_of_rows": after_labels_as_of_rows,
@@ -224,7 +254,7 @@ def evaluate_baselines(
         "series": [
             _evaluate_series(
                 series, sorted(versions, key=lambda row: row.available_at.astimezone(timezone.utc)),
-                start, end, horizon_days, window,
+                start, end, horizon_days, window, seasonal_period_days,
             )
             for series, versions in sorted(versions_by_series.items(), key=lambda item: tuple(vars(item[0]).values()))
         ],
@@ -239,6 +269,8 @@ def main() -> None:
     parser.add_argument("--labels-as-of", type=datetime.fromisoformat, required=True)
     parser.add_argument("--horizon-days", type=int, default=1, help="Calendar days from the KST origin day to the target")
     parser.add_argument("--window", type=int, default=7, help="Number of distinct trade observations for the moving average")
+    parser.add_argument("--seasonal-period-days", type=int, default=7,
+                        help="Exact calendar-day lag for the seasonal baseline")
     args = parser.parse_args()
 
     try:
@@ -246,7 +278,7 @@ def main() -> None:
         rows = load_daily_prices(io.StringIO(source.decode("utf-8-sig"), newline=""))
         report = evaluate_baselines(
             rows, start=args.start, end=args.end, labels_as_of=args.labels_as_of,
-            horizon_days=args.horizon_days, window=args.window,
+            horizon_days=args.horizon_days, window=args.window, seasonal_period_days=args.seasonal_period_days,
         )
         report["input_sha256"] = hashlib.sha256(source).hexdigest()
         print(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False))
