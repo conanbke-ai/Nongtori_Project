@@ -1,7 +1,7 @@
 import { findPestTarget, pestTargets, reviewVerdict } from '../domain/catalog';
-import type { PestRepository } from '../infrastructure/pest-repository';
+import type { PestRepositoryPort, PestReviewInput } from './pest-repository-port';
 
-export async function loadPestDashboard(repository: PestRepository, farmId: string, code: string, status: 'OPEN' | 'DONE', requestedPage: number, limit = 20) {
+export async function loadPestDashboard(repository: PestRepositoryPort, farmId: string, code: string, status: 'OPEN' | 'DONE', requestedPage: number, limit = 20) {
   if (code && !findPestTarget(code)) throw new Error('지원하는 병해충 종류를 선택해 주세요.');
   const counts = await repository.counts(farmId);
   const count = (target: string, state: string) => counts.filter((row) => (!target || row.pest_code === target) && row.review_status === state).reduce((sum, row) => sum + Number(row.count), 0);
@@ -15,7 +15,7 @@ export async function loadPestDashboard(repository: PestRepository, farmId: stri
   };
 }
 
-export async function savePestReview(repository: PestRepository, input: Parameters<PestRepository['addReview']>[0]) {
+export async function savePestReview(repository: PestRepositoryPort, input: PestReviewInput) {
   const target = await repository.target(input.farmId, input.predictionId);
   if (!target) return null;
   const verdict = reviewVerdict(target.pest_code, input.verdict);

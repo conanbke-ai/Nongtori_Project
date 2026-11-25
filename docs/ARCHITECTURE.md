@@ -66,6 +66,12 @@ Domain은 framework, DB, model filename, 외부 API를 모른다.
 
 저장/조회만 담당한다. `응애 의심`, `수확 적기`, `JM`, `JAM`, 파일 match/rename/change 판단 같은 비즈니스 판단은 금지한다.
 
+병해충 대시보드와 현장 확인 유스케이스는 Application 소유
+`app/features/pests/application/pest-repository-port.ts`에 저장 계약을 정의한다.
+`app/features/pests/infrastructure/pest-repository.ts`는 이 Port를 구현하며,
+Application Service는 D1이나 구체 Repository 클래스를 직접 참조하지 않는다.
+API route는 composition boundary에서 구체 구현을 생성해 Service에 전달한다.
+
 ### Infrastructure / Adapter
 
 - `RgbImageAdapter`
