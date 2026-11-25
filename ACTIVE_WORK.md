@@ -1,3 +1,10 @@
+## N-A 게시 확인 — 2026-11-25
+
+- 확인 시점 main917aa934380407a97b48e7a0fc0347dae6fa685f 불변. 기존 #109 브랜치에4f14c59ed59f7f4dd171acd32a3cef07a5ccd04a, 기존 #113 브랜치에bbbd78c500c7e196f1a4c53dacc6965d1541c8f1 non-force push 성공. 새 원격브랜치/Draft해제/main병합/배포0. 이 기록 후 문서-only 후속 commit은 별도이므로 위SHA는 실제 관측된 게시checkpoint다.
+- #109 수정만의59/59·type/lint exit0 재검증. #113 결합 tree860da8ebd2d9fb942388e9530cb16119842cd47f는 독립ScopedGO 및 최종59/59·전체194/194·type/lint exit0 검증tree와 정확일치. 기존 localD1 3/3 및 동일제품build0 근거를 범위구분해 재사용. 현재기록은 상태문서만 추가하며 제품/시험/설정 바이트를 바꾸지 않는다.
+- 구현LOCAL_COMMITTED / 게시REMOTE_PUSHED(기존Draft) / 검증scopedPASS / Windows동기화UNVERIFIED. 새 원격CI는 NOT_VERIFIED이며 과거CI성공을 새SHA에 승계하지 않는다. 모바일/실제DOM NOT_RUN, HTTP완료BLOCKED/BFCacheHOLD, 사진ack-loss·영속dedup 및 ML_INFERENCE_CONTRACT_V001 미확보gate는 유지한다.
+- 다음 N-A 우선항목은 기존Draft의schema/새저장활성화 제외조건과 분리한 사진접수 durable identity·저장확정/불명·대사/보상 계약이다. N-B에는 원문계약경로/SHA 확보가 필요하다. 실제모델/가격모듈 수정·운영R2/D1 쓰기0. 원래work3547c552 작업본517파일/index 보존은 최종영수증에서 확인한다.
+
 ## N-A Integration & Reliability — 2026-11-25 checkpoint
 
 - OWNER_SESSION=/root (실제 thread ID는 UNVERIFIED), 단일 writer. 정책 baseline Tori_Common_Project@df0331220f6eae2b802bed612ec306ac20893c1a §26–32/Credit13/Recovery 실제 읽음. 기본A 개발·검증, B 게시 조건은 별도 gate. 정책 복제0.

@@ -8,11 +8,7 @@ import {
   type ScoutingSignals,
   type ScoutingState,
 } from '../domain/scouting-policy';
-import {
-  ScoutingRepository,
-  type ScoutingCaseRow,
-  type ScoutingPolicyProfile,
-} from '../infrastructure/scouting-repository';
+import type { ScoutingCaseRow, ScoutingPolicyProfile, ScoutingRepositoryPort } from './scouting-repository-port';
 
 export const SCOUTING_POLICY_VERSION = 'PEST-SCOUT-V2-20260916';
 
@@ -84,7 +80,7 @@ function resolveFieldCheckFreshness(input: {
   } as const;
 }
 
-export async function processScoutingObservation(repository: ScoutingRepository, input: ProcessScoutingObservationInput) {
+export async function processScoutingObservation(repository: ScoutingRepositoryPort, input: ProcessScoutingObservationInput) {
   const location = await repository.resolveLocation(input.farmId, input.houseId, input.bedId, input.zoneId, input.observedAt);
   const normalizedSessionId = await repository.validateObservationScope({
     farmId: input.farmId,
@@ -242,7 +238,7 @@ export async function processScoutingObservation(repository: ScoutingRepository,
 
 export class ScoutingMutationValidationError extends Error {}
 
-export async function recordScoutingFieldCheck(repository: ScoutingRepository, input: {
+export async function recordScoutingFieldCheck(repository: ScoutingRepositoryPort, input: {
   farmId: string;
   locationStateId: string;
   memberId: string;
@@ -295,7 +291,7 @@ export async function recordScoutingFieldCheck(repository: ScoutingRepository, i
   };
 }
 
-export async function correctScoutingFieldCheck(repository: ScoutingRepository, input: {
+export async function correctScoutingFieldCheck(repository: ScoutingRepositoryPort, input: {
   farmId: string;
   fieldCheckId: string;
   memberId: string;
@@ -344,7 +340,7 @@ export async function correctScoutingFieldCheck(repository: ScoutingRepository, 
   };
 }
 
-export async function recordScoutingAction(repository: ScoutingRepository, input: {
+export async function recordScoutingAction(repository: ScoutingRepositoryPort, input: {
   farmId: string;
   locationStateId: string;
   memberId: string;
@@ -374,7 +370,7 @@ export async function recordScoutingAction(repository: ScoutingRepository, input
   return { locationStateId: input.locationStateId, caseId: activeCase?.id ?? null, actionCode: input.actionCode, nextState };
 }
 
-export async function resolveScoutingCase(repository: ScoutingRepository, input: {
+export async function resolveScoutingCase(repository: ScoutingRepositoryPort, input: {
   farmId: string;
   locationStateId: string;
   memberId: string;

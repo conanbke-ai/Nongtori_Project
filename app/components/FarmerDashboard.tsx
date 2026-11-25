@@ -15,7 +15,7 @@ import { CameraCapture } from './CameraCapture';
 import { CropGuideLibrary, type CropGuideRecord } from './CropGuideLibrary';
 import { FarmMiniChat } from './FarmMiniChat';
 import { FarmStatus } from './FarmStatus';
-import { HarvestLog } from './HarvestLog';
+import { HarvestLog } from '@/app/features/harvest/presentation/HarvestLog';
 import { PestCaptureForm } from './PestCaptureForm';
 import { PestAlertReview, type PestAlertPagination, type PestAlertRecord } from './PestAlertReview';
 import { RecordNotes } from './RecordNotes';

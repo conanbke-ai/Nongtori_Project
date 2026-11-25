@@ -1,72 +1,23 @@
-import type { AlertDecision, FieldEvidenceCode, ScoutingState } from '../domain/scouting-policy';
+import type {
+  AppendScoutingActionInput,
+  AppendScoutingAlertInput,
+  AppendScoutingFieldCheckCorrectionInput,
+  AppendScoutingFieldCheckInput,
+  ApplyScoutingFieldCheckStateInput,
+  CreateScoutingNotificationsInput,
+  ObservationInput,
+  OpenScoutingCaseInput,
+  ResolveScoutingCaseInput,
+  ScoutingCaseRow,
+  ScoutingFieldCheckRow,
+  ScoutingLocationStateRow,
+  ScoutingPolicyProfile,
+  ScoutingRepositoryPort,
+  UpdateScoutingLocationInput,
+  ValidateScoutingObservationScopeInput,
+} from '../application/scouting-repository-port';
 
-export type ScoutingLocationStateRow = {
-  id: string;
-  farm_id: string;
-  house_id: string;
-  bed_id: string;
-  zone_id: string;
-  location_key: string;
-  house_code: string;
-  bed_code: string;
-  zone_code: string;
-  current_state: ScoutingState;
-  active_case_id: string | null;
-  last_observed_at: string | null;
-  last_field_check_at: string | null;
-  last_action_at: string | null;
-  last_alert_at: string | null;
-  last_alert_reason: string | null;
-  recent_pattern_fingerprint: string | null;
-  state_version: number;
-};
-
-export type ScoutingCaseRow = {
-  id: string;
-  farm_id: string;
-  location_state_id: string;
-  issue_family: 'PEST' | 'DISEASE' | 'PHYSIOLOGICAL_ENVIRONMENTAL' | 'UNKNOWN';
-  primary_issue_code: string | null;
-  status: 'OPEN' | 'MONITORING' | 'POST_TREATMENT' | 'RESOLVED';
-  opened_at: string;
-  closed_at?: string | null;
-  close_reason?: string | null;
-};
-
-export type ScoutingPolicyProfile = {
-  policy_version: string;
-  freshness_mode: 'CALIBRATION_PENDING' | 'FIXED_WINDOW';
-  field_check_freshness_minutes: number | null;
-};
-
-export type ObservationInput = {
-  id: string;
-  farmId: string;
-  locationStateId: string;
-  caseId: string | null;
-  captureSessionId?: string | null;
-  frameId?: string | null;
-  sourceAssetId?: string | null;
-  observedAt: string;
-  sourceType: 'THERMAL' | 'RGB_REFERENCE' | 'SENSOR' | 'MANUAL' | 'FUSION';
-  leafTemp?: number | null;
-  ambientTemp?: number | null;
-  referenceTemp?: number | null;
-  humidity?: number | null;
-  lightLevel?: number | null;
-  thermalFeaturesJson?: string;
-  rgbReferenceJson?: string;
-  modelName?: string | null;
-  modelVersion?: string | null;
-  riskSignal?: number | null;
-  noveltySignal?: number | null;
-  trendSignal?: number | null;
-  spatialSignal?: number | null;
-  patternFingerprint?: string | null;
-  policyInputJson: string;
-};
-
-export class ScoutingRepository {
+export class ScoutingRepository implements ScoutingRepositoryPort {
   constructor(private db: D1Database, private mutationPlan?: D1PreparedStatement[]) {}
 
   private async commitMutation(statements: D1PreparedStatement[]) {
@@ -118,10 +69,7 @@ export class ScoutingRepository {
       .first<ScoutingPolicyProfile>();
   }
 
-  async openCase(input: {
-    farmId: string; locationStateId: string; issueFamily: ScoutingCaseRow['issue_family'];
-    issueCode?: string | null; openedReason: string; now: string; previousCaseId?: string | null;
-  }) {
+  async openCase(input: OpenScoutingCaseInput) {
     const id = crypto.randomUUID();
     const statements = [this.db.prepare(`INSERT INTO scouting_cases(
       id, farm_id, location_state_id, issue_family, primary_issue_code, status,
@@ -143,9 +91,7 @@ export class ScoutingRepository {
     return id;
   }
 
-  async validateObservationScope(input: {
-    farmId: string; location: ScoutingLocationStateRow; captureSessionId?: string | null; frameId?: string | null;
-  }) {
+  async validateObservationScope(input: ValidateScoutingObservationScopeInput) {
     let sessionId = input.captureSessionId ?? null;
     if (input.captureSessionId) {
       const session = await this.db.prepare(`SELECT id, farm_id, house_id, bed_id, zone_id FROM capture_sessions WHERE id = ? LIMIT 1`)
@@ -202,10 +148,7 @@ export class ScoutingRepository {
         input.spatialSignal ?? null, input.patternFingerprint ?? null, input.policyInputJson, input.observedAt).run();
   }
 
-  async appendAlert(input: {
-    id: string; farmId: string; locationStateId: string; caseId: string | null; observationId: string;
-    decision: AlertDecision; reason: string; suppressionReason: string | null; policyVersion: string; now: string;
-  }) {
+  async appendAlert(input: AppendScoutingAlertInput) {
     await this.db.prepare(`INSERT INTO scouting_alert_events(
       id, farm_id, location_state_id, case_id, observation_id, created_at,
       alert_decision, alert_reason, suppression_reason, policy_version
@@ -214,10 +157,7 @@ export class ScoutingRepository {
         input.now, input.decision, input.reason, input.suppressionReason, input.policyVersion).run();
   }
 
-  async updateLocation(input: {
-    locationStateId: string; nextState: ScoutingState; activeCaseId: string | null;
-    observedAt: string; fingerprint?: string | null; alertAt?: string | null; alertReason?: string | null;
-  }) {
+  async updateLocation(input: UpdateScoutingLocationInput) {
     await this.db.prepare(`UPDATE scouting_location_states SET
       current_state = ?, active_case_id = ?, last_observed_at = ?,
       recent_pattern_fingerprint = COALESCE(?, recent_pattern_fingerprint),
@@ -229,11 +169,7 @@ export class ScoutingRepository {
         input.alertAt ?? null, input.alertReason ?? null, input.observedAt, input.locationStateId).run();
   }
 
-  async appendFieldCheck(input: {
-    id: string; farmId: string; locationStateId: string; caseId: string | null; observationId?: string | null;
-    checkedAt: string; checkerMemberId: string; evidenceCode: FieldEvidenceCode;
-    secondaryEvidenceJson?: string; note?: string | null;
-  }) {
+  async appendFieldCheck(input: AppendScoutingFieldCheckInput) {
     const statement = this.db.prepare(`INSERT INTO scouting_field_checks(
       id, farm_id, location_state_id, case_id, observation_id, checked_at, checker_member_id,
       primary_evidence_code, secondary_evidence_json, note, created_at
@@ -259,16 +195,10 @@ export class ScoutingRepository {
 
   async fieldCheckForCorrection(farmId: string, fieldCheckId: string) {
     return this.db.prepare(`SELECT id, farm_id, location_state_id, case_id, primary_evidence_code, checked_at
-      FROM scouting_field_checks WHERE id = ? AND farm_id = ? LIMIT 1`).bind(fieldCheckId, farmId).first<{
-      id: string; farm_id: string; location_state_id: string; case_id: string | null;
-      primary_evidence_code: FieldEvidenceCode; checked_at: string;
-    }>();
+      FROM scouting_field_checks WHERE id = ? AND farm_id = ? LIMIT 1`).bind(fieldCheckId, farmId).first<ScoutingFieldCheckRow>();
   }
 
-  async applyFieldCheckState(input: {
-    locationStateId: string; caseId: string | null; nextState: ScoutingState;
-    evidenceCode: FieldEvidenceCode; issueFamily?: ScoutingCaseRow['issue_family']; issueCode?: string | null; now: string;
-  }) {
+  async applyFieldCheckState(input: ApplyScoutingFieldCheckStateInput) {
     const statements = [
       this.db.prepare(`UPDATE scouting_location_states SET current_state = ?, last_field_check_at = ?,
         state_version = state_version + 1, updated_at = ? WHERE id = ?`)
@@ -286,13 +216,7 @@ export class ScoutingRepository {
     await this.commitMutation(statements);
   }
 
-  async appendFieldCheckCorrection(input: {
-    id: string; farmId: string; fieldCheckId: string; locationStateId: string; caseId: string | null;
-    correctionKind: 'REPLACE' | 'VOID'; replacementEvidenceCode?: FieldEvidenceCode | null;
-    reasonCode: 'MISCLICK' | 'WRONG_OBSERVATION' | 'DUPLICATE' | 'OTHER'; note?: string | null;
-    actorMemberId: string; now: string; nextState: ScoutingState;
-    issueFamily?: ScoutingCaseRow['issue_family']; issueCode?: string | null;
-  }) {
+  async appendFieldCheckCorrection(input: AppendScoutingFieldCheckCorrectionInput) {
     const statements = [this.db.prepare(`INSERT INTO scouting_field_check_corrections(
       id, farm_id, field_check_id, location_state_id, case_id, correction_kind, replacement_evidence_code,
       reason_code, note, actor_member_id, created_at
@@ -323,11 +247,7 @@ export class ScoutingRepository {
     await this.commitMutation(statements);
   }
 
-  async appendAction(input: {
-    id: string; farmId: string; locationStateId: string; caseId: string | null;
-    actionAt: string; actionCode: string; actorMemberId: string; detailJson?: string; note?: string | null;
-    nextState: ScoutingState;
-  }) {
+  async appendAction(input: AppendScoutingActionInput) {
     const statements = [
       this.db.prepare(`INSERT INTO scouting_actions(
         id, farm_id, location_state_id, case_id, action_at, action_code, actor_member_id,
@@ -347,9 +267,7 @@ export class ScoutingRepository {
     await this.commitMutation(statements);
   }
 
-  async resolveCase(input: {
-    farmId: string; locationStateId: string; caseId: string; reasonCode: string; actorMemberId: string; now: string;
-  }) {
+  async resolveCase(input: ResolveScoutingCaseInput) {
     await this.commitMutation([
       this.db.prepare(`UPDATE scouting_cases SET status = 'RESOLVED', closed_at = ?, close_reason = ?, updated_at = ?
         WHERE id = ? AND farm_id = ? AND location_state_id = ? AND status != 'RESOLVED'`)
@@ -365,10 +283,7 @@ export class ScoutingRepository {
     ]);
   }
 
-  async createNotifications(input: {
-    farmId: string; locationState: ScoutingLocationStateRow; observationId: string;
-    decision: Exclude<AlertDecision, 'SUPPRESSED'>; reason: string; now: string;
-  }) {
+  async createNotifications(input: CreateScoutingNotificationsInput) {
     const recipients = await this.db.prepare(`SELECT id, phone FROM farm_members
       WHERE farm_id = ? AND status = 'ACTIVE' AND notifications_enabled = 1
         AND phone IS NOT NULL AND phone_verified_at IS NOT NULL`)

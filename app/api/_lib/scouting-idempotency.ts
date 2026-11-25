@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { getFarmMember } from '@/app/lib/farm-auth';
 import { executeScoutingIntent, lookupScoutingIntent, normalizeScoutingIntent, ScoutingIntentError, type ScoutingMutationKind } from '@/app/features/pests/application/scouting-intent';
+import { ScoutingReceiptRepository } from '@/app/features/pests/infrastructure/scouting-receipt-repository';
 
 async function boundedJson(request: Request) {
   const reader = request.body?.getReader();
@@ -41,7 +42,7 @@ export async function handleScoutingIntentLookup(request: Request) {
     if (!actor?.id || !actor.permissions.reviewAlerts)
       throw new ScoutingIntentError(403, 'FORBIDDEN', '이 농장의 요청 결과를 확인할 권한이 없습니다.');
     // Lookup never calls original POST handler, bootstrap or a write transaction.
-    return respond(await lookupScoutingIntent(env.DB, actor.id, key, intent));
+    return respond(await lookupScoutingIntent(new ScoutingReceiptRepository(env.DB), actor.id, key, intent));
   } catch (error) {
     if (error instanceof ScoutingIntentError) return respond({ error: error.message, code: error.code }, error.status);
     return respond({ error: '아직 저장 결과를 확인할 수 없습니다. 기존 요청 키를 유지해 주세요.', code: 'MUTATION_RESULT_UNCERTAIN' }, 503);
@@ -60,7 +61,7 @@ export async function handleKeyedScoutingMutation(request: Request, operation: S
     if (!actor?.id || !actor.permissions.reviewAlerts)
       throw new ScoutingIntentError(403, 'FORBIDDEN', '이 농장의 예찰 기록을 변경할 권한이 없습니다.');
     // No ensureSchema/ensureScoutingRuntime: schema preparation is not activation.
-    const result = await executeScoutingIntent(env.DB, actor.id, key, intent, { farm, member });
+    const result = await executeScoutingIntent(new ScoutingReceiptRepository(env.DB), actor.id, key, intent, { farm, member });
     return Response.json(result.body, { status: result.status });
   } catch (error) {
     if (error instanceof ScoutingIntentError)

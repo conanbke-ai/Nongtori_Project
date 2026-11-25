@@ -118,6 +118,32 @@ test('paired photo failure waits for the delayed sibling upload before cleanup a
   } finally { release(); env.FILES = originalFiles; }
 });
 
+test('capture removes stored photos when the session and assets roll back together', async () => {
+  const sessionCount = () => sqlite.prepare('SELECT COUNT(*) AS n FROM capture_sessions').get()?.n;
+  const assetCount = () => sqlite.prepare('SELECT COUNT(*) AS n FROM capture_assets').get()?.n;
+  const baseline = { sessions: sessionCount(), assets: assetCount(), keys: [...objects.keys()] };
+  const body = new FormData();
+  body.set('farmId', 'test-a');
+  body.set('pestCode', 'APHID');
+  body.set('rgbImage', new File(['RGB_TEST_ONLY'], 'rgb.png', { type: 'image/png' }));
+  body.set('thermalImage', new File(['THERMAL_TEST_ONLY'], 'thermal.png', { type: 'image/png' }));
+
+  sqlite.exec(`CREATE TEMP TRIGGER capture_asset_failure BEFORE INSERT ON capture_assets
+    BEGIN SELECT RAISE(ABORT, 'TEST_ONLY capture asset write failure'); END`);
+  try {
+    const response = await capture.POST(new Request('https://nongtori.test/api/pest-capture', {
+      method: 'POST', headers: { 'oai-authenticated-user-id': 'worker' }, body,
+    }));
+    assert.equal(response.status, 400);
+    assert.equal((await response.json() as { error: string }).error, 'TEST_ONLY capture asset write failure');
+    assert.equal(sessionCount(), baseline.sessions);
+    assert.equal(assetCount(), baseline.assets);
+    assert.deepEqual([...objects.keys()], baseline.keys);
+  } finally {
+    sqlite.exec('DROP TRIGGER capture_asset_failure');
+  }
+});
+
 test('multiple pests have independent counts, filtering, deduplication and pagination', async () => {
   const all = await loadPestDashboard(repo, 'test-a', '', 'OPEN', 1);
   assert.equal(all.totalOpen, 4); assert.equal(all.rows.length, 4);
