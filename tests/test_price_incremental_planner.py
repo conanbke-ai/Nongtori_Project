@@ -106,6 +106,43 @@ class IncrementalPlanTests(unittest.TestCase):
             result = run([target()], [receipt], [A])
             self.assertEqual((result.decisions[0].state, result.decisions[0].new_days), (state, 0))
 
+    def test_market_scope_distinguishes_matched_empty_and_wrong_market(self):
+        matched = Observation(A, DAY1, FIRST, "a" * 64)
+        wrong_market = replace(matched, series=replace(A, market="other"))
+        cases = (
+            ((matched,), "RETRAIN_CANDIDATE", 1),
+            ((), "REUSE_APPROVED_MODEL", 0),
+            ((wrong_market,), "UNVERIFIED_ACQUISITION", 0),
+        )
+        for rows, state, new_days in cases:
+            with self.subTest(state=state):
+                result = run([target()], [source(R1, rows)], [A])
+                self.assertEqual(result.fetch, ())
+                self.assertEqual((result.decisions[0].state, result.decisions[0].new_days), (state, new_days))
+
+    def test_mixed_scope_violation_holds_whole_receipt(self):
+        matched = Observation(A, DAY1, FIRST, "a" * 64)
+        for field, value in (("provider", "other"), ("market", "other"),
+                             ("corporation", "1101"), ("product", "1")):
+            with self.subTest(field=field):
+                foreign = replace(matched, series=replace(A, **{field: value}))
+                result = run([target()], [source(R1, (matched, foreign))], [A])
+                self.assertEqual(result.fetch, ())
+                self.assertEqual((result.decisions[0].state, result.decisions[0].new_days),
+                                 ("UNVERIFIED_ACQUISITION", 0))
+
+    def test_request_scope_can_cover_other_series(self):
+        other_series = replace(A, origin="origin-b", cultivar="other", grade="other", unit="box")
+        unfiltered = replace(R1, corporation_filter=None, product_filter=None)
+        cases = ((R1, other_series), (unfiltered, replace(other_series, corporation="other", product="other")))
+        for request, series in cases:
+            with self.subTest(request=request):
+                row = Observation(series, DAY1, FIRST, "a" * 64)
+                result = run([target(requests=(request,))], [source(request, (row,))], [A])
+                self.assertEqual(result.fetch, ())
+                self.assertEqual((result.decisions[0].state, result.decisions[0].new_days),
+                                 ("REUSE_APPROVED_MODEL", 0))
+
     def test_chronology_or_lineage_fault_holds_whole_receipt(self):
         valid = Observation(A, DAY1, FIRST, "a" * 64)
         for invalid in (replace(valid, source_sha256="b" * 64),

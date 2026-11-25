@@ -121,12 +121,21 @@ def _has_digest(value: str) -> bool:
 def _verified_rows(receipt: Receipt, verified: datetime) -> bool:
     if not isinstance(receipt.eligible_rows, tuple):
         return False
+    request = receipt.request
     for row in receipt.eligible_rows:
         if (
             not isinstance(row, Observation)
+            or not isinstance(row.series, Series)
             or row.source_sha256 != receipt.sha256
             or type(row.trade_day) is not date
-            or row.trade_day > receipt.request.settlement_day
+            or row.trade_day > request.settlement_day
+        ):
+            return False
+        series = row.series
+        if (
+            (series.provider, series.market) != (request.provider, request.market)
+            or request.corporation_filter not in (None, series.corporation)
+            or request.product_filter not in (None, series.product)
         ):
             return False
         if row.available_at is not None:
