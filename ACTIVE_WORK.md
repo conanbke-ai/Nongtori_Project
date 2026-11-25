@@ -115,6 +115,48 @@
 - Final actual existing test:workflows PASS92/92 (baseline86+new history6), type/full lint/build PASS; target22/22 before final date regressions, all included in final full run. Existing CI lists already cover edited scouting-ui/scouting-hardening files, so package/workflow edits are unnecessary. Independent read review's calendar/accessibility findings fixed and rereview PASS; not Advisor/operational/browser acceptance.
 - Candidate8 paths and evidence are in docs/SCOUTING_HISTORY_UI_CANDIDATE.md and external manifest. No path overlap with photo5-file candidate. New implementation remains uncommitted and unpublished. Browser/hosting/actual DB/data NOT_RUN; no previous access denial retried or bypassed. Next gate is exact-diff/current-main review and separate publication approval, not deployment.
 
+---
+## 2026-11-24 pest catalog readiness and thermal-first policy alignment
+
+Status: **POLICY_DOCUMENTS_UPDATED / APP_AND_MODEL_RUNTIME_UNCHANGED**.
+
+- `docs/PEST_AND_RECORD_WORKFLOWS.md` policy update commit `2b729276fa8e1fc72ca4b17f621ab638d90393a8`: six record-only pest/disease catalog entries are not inferred as trained/validated inference capabilities. Confirmed public RGB dataset evidence is separated from missing/unknown per-class data readiness; readiness stages and inference/deployment stages are independent future contracts. New pest-specific data is source/license/split audited rather than silently treated as ready.
+- `docs/THERMAL_MITE_RISK_V001.md` policy update commit `ab5bc5611aa3eb415f9b230977105ac9f1adf80d`: thermal/env/history mite-risk early scouting remains primary. RGB direct mite detection and ZERO/VFM few-shot are auxiliary and research only. Radiometric units/reference, independently confirmed labels and temporal/farm holdouts are required; no sign-fixed thermal assumption, fabricated species diagnosis, or training before label/split readiness.
+- Respect paper-aligned RGB benchmark architecture and epochs/patience; later independent tuning only with validated evidence. Existing public reference datasets and incomplete/unknown local field assets are not silently upgraded to operational field-ready status.
+- Pending: inspect current local media & label linkage and runtime; evaluate missing disease/pest datasets separately, implement readiness state UI/model contracts only after design/QA gates and branch lease. No new inference worker, dataset collection, training job, migration, branch, deployment or GPU benchmark was performed in this policy-only update.
+- Existing main and open PR workstreams are preserved. No source data, secrets or model weights changed.
+
+---
+## 2026-11-20 ML optimization adoption and GPU throughput workstream
+
+Status: **DOCS_INTEGRATED / BENCHMARK_NOT_RUN / LOCAL_RUNTIME_REQUIRED**.
+Requested scope: AWSKRUG Superb AI ZERO scratch VFM, zero-shot/few-shot and benchmarks; apply useful techniques to Nongtori; improve historical half-day training time with realistic single RTX 4060 optimization. Target 2027-03, contingency 2027-06.
+
+### Completed in this session (GitHub main, documentation-only)
+
+- `docs/MODEL_IMPROVEMENT_STRATEGY.md`: detailed adoption strategy, gating, priority, acceptance, few-shot/zero-shot distinction; commit `921d9fc862329d9b517e56006009ca84072983a9`.
+- `docs/ML_EXECUTION_ENVIRONMENT_POLICY.md`: A0–A5 CPU worker/cache/AMP/batch/prefetch profiling, controlled GPU speed measurement; commit `3de5be909ef6abb65e0f2568d846f7638e3f1f3f`.
+- GitHub main static code inventory (not local runtime proof): YOLO11 Large source-reference workers 4 / 100 epochs / 1024 imgsz; mite field PyTorch DataLoader workers 4 and CUDA pin_memory; ripeness v001 workers 2 and pin_memory false; existing validated crop cache reuse. Reuse existing logging and metrics instead of implementing a duplicate system.
+- Remote GitHub branch budget was **main + 4 feature branches = 5/5**, open PRs #26, #97, #102, #109. No new branch or PR, no deletion/merge or activation.
+- Scope respects existing mite morphology PR #102; model performance baseline and local latest assets/checkpoints remain **UNVERIFIED**.
+
+### First execution gate (next local GPU task)
+
+1. Reconcile `ACTIVE_WORK.md`, current local uncommitted changes, branch/PR #102 and model code; mark ALREADY_DONE/IN_PROGRESS/NEW/BLOCKED. Do not replace/overwrite current work.
+2. Locate original half-day run log and identify stage durations; if missing, capture new A0 measured baseline (do not assume 12 hours precisely).
+3. Confirm canonical snapshot readiness and freeze checkpoint/config/seed/split, then run a short same-data benchmark with worker 0/2/4/8 followed by cold/warm cache, AMP verification, batch/prefetch as supported.
+4. Capture wall-clock vs epoch durations, image throughput, load wait, GPU utilization/VRAM, validation quality; separate warmup and cache build. Use immutable artifacts and SHA.
+5. Select A5 full-run candidate only if screening supports speed improvement without metric regression. No fixed test tuning, no paid cloud GPU and no simulated PASS.
+6. After baseline, evaluate small-object tiled inference and conditional few-shot experiments only if field label/split readiness meets gates.
+
+### Evidence and pending status
+
+- NOT_RUN: local GPU benchmark, training jobs, dataset re-acquisition, actual model performance comparison, full app tests/browser QA.
+- NOT_DONE: new application/model code, new dataset snapshot, inference worker enablement, deployment, main merge of open PRs.
+- Follow canonical `docs/MODEL_EXPERIMENT_EVIDENCE_POLICY.md`; real run evidence is required before any claimed metric or portfolio outcome.
+- Sources: AWS https://aws.amazon.com/ko/blogs/tech/amazon-sagemaker-hyperpod-superbai-zero-foundation-model/ and user-supplied AWSKRUG 2026-11-26 session agenda.
+
+---
 ## Manual confirmation publication preparation — no remote writes
 
 - Exact scope remains the11 files inventoried in `LOOKUP_REVIEW.md`; detached local source `d012be6`, parent-confirmed main `7ef6e546a18c6cd9267d8d4986d5439ca39a5476`/tree `8595d1a93f6c9d16222ef8ffb80220506910d684`. Current remote main/heads/open PRs/rules are UNKNOWN: no GitHub connector is callable here and prior denied remote paths were not retried. Cached origin/main57c7e01 and local branch labels are not current remote evidence.

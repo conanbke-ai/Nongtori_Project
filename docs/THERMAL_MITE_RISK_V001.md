@@ -115,3 +115,17 @@ Thermal signal is a risk indicator, not a species-specific diagnosis.
 
 Field confirmation, RGB corroboration and repeated observations can increase confidence,
 but no single missing evidence stream is silently interpreted as a negative label.
+
+---
+
+## 2026-11-24 Thermal-first / low-data adaptation clarification
+
+**Policy status: ADOPTED / NO NEW MODEL TRAINING.** Mite early warning is based on leaf thermal physiology (relative leaf/reference/ambient temperature, VPD, time and spatial pattern), environmental covariates and independently verified outcomes. High-resolution RGB mite/egg detection or ZERO/VFM zero-shot/few-shot detection is **auxiliary corroboration/research**, not the primary early-warning objective.
+
+- Require provenance for radiometric thermal values vs palette-rendered screenshots; never interpret pixel colors as absolute °C without validated calibration and palette metadata. Preserve device calibration, units, capture time, source hash and reference region when available.
+- Candidate observational labels: `CONFIRMED_POSITIVE`, `CONFIRMED_NEGATIVE`, `UNVERIFIED`, `UNKNOWN`; confirmed negative requires actual documented inspection protocol, not missing RGB detections. Do not infer mites from `Health` or `Risk_Status` alone.
+- Pair temporal, plant/leaf, farm/zone and environmental observations. Capture matched positive, inspected-negative, other-stress confounder and repeated observations; no fixed warmer/cooler direction or risk threshold without field calibration. Observed mite after symptoms and true lead-time early warning must be reported separately.
+- For very small datasets, first test interpretable Logistic Regression and XGBoost on verified features; low-data/few-shot domain adaptation is a *conditional* study, not an automatic VFM replacement. A 10/20/50-case support cohort is illustrative only; sampling unit, independent validation/test and uncertainty must be specified. Do not label repeated frames from one leaf as independent shots.
+- Evaluate sensitivity/false alarms per farm/zone, AUPRC/AUROC, calibration, lead time, domain holdout, robustness to illumination/water-stress/confounders and missing inputs. A generic abnormal thermal signal is not a species-specific positive diagnosis.
+- Preserve source-aligned paper-based baseline architecture and predeclared epoch/patience settings for existing RGB reference experiments. No arbitrary replacement with tutorial values; later tuning requires hypothesis, fixed split and separate evidence. Thermal tabular baseline does not inherit YOLO epoch/patience.
+- No model fitting until canonical field label policy and cohort/split gate are complete. Product inference remains disabled until validated and deployed under existing authorization/worker QA policies.

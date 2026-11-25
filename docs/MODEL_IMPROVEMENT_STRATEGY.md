@@ -458,3 +458,53 @@ Accuracy / Error
 - 가격 예측: R²가 높아도 leakage가 있거나 MAE가 크면 탈락
 
 이 원칙을 통해 모델 개선 과정과 모델 선택 이유를 포트폴리오/운영 문서에서 명확하게 설명할 수 있어야 한다.
+
+---
+## 2026-11-20 AWSKRUG ZERO / Few-shot / Pest ML optimization adoption plan
+
+Status: **PLANNED / NOT EXECUTED**. Owner: Nongtori ML workstream. Target: **2027-03 portfolio-ready; 2027-06 contingency only**.
+Source context: AWSKRUG Data x AI Engineering (2026-11-26) session on Superb AI ZERO VFM scratch training, prompt-based zero-shot, few-shot adaptation, benchmark and demo; https://aws.amazon.com/ko/blogs/tech/amazon-sagemaker-hyperpod-superbai-zero-foundation-model/ .
+This is an evaluation backlog, **not** evidence that ZERO has been integrated or that current model performance has improved. Do not start a duplicate implementation workstream.
+
+### Ground truth / current boundaries
+
+- The current repo contains `ml/detector_baseline/mite_yolo11_reference_v001.py` (YOLO11-Large source-reference, portfolio/reference scope), `mite_field_v001.py` (PyTorch detector), and ripeness models; the official baseline is **not** assumed to be YOLO-only. Resolve actual latest local weights, snapshot, job logs, tasks, and active PR before execution.
+- RGB pest detection, thermal-first mite-risk prediction, fruit detection, and ripeness classification are separate tasks. Never present an RGB classifier output as a validated thermal risk prediction.
+- Respect `ACTIVE_WORK.md`, PR #102 (mite morphology transfer), PR #109 (scouting UI), design freeze, source licenses, immutable source/snapshot, Group_ID/session/farm leakage policy, validation-only selection, and locked final test set.
+- Preserve original source and verified backups; do not create redundant backups, auto-overwrite files, or modify live Google Sheet/remote source. New accepted dataset policy produces **versioned successor snapshot**, not destructive mutation.
+
+### Concept-to-experiment mapping
+
+| Concept | Meaning / choice | Candidate work and decision gate |
+|---|---|---|
+| YOLO detection vs classification | detection predicts class + bbox; classification labels whole image/crop | verify detector and EfficientNet role separately; no unverified architecture claim |
+| Pretraining / transfer / fine-tuning | reuse pretrained features; update selected weights on field examples | use existing checkpoints first, compare controlled field fine-tune on validation |
+| Zero-shot VFM | prompted detection without target-specific retraining | research-only candidate with terms/license/runtime availability verified; do not claim ZERO API/access |
+| Few-shot adaptation | small support set; may use parameter updates or prototype/prompt methods | fixed support count comparison (e.g. 10/30/50 **illustrative**, subject to viable holdout); keep test untouched |
+| Domain shift / edge case | new farm, angle, lighting, occlusion, small/dense pests | farm/source/size/occlusion stratified error audit, hard-negative and missed-positive gallery |
+| Active learning | select high-value examples for manual labeling | rank uncertain/diverse images, human review; record label effort |
+| Pseudo-labeling | predicted labels as candidate training targets | offline opt-in only; independent confirmation/human QA; no auto-promotion of unverified labels |
+| Tiled inference | split high-resolution image into overlapping tiles, map boxes back, de-duplicate | compare with baseline for small-object recall and latency; NMS/merging test |
+| Reclassification | detector bbox crop classified by second model | only if systematic class confusion; gate on added compute, F1, false alerts |
+
+### Ordered implementation gates (avoid unnecessary experiments)
+
+**G0 – Audit / freeze, late Nov 2026:** identify live canonical workstream and current local checkpoint, valid image metadata, labels, bbox/class mappings, dataset hash, photographer/group identity, raw ↔ derived provenance, training permission; reproduce existing baseline. `READY_METADATA` is not `TRAINING_READY`; hard-stop training on missing physical media/annotation evidence. Produce audit report and new immutable snapshot only after gates pass.
+
+**G1 – Profiling / throughput, late Nov–Dec:** single GPU baseline and narrow CPU data loading/cache/AMP/batch benchmark documented in `ML_EXECUTION_ENVIRONMENT_POLICY.md`. This is a **first-class deliverable**, not optional polish, due to reported historical ~half-day run (unverified exact scope). Keep wall-clock + epoch/s + images/s + GPU utilization/VRAM + validation metrics. No early claim of time savings.
+
+**G2 – Detection error reduction, Dec:** compare unchanged baseline vs resolution and tile/overlap/NMS strategies on frozen validation, with small-object recall, FP/FN, per-farm/lighting breakdown and inference latency. Prefer a small controlled experiment over architecture replacement.
+
+**G3 – Data-efficient adaptation, Jan 2027 (conditional):** if sufficient independent field validation exists, run pretrained baseline fine-tuning using controlled small support cohorts; optional hard-example selection, active learning and QA-verified pseudo-label candidates. Compare annotation effort/time and precision/recall/mAP. Stop when sample independence is insufficient or false alerts deteriorate.
+
+**G4 – App integration / QA, Feb 2027:** connect only approved model through existing Adapter → Normalization → Repository → Domain → Analysis Service → Strategy → API → UI; preserve farm-scoped authorization, audit evidence, `UPLOADED_AWAITING_MODEL`, failed/unverified prediction states, worker failure/retry boundaries. No invented confidence or unverified inference rollout.
+
+**G5 – Portfolio, Mar 2027:** reproducible dataset/model/config/evidence summary, time-to-train before/after with controlled hardware, inference accuracy and latency, real browser and service QA. Apr–Jun contingency only if blocking data/field QA demands it.
+
+### Acceptance / rejection
+
+- No promotion without immutable input identity, matched model family + task, repeatable validation, unchanged test, no source/license or privacy violation.
+- Track mAP50-95, small/dense/occluded-object recall, class precision and false alarms, per-domain metrics, latency P50/P95, GPU memory, training wall-clock and throughput, labeling/annotation cost.
+- For throughput changes, explicit screening target: **≥30% lower wall-clock** (stretch **≥50%**), *targets not observed improvements*; reject if accuracy or run reliability fails agreed tolerance, if speedup only reflects fewer epochs, or if environment is not comparable.
+- VFM scratch-training / HyperPod / multi-GPU infrastructure **excluded** from March scope. Compare VFM/zero-shot only as short offline research against baseline when availability/license is verified.
+- Record outcomes only after real execution in evidence logs per `MODEL_EXPERIMENT_EVIDENCE_POLICY.md`. Status and next steps stay in `ACTIVE_WORK.md`; no extra workstream/branch while branch budget is full.

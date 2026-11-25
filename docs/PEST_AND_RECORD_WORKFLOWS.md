@@ -64,3 +64,41 @@ Drizzle generate 실행 시 기존 `0009` 이후 snapshot 공백 때문에 이�
 ## 원격 반영 상태
 
 로컬 기능/검증 커밋은 `92d15d9`, `e6e49cf`, `1bfb4f8`, `60b35e8`이다. GitHub push는 자동 승인 검토에서 원격 저장소 전송 및 branch 변경에 명시적 승인이 부족하다는 이유로 차단됐다. 읽기 전용 재확인에서 PR #2 head는 여전히 `3223b29`다. 사용자 승인 전까지 PR 반영·배포 완료로 취급하지 않는다.
+
+---
+
+## 2026-11-24 병해충 카탈로그와 모델/데이터 준비 상태 분리 정책
+
+**Policy status: ADOPTED / Documentation only.** 기존 `app/features/pests/domain/catalog.ts`의 6개 항목(`MITE`, `POWDERY_MILDEW`, `GRAY_MOLD`, `APHID`, `THRIPS`, `OTHER`)은 표시·접수·기록용 카탈로그이며 현재 모두 `capability: RECORD_ONLY`다. 등록이 곧 모델 학습·예측·진단 가능함을 의미하지 않는다.
+
+### 카테고리별 근거와 준비 현황 (2026-11-24, GitHub main에서 확인한 원격 문서 기준)
+
+| 카탈로그 | 확인된 학습 근거 | 현재 AI 사용 가능성 |
+|---|---|---|
+| MITE 응애 | `MITE-PUBLIC-FIELD-CONTEXT-V001` 및 `MITE-PUBLIC-MORPHOLOGY-V001` 공개 RGB 객체 탐지용 스냅샷 존재 | RGB 연구/참고 수준, 운영 추론 미연결; Thermal-first field training/calibration gate 미통과 |
+| GRAY_MOLD 잿빛곰팡이병 | `DATA-PEST-001` 외부 데이터 원래 라벨 `gray_mold` 존재 | 병별 학습·검증·서비스 판독 완료 아님 |
+| POWDERY_MILDEW 흰가루병 | 등록된 위 두 공개 데이터셋에 전용 라벨 확인되지 않음 | 학습 스냅샷 확인 필요, RECORD_ONLY |
+| APHID 진딧물 | 위 공개 데이터셋에 전용 라벨 확인되지 않음 | 학습 스냅샷 확인 필요, RECORD_ONLY |
+| THRIPS 총채벌레 | 위 공개 데이터셋에 전용 라벨 확인되지 않음 | 학습 스냅샷 확인 필요, RECORD_ONLY |
+| OTHER 기타·미확인 | 현장 기록/보류 분류, 정답 학습 클래스라고 가정 금지 | RECORD_ONLY |
+
+실제 로컬 또는 미병합 브랜치의 새 데이터 여부는 별도 감사 전까지 **UNKNOWN**으로 유지한다. `DATA-PEST-001`에는 `dry`, `gray_mold`, `scorch`, `Tetranychus Urticae` 라벨이 존재하지만, 증상 라벨과 병해충 진단명을 자동 동치 매핑하지 않는다. 공개 RGB 데이터의 확보/모델 연구 성과를 특정 농가에서의 현장 검증으로 표현하지 않는다.
+
+### 데이터 준비 상태와 모델 서비스 상태는 독립 관리
+
+향후 구현 시 다음 두 개의 구분된 상태축으로 계약화하되, **이번 문서 적용만으로 DB/schema/UI/API를 수정하지 않는다**.
+
+- Data readiness 후보: `NOT_REGISTERED` → `SOURCE_REGISTERED` → `ACQUIRED` → `AUDITED` → `SNAPSHOT_READY` → `FIELD_VALIDATED_DATA` (정의와 진입·퇴출 조건은 기존 데이터 정책과 정합성 검토 후 고정). 원본 미접근/미확인은 `UNKNOWN` 별도 유지.
+- Model capability: `RECORD_ONLY`, `RESEARCH_ONLY`, `VALIDATED_NOT_DEPLOYED`, `INFERENCE_ENABLED` 등은 향후 설계 후보이며 기존 `capability: RECORD_ONLY`의 실제 구현과 혼동하지 않는다. 검증된 worker, 체크포인트, 권한·보안·QA 및 배포 승인 전에는 `INFERENCE_ENABLED`로 전환하지 않는다.
+- 카탈로그/라벨/데이터셋/모델은 다대다로 연결될 수 있으며, 각 관계에 task(thermal risk/RGB detection/disease classification), class mapping version, source ID, snapshot hash, model/version, license, validation evidence, deployment state를 부착한다.
+- UI에서 데이터 미확보/모델 미연결 상태를 숨기거나 임의 confidence/확정 음성 판단을 만들지 않는다. 신규 병해충 종을 추가할 때도 `RECORD_ONLY` 기록 가능 상태와 AI 기능을 분리한다.
+- 원본 read-only, 라이선스 확인, 라벨 품질, exact/near-duplicate, capture session·farm·group 단위 누수 감사, immutable snapshot, frozen test, 실제 현장 독립 검증을 순차적으로 통과해야 모델 후보가 된다.
+
+### 우선순위 및 일정
+
+1. **MITE Thermal-first:** radiometric thermal 원본·동일 구역/잎 reference·시간·환경(VPD)·독립 응애 확인 라벨을 연결하고, 확인 양성/음성/미확인 구분. `Health`/`Risk_Status` 및 RGB 미탐을 응애 음성 정답으로 대체하지 않는다. `docs/THERMAL_MITE_RISK_V001.md`의 gate가 우선한다.
+2. 기존 공개 데이터셋과 등록 라벨/원본 저작권/스냅샷 상태를 재감사하고 중복 다운로드 금지. RGB 응애 모델은 독립적인 보조 연구로 유지.
+3. 잿빛곰팡이병의 확보된 원래 라벨을 검증하고, 흰가루병·진딧물·총채벌레의 부족한 종류별 데이터 출처를 순차적으로 조사한다. 증상과 확정 병해 진단은 구별한다.
+4. 별도 모델 고도화/Few-shot 실험은 데이터·라벨·split gate 이후만 수행. 2027-03 포트폴리오 완료 목표를 위해 다종 AI 판독 전체 완성은 V1 출시 필수 조건으로 만들지 않는다.
+
+기존 업로드·예찰·권한·다국어·`UPLOADED_AWAITING_MODEL` 상태와 운영 DB를 보존한다. 작업은 기존 workstream을 먼저 조회하고 중복 브랜치 생성 없이 실행한다.
