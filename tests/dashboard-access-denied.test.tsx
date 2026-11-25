@@ -156,6 +156,73 @@ test('사진 접수는 농장 snapshot 실패 후 대기를 끝내고 명시 재
   }
 });
 
+for (const screen of ['alerts', 'capture']) for (const outcome of ['success', 'failure']) for (const order of ['old-first', 'current-first']) {
+  test(`photo A→B→A waits for the current snapshot generation (${screen}/${outcome}/${order})`, async () => {
+    await fixture(async f => {
+      const tabs = one(f.render(), n => n.props.className === 'module-tabs');
+      call(nodes(tabs).filter(n => n.type === 'button')[1]);
+      const initial = one(f.render(), n => n.type === PestCaptureForm);
+      const select = () => one(one(f.render(), n => n.props.className === 'farm-select-wrap'), n => n.type === 'select');
+      const forms = () => nodes(f.render()).filter(n => n.type === PestCaptureForm);
+      call(select(), 'onChange', { target: { value: 'farm-b' } });
+      const abandoned = f.pending.at(-1)!;
+      call(select(), 'onChange', { target: { value: 'farm-a' } });
+      const current = f.pending.at(-1)!;
+      assert.notEqual(current, abandoned);
+      assert.equal(forms().length, 0, 'cached A is not confirmation for a new A selection');
+      if (order === 'old-first') {
+        abandoned.resolve(Response.json(f.snapshot('farm-b')));
+        await flush();
+        assert.equal(forms().length, 0, 'late B must not authorize the pending A form');
+      }
+      current.resolve(outcome === 'success' ? Response.json(f.snapshot('farm-a'))
+        : Response.json({ error: 'SYNTHETIC_503' }, { status: 503 }));
+      await flush();
+      if (outcome === 'failure') {
+        assert.equal(forms().length, 0, 'failed A confirmation must not revive cached A');
+        assert.equal(nodes(f.render()).some(n => n.type === 'p' && n.props.role === 'status' && n.props.children === '불러오는 중'), false);
+        call(one(one(f.render(), n => n.props.className === 'error-banner'), n => n.type === 'button'));
+        assert.equal(forms().length, 0);
+        f.pending.at(-1)!.resolve(Response.json(f.snapshot('farm-a')));
+        await flush();
+      }
+      if (order === 'current-first') {
+        const before = JSON.stringify(f.h.states);
+        abandoned.resolve(Response.json(f.snapshot('farm-b')));
+        await flush();
+        assert.equal(JSON.stringify(f.h.states), before, 'reverse-order B cannot replace the completed A snapshot');
+      }
+      const ready = one(f.render(), n => n.type === PestCaptureForm);
+      assert.equal(ready.props.farmId, 'farm-a');
+      assert.equal(ready.props.itemId, 'farm-a-item');
+      assert.equal(ready.key, initial.key, 'no new remount key or upload retry policy');
+      f.refresh();
+      assert.equal(one(f.render(), n => n.type === PestCaptureForm).key, ready.key, 'same-scope read refresh keeps the form owner');
+      f.pending.at(-1)!.resolve(Response.json({ error: 'SYNTHETIC_503' }, { status: 503 }));
+      await flush();
+      assert.equal(one(f.render(), n => n.type === PestCaptureForm).key, ready.key);
+    }, screen);
+  });
+}
+
+test('round-trip farm selection requires a current snapshot before restoring the mutation actor', async () => {
+  await fixture(async f => {
+    const select = () => one(one(f.render(), n => n.props.className === 'farm-select-wrap'), n => n.type === 'select');
+    const member = () => one(f.render(), n => n.type === PestAlertReview).props.mutationMemberId;
+    assert.equal(member(), 'farm-a-member');
+    call(select(), 'onChange', { target: { value: 'farm-b' } });
+    const old = f.pending.at(-1)!;
+    call(select(), 'onChange', { target: { value: 'farm-a' } });
+    assert.equal(member(), '', 'cached A cannot revive its mutation actor');
+    f.pending.at(-1)!.resolve(Response.json(f.snapshot('farm-a')));
+    await flush();
+    assert.equal(member(), 'farm-a-member');
+    old.resolve(Response.json(f.snapshot('farm-b')));
+    await flush();
+    assert.equal(member(), 'farm-a-member', 'late B cannot change the confirmed actor');
+  });
+});
+
 test('actual dashboard 403 hides/inerts retained private tree, including chat and portal host, without consuming denied body', async () => {
   await fixture(async f => {
     const before = f.render(), oldReview = one(before, n => n.type === PestAlertReview), original = JSON.stringify(f.snapshot());

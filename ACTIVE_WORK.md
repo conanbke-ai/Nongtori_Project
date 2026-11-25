@@ -1,3 +1,12 @@
+## N-A Integration & Reliability — 2026-11-25 checkpoint
+
+- OWNER_SESSION=/root (실제 thread ID는 UNVERIFIED), 단일 writer. 정책 baseline Tori_Common_Project@df0331220f6eae2b802bed612ec306ac20893c1a §26–32/Credit13/Recovery 실제 읽음. 기본A 개발·검증, B 게시 조건은 별도 gate. 정책 복제0.
+- 원격 main917aa934 / #109ceb6c9a9 / #113849c887e 실제 ls-remote 및 fetch 검증. #112 MAIN_INTEGRATED, #109 ancestor #113. 이미 있는 Capture 분리/Scouting Port/HarvestLog 이동은 ALREADY_DONE(PR 단계), 반복0. #113은 Draft→#109 대상, 검증 순서는 main→#109→#113. main 병합·Draft 해제·배포 제외.
+- 실제 `/workspace/scratch/nongtori-na-integration-20261125` detached849c887e 결합 worktree. 원래 `/workspace/Nongtori_Project` work3547c552 및517파일/index 보존. 공통 정책은 별도 임시 bare reference에서 읽기, Windows 접근/동기화0. ML/가격 owner 경로 수정0.
+- NEW: cached A의 ID 일치로 A→B→A 확인 전 사진 폼이 열리는 반례4FAIL→명시 선택 변경시 readiness 무효화/최신 apply만복구. 두사진영역과 mutation actor에공유. 같은농장 read refresh의 폼key/불명잠금 유지, 기존권한/요청키/저장계약불변. 최종8경쟁+1actor 회귀와 기존사진/403 포함59/59. 구현 위치 FarmerDashboard/test2파일, QA기록과 이기록 포함4파일 범위.
+- 실제 Miniflare localD1 예찰 receipt/권한/rollback3/3 PASS. 사진 save ack-loss 및 durable dedup은 별도 Application/Port 대역 진단2FAIL, 실제운영사고로주장하지않음. 사진 재진입 영속중복/불명결과 복구는 BLOCKED_CONTRACT, 기존Draft의schema/새저장 활성화제외 조건 유지. ML_INFERENCE_CONTRACT_V001 원문미확보, 웹DTO연결 BLOCKED_CONTRACT.
+- 상세 명령·scope·실패보존·다음조건은 docs/qa/DASHBOARD_STREAMING_403_REGRESSION_KO.md 마지막 N-A 절 및 scratch/nongtori-na-20261125-* 영수증. 실제브라우저/모바일 NOT_RUN(이전sandbox거부반복0,현재공식desktop제어도구없음), HTTP완료BLOCKED/BFCacheHOLD 유지. 현checkpoint는 LOCAL_MODIFIED/LOCAL_ONLY이며 게시·원격CI·main통합은 별도 확인 전 완료로표시하지않음.
+
 ## 사진 접수의 농장 snapshot 대기 보호 — 2026-11-12 별도 격리 후보
 
 - 기준은 관리자 확인 #109 `617942eae48cf71fab6ae9afe90a024227d770c5`이며 직접 원격 조회가 아니다. 기존 사진잠금3파일 final 핀의 로컬 복원본에서 분리했다. 게시 대기 사진 사전안내6파일 후보와 CSS·실패 기록은 보존하고 결합하지 않았다.
