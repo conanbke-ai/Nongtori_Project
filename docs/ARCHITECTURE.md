@@ -72,6 +72,11 @@ Domain은 framework, DB, model filename, 외부 API를 모른다.
 Application Service는 D1이나 구체 Repository 클래스를 직접 참조하지 않는다.
 API route는 composition boundary에서 구체 구현을 생성해 Service에 전달한다.
 
+사진 접수는 `pest-capture-service.ts`에서 농장·품목 확인, 파일 접수, 기록 저장,
+실패 시 파일 정리를 조정한다. `pest-capture-repository.ts`가 D1 batch를 구성하고
+`r2-pest-capture-storage.ts`가 객체 키와 메타데이터를 관리한다. R2 저장과 D1 batch는
+서로 다른 커밋 경계이며, 사진 접수에는 별도의 영속 요청 키가 필요하다.
+
 ### Infrastructure / Adapter
 
 - `RgbImageAdapter`
