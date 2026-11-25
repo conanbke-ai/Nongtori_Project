@@ -61,3 +61,29 @@ fixture의 `producerClosed:false`는 생산자가 close를 호출하지 않았�
 정상 완료403, 503/네트워크 stale, 기존 늦은 응답 계약은 기존 회귀와 영수증을 재사용합니다. 실제 HTTP `response.finished()` 완료 BLOCKED, BFCache HOLD, 운영 인증/DB·SSR·첫 paint·실기기 수용은 해결하지 않습니다. 새 검사 통과가 그 상태를 변경하지 않습니다.
 
 검수는 이번 담당자의 자체 검토이며 독립 검수로 표시하지 않습니다. 게시·CI 브라우저 환경 추가·main 병합·배포는 각각 별도 승인/범위 확인이 필요합니다. 기존72px CSS 승인 요청과 dock 여백 후보는 이 테스트 후보와 분리합니다.
+
+
+## N-A 통합·신뢰성 checkpoint — 2026-11-25
+
+- 정책은 `conanbke-ai/Tori_Common_Project@df0331220f6eae2b802bed612ec306ac20893c1a`의 운영 §26–32, Credit Guard §13, Transaction Recovery Standard를 읽기 참조했다. 제품 안에 정책 본문을 복제하지 않았다.
+- 실제 원격 Git 조회: main `917aa934380407a97b48e7a0fc0347dae6fa685f`, #109 `ceb6c9a94108b638a024c84fade4a1e0ef2e7d41`, #113 `849c887e98ce1c6d6295ea0be9b442e0693ee4db`. main은 #112 merge이고 #109에 포함되며 #109는 #113의 조상이다. #113의 고유 변경은 사진 Application/Adapter 분리, Scouting Port, HarvestLog 이동의 3커밋/16경로다. 이를 중복 cherry-pick하거나 main에 재구현하지 않는다.
+- #113의 실제 Draft 대상은 #109 브랜치다. 제품 수정은 #109 범위로 분리하고 #113은 최신 #109를 채택한 결합 후보로 검증하는 순서다. Draft 해제·main 병합·운영 배포 승인은 아니다. 과거 PR 설명의 f8934bd와 사용자 제공 CI 성공은 현재 SHA의 독립 CI 관측으로 재해석하지 않는다.
+- 검증 위치는 `/workspace/scratch/nongtori-na-integration-20261125`의 실제 Git worktree다. 원래 `/workspace/Nongtori_Project` work/3547c552의 수정·미추적 517파일과 index는 보존한다. Windows 정식 작업본 동기화는 NOT_RUN이다.
+
+### 새 반례와 최소 수정
+
+기존 snapshot ID 비교만으로는 A→B→A의 마지막 A 확인 전에 cached A 사진 폼이 다시 활성화된다. 두 진입점×성공/실패 4검사가 수정 전 실패했다. 명시 농장 선택 변경에만 `farmSnapshotReady=false`, 현재 request sequence의 성공 apply에만 true를 적용했다. 두 사진 폼과 mutation actor가 같은 readiness를 사용한다. 같은 농장 refresh는 폼 key/readiness를 바꾸지 않으므로 기존 sending/uncertain owner를 유지한다. 서버 인가·POST·요청 키·자동 재전송·스키마·모델 코드는 변경하지 않는다.
+
+최종 회귀는 두 진입점×성공/실패×두 응답 순서 8건과 status 탭의 actor 왕복 전환 1건이다. 최신 확인 실패 후에는 폼이 계속 닫히고 로딩은 끝나며 기존 명시 재시도로 회복한다. 오래된 B 응답은 A 확인을 대신하거나 완료된 A를 덮지 못한다. 초기 actor 검사는 사진 탭에 존재하지 않는 status 컴포넌트를 찾는 fixture 오류로 4건 실패했으며, 기대값을 낮추지 않고 별도 status 탭 검사로 분리했다. 실패 로그는 삭제하지 않았다.
+
+- `node --import ./tests/register.mjs --test tests/dashboard-access-denied.test.tsx tests/pest-capture-guidance.test.tsx`: 최종 59/59. 기존 403/권한·다국어·불명 결과 latch 검사를 포함하는 synthetic hook/SSR 경계이며 실제 React DOM/mobile 검증은 아니다.
+- `npm run test:scouting-idempotency:local-d1`: 3/3. 공식 Miniflare D1에서 네 예찰 handler의 동일 receipt replay, 다른 payload 충돌/권한 재확인, quota와 실제 batch rollback을 검증했다. 실제 R2·운영 D1이 아니다.
+- 전체 workflow·타입/lint·build의 최종 명령/결과와 정확한 파일 fingerprint는 이번 작업 영수증을 따른다. 실제 브라우저는 이전 sandbox 차단을 재실행하지 않았고, 현재 공식 desktop 제어 도구도 제공되지 않아 NOT_RUN이다. HTTP 완료 BLOCKED·BFCache HOLD는 해제하지 않는다.
+
+### 별도 미해결 gate — 완료로 승격 금지
+
+1. 사진 save의 commit 뒤 응답 유실: 실제 `recordPestCapture`에 Port 대역으로 저장 완료 후 reject를 주면 catch가 R2 대역의 참조 파일을 지운다(안전 불변식 1FAIL). 실제 D1/R2 사고 재현이 아니라 조건부 장애 진단이다. 확정 rollback과 불명 결과를 구별하는 저장 계약·대사 없이 일반 catch 삭제를 안전하다고 할 수 없다.
+2. 사진 영속 중복 방지: 동일 입력을 두 번 호출하면 session 두 건이 생긴다(요구 불변식 1FAIL). 사진 경로에는 durable request identity/receipt가 없다. 예찰 handler의 keyed receipt 3/3 성공을 사진 업로드의 중복 방지로 확대하지 않는다. remount/재진입 뒤의 uncertain 복구도 미완료다. 기존 PR의 DB/schema·새 저장 활성화 제외 조건을 보존하여 이번 UI 수정에 새로운 저장 계약을 섞지 않는다.
+3. `ML_INFERENCE_CONTRACT_V001`: 확인한 main/#109/#113, ML branch df8d69ee 및 qa-contract branch 6e01008a에서 해당 원문이 없다. 기존 farm/snapshot/QA contract를 그 문서로 가장하지 않는다. N-B 담당의 정확한 파일 경로·SHA와 입력/출력/실패/버전·단위 계약이 제공되어야 웹 DTO를 연결한다. 모델·가격 담당 소스는 수정하지 않았다.
+
+합성 진단 2FAIL과 실제 D1 3PASS, workflow PASS, 모바일/HTTP/BFCache 미완료는 별개다. 이번 snapshot 수정만의 검증·Draft 게시 판단이 혼합 PR 전체 통합 승인이나 서비스 출시를 뜻하지 않는다.
