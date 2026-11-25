@@ -120,6 +120,42 @@ test('사진 접수는 농장 전환 snapshot 대기 중 이전 품목을 새 �
   }
 });
 
+test('사진 접수는 농장 snapshot 실패 후 대기를 끝내고 명시 재시도로 복구한다', async () => {
+  for (const screen of ['alerts', 'capture']) {
+    await fixture(async f => {
+      const tabs = one(f.render(), n => n.props.className === 'module-tabs');
+      call(nodes(tabs).filter(n => n.type === 'button')[1]);
+      const farmSelect = one(one(f.render(), n => n.props.className === 'farm-select-wrap'), n => n.type === 'select');
+      const snapshotPending = () => f.pending.findLast(p => p.url.includes('/api/farmer-dashboard') && p.url.includes('farm-b'));
+      const photoLoading = () => nodes(f.render()).some(n => n.type === 'p' && n.props.role === 'status' && n.props.children === '불러오는 중');
+      const photoForm = () => nodes(f.render()).find(n => n.type === PestCaptureForm);
+
+      call(farmSelect, 'onChange', { target: { value: 'farm-b' } });
+      const failed = snapshotPending();
+      assert.ok(failed);
+      assert.equal(photoLoading(), true);
+      assert.equal(photoForm(), undefined);
+
+      failed.resolve(Response.json({ error: 'SYNTHETIC_503' }, { status: 503 }));
+      await flush();
+      const errorBanner = one(f.render(), n => n.props.className === 'error-banner');
+      assert.equal(f.denied(), false);
+      assert.equal(photoLoading(), false, screen);
+      assert.equal(photoForm(), undefined);
+
+      call(one(errorBanner, n => n.type === 'button'));
+      const retry = snapshotPending();
+      assert.ok(retry && retry !== failed);
+      assert.equal(photoLoading(), true);
+      retry.resolve(Response.json(f.snapshot('farm-b')));
+      await flush();
+      assert.equal(photoForm()?.props.farmId, 'farm-b');
+      assert.equal(photoForm()?.props.itemId, 'farm-b-item');
+      assert.equal(photoLoading(), false);
+    }, screen);
+  }
+});
+
 test('actual dashboard 403 hides/inerts retained private tree, including chat and portal host, without consuming denied body', async () => {
   await fixture(async f => {
     const before = f.render(), oldReview = one(before, n => n.type === PestAlertReview), original = JSON.stringify(f.snapshot());
