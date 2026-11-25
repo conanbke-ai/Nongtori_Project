@@ -77,6 +77,11 @@ API route는 composition boundary에서 구체 구현을 생성해 Service에 �
 `r2-pest-capture-storage.ts`가 객체 키와 메타데이터를 관리한다. R2 저장과 D1 batch는
 서로 다른 커밋 경계이며, 사진 접수에는 별도의 영속 요청 키가 필요하다.
 
+예찰 관측과 현장 기록 서비스는 `ScoutingRepositoryPort`를 사용한다.
+요청 키가 있는 예찰 변경의 준비·저장에는 `ScoutingIntentPersistencePort`를 사용하며,
+결과 조회에는 읽기 전용 계약만 전달한다. 구체 구현은 영수증, 한도 가드, 예찰 쓰기를
+기존 순서의 단일 D1 batch로 실행한다.
+
 ### Infrastructure / Adapter
 
 - `RgbImageAdapter`

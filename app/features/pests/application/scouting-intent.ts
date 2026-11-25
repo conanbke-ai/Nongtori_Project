@@ -1,5 +1,4 @@
-import { ScoutingRepository } from '../infrastructure/scouting-repository';
-import { ScoutingReceiptRepository, type ReceiptRow } from '../infrastructure/scouting-receipt-repository';
+import type { ReceiptLimits, ReceiptRow, ScoutingIntentPersistencePort, ScoutingReceiptReaderPort } from './scouting-intent-persistence-port';
 import { correctScoutingFieldCheck, recordScoutingAction, recordScoutingFieldCheck, resolveScoutingCase, ScoutingMutationValidationError } from './scouting-service';
 
 export type ScoutingMutationKind = 'CHECK' | 'CORRECTION' | 'ACTION' | 'RESOLVE';
@@ -53,9 +52,8 @@ function replay(row: ReceiptRow, hash: string) {
   return { status: row.http_status, body: JSON.parse(row.response_json) as Record<string, unknown> };
 }
 // Read only: no mutation plan, no receipt creation, quota consumption or bootstrap.
-export async function lookupScoutingIntent(db: D1Database, memberId: string, key: string,
+export async function lookupScoutingIntent(receipts: ScoutingReceiptReaderPort, memberId: string, key: string,
   intent: NormalizedScoutingIntent) {
-  const receipts = new ScoutingReceiptRepository(db);
   if (!await receipts.schemaAvailable()) throw new ScoutingIntentError(503, 'RECEIPT_SCHEMA_UNAVAILABLE', '요청 기록 기능이 준비되지 않았습니다.');
   if (!await receipts.ownsTarget(intent.farmId, intent.operation, intent.targetId))
     throw new ScoutingIntentError(400, 'TARGET_NOT_FOUND', '이 농장의 기록을 찾을 수 없습니다.');
@@ -65,9 +63,8 @@ export async function lookupScoutingIntent(db: D1Database, memberId: string, key
   const result = replay(row, await intentDigest(stableIntentJson(intent.fields)));
   return { state: 'COMMITTED' as const, originalStatus: result.status, result: result.body };
 }
-export async function executeScoutingIntent(db: D1Database, memberId: string, key: string,
-  intent: NormalizedScoutingIntent, limits: { farm: number; member: number }) {
-  const receipts = new ScoutingReceiptRepository(db);
+export async function executeScoutingIntent(receipts: ScoutingIntentPersistencePort, memberId: string, key: string,
+  intent: NormalizedScoutingIntent, limits: ReceiptLimits) {
   if (!await receipts.schemaAvailable()) throw new ScoutingIntentError(503, 'RECEIPT_SCHEMA_UNAVAILABLE', '요청 기록 기능이 준비되지 않았습니다.');
   if (!await receipts.ownsTarget(intent.farmId, intent.operation, intent.targetId))
     throw new ScoutingIntentError(400, 'TARGET_NOT_FOUND', '이 농장의 기록을 찾을 수 없습니다.');
@@ -75,8 +72,8 @@ export async function executeScoutingIntent(db: D1Database, memberId: string, ke
   const hash = await intentDigest(stableIntentJson(intent.fields));
   const previous = await receipts.find(scope);
   if (previous) return replay(previous, hash);
-  const plan: D1PreparedStatement[] = [];
-  const repo = new ScoutingRepository(db, plan), p = intent.fields;
+  const mutation = receipts.beginMutation();
+  const repo = mutation.repository, p = intent.fields;
   const shared = { farmId: intent.farmId, memberId, note: p.note as string | null };
   const stamp = new Date().toISOString();
   let result: Record<string, unknown>;
@@ -107,7 +104,7 @@ export async function executeScoutingIntent(db: D1Database, memberId: string, ke
   const status = intent.operation === 'RESOLVE' ? 200 : 201, json = JSON.stringify(result);
   if (new TextEncoder().encode(json).byteLength > 4096)
     throw new ScoutingIntentError(422, 'RESPONSE_TOO_LARGE', '처리 결과를 기록할 수 없습니다.');
-  try { await receipts.commit(scope, hash, { status, json }, plan, limits); }
+  try { await mutation.commit(scope, hash, { status, json }, limits); }
   catch (error) {
     // Recover only an actually committed, scoped receipt; unknown errors stay uncertain.
     const winner = await receipts.find(scope); if (winner) return replay(winner, hash);

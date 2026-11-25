@@ -1,6 +1,7 @@
-export type ReceiptScope = { farmId: string; memberId: string; operation: string; keyDigest: string };
-export type ReceiptRow = { canonical_version: number; payload_hash: string; http_status: number; response_json: string };
-export class ScoutingReceiptRepository {
+import type { ReceiptLimits, ReceiptResponse, ReceiptRow, ReceiptScope, ScoutingIntentPersistencePort } from '../application/scouting-intent-persistence-port';
+import { ScoutingRepository } from './scouting-repository';
+
+export class ScoutingReceiptRepository implements ScoutingIntentPersistencePort {
   constructor(private db: D1Database) {}
 
   async schemaAvailable() {
@@ -21,8 +22,16 @@ export class ScoutingReceiptRepository {
       .bind(scope.farmId, scope.memberId, scope.operation, scope.keyDigest).first<ReceiptRow>();
   }
 
-  async commit(scope: ReceiptScope, payloadHash: string, response: { status: number; json: string },
-    statements: D1PreparedStatement[], limits: { farm: number; member: number }) {
+  beginMutation(): ReturnType<ScoutingIntentPersistencePort['beginMutation']> {
+    const statements: D1PreparedStatement[] = [];
+    return {
+      repository: new ScoutingRepository(this.db, statements),
+      commit: (scope, payloadHash, response, limits) => this.commit(scope, payloadHash, response, statements, limits),
+    };
+  }
+
+  private async commit(scope: ReceiptScope, payloadHash: string, response: ReceiptResponse,
+    statements: D1PreparedStatement[], limits: ReceiptLimits) {
     const guardId = crypto.randomUUID();
     await this.db.batch([
       this.db.prepare(`INSERT INTO scouting_operation_receipts(farm_id,member_id,operation_kind,key_digest,

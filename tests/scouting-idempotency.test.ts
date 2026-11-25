@@ -6,6 +6,7 @@ import { testIdentityProvider } from './support/test-identity-provider';
 import { executeScoutingIntent, normalizeScoutingIntent } from '../app/features/pests/application/scouting-intent';
 import { recordScoutingFieldCheck, correctScoutingFieldCheck, recordScoutingAction, resolveScoutingCase } from '../app/features/pests/application/scouting-service';
 import { ScoutingRepository } from '../app/features/pests/infrastructure/scouting-repository';
+import { ScoutingReceiptRepository } from '../app/features/pests/infrastructure/scouting-receipt-repository';
 const handlers = {
   CHECK: (await import('../app/api/scouting-field-checks/route')).POST,
   CORRECTION: (await import('../app/api/scouting-field-check-corrections/route')).POST,
@@ -133,7 +134,7 @@ test('new-key historical correction and action retain existing case and event se
       else if(kind==='ACTION')await recordScoutingAction(repo,{farmId:'farm-a',memberId:'worker-a',locationStateId:'loc',actionCode:'TREATMENT_APPLIED',actionAt:'T'});
       else if(kind==='CHECK')await recordScoutingFieldCheck(repo,{farmId:'farm-a',memberId:'worker-a',locationStateId:'loc',evidenceCode:'NO_VISIBLE_EVIDENCE',checkedAt:'T'});
       else await resolveScoutingCase(repo,{farmId:'farm-a',memberId:'worker-a',locationStateId:'loc',reasonCode:'TREATMENT_COMPLETED',resolvedAt:'T'});
-      await executeScoutingIntent(b.db,'worker-a',crypto.randomUUID(),normalizeScoutingIntent(kind,bbody),{farm:10,member:10});
+      await executeScoutingIntent(new ScoutingReceiptRepository(b.db),'worker-a',crypto.randomUUID(),normalizeScoutingIntent(kind,bbody),{farm:10,member:10});
       for(const f of [a,b])assert.equal(count(f,'scouting_case_events'),kind==='CORRECTION'||kind==='RESOLVE'?1:0);
       assert.equal((a.sqlite.prepare('SELECT current_state FROM scouting_location_states').get() as {current_state:string}).current_state,
         (b.sqlite.prepare('SELECT current_state FROM scouting_location_states').get() as {current_state:string}).current_state);
