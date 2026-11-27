@@ -1,0 +1,40 @@
+{
+  "source_id": "DATA-DIS-002",
+  "source_type": "dataset",
+  "provider": "Mendeley Data",
+  "title": "Strawberry Disease Detection Dataset with Hybrid Data Augmentation",
+  "original_url": "https://data.mendeley.com/datasets/k2ptxmfjhj/1",
+  "version_or_revision": "1 / DOI 10.17632/k2ptxmfjhj.1",
+  "license": "CC BY-NC 4.0 — NONCOMMERCIAL ONLY",
+  "license_checked_at": "2026-11-27",
+  "status": "DISCOVERED_DOWNLOAD_PENDING_NONCOMMERCIAL_ONLY",
+  "retrieval": {
+    "requires_login_or_key": "TO_VERIFY",
+    "published_total_images": 5610,
+    "reported_base_images": 2459,
+    "reported_traditional_augmented": 1559,
+    "reported_synthetic": 1018,
+    "reported_subtotal": 5036,
+    "reported_unreconciled_delta": 574
+  },
+  "original_labels": [
+    "Angular Leafspot",
+    "Anthracnose Fruit Rot",
+    "Blossom Blight",
+    "Gray Mold",
+    "Healthy Strawberry",
+    "Leaf Spot",
+    "Powdery Mildew Fruit",
+    "Powdery Mildew Leaf"
+  ],
+  "nongtori_mapping": {
+    "candidate_for": [
+      "POWDERY_MILDEW",
+      "GRAY_MOLD"
+    ],
+    "task": "RGB_DISEASE_INSTANCE_SEGMENTATION_RESEARCH_ONLY",
+    "training_ready": false,
+    "production_commercial_allowed": false
+  },
+  "notes": "COCO polygon instance masks, 640x640. Publisher claims 5610 total but component counts 2459+1559+1018=5036 (difference 574); do not silently reconcile. Hybrid and traditional directory structures may overlap; dedup by original identity. Synthetic DALL-E 3 images are not genuine field samples. No bytes downloaded."
+}
