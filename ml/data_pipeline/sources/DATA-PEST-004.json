@@ -1,0 +1,32 @@
+{
+  "source_id": "DATA-PEST-004",
+  "source_type": "dataset",
+  "provider": "Roboflow Universe",
+  "title": "Chilli Thrips Symptom Classification (plus 2025-26)",
+  "original_url": "https://universe.roboflow.com/strawberry-segmentation/chilli-thrips-symptom-classification-plus-2025-26",
+  "version_or_revision": "1 (page lists one version; immutable binary revision NOT verified)",
+  "license": "CC BY 4.0 (publisher displayed; provenance audit pending)",
+  "license_checked_at": "2026-11-27",
+  "status": "DISCOVERED_DOWNLOAD_PENDING",
+  "retrieval": {
+    "requires_login_or_key": "TO_VERIFY",
+    "workspace": "strawberry-segmentation",
+    "project": "chilli-thrips-symptom-classification-plus-2025-26",
+    "estimated_page_image_count": 1629
+  },
+  "original_labels": [
+    "stage_0",
+    "stage_1",
+    "stage_2",
+    "stage_3",
+    "stage_4"
+  ],
+  "nongtori_mapping": {
+    "candidate_for": [
+      "THRIPS"
+    ],
+    "task": "STRAWBERRY_THRIPS_DAMAGE_STAGE_AUXILIARY_NOT_INSECT_BOX",
+    "training_ready": false
+  },
+  "notes": "The five classes are damage stages, not confirmed insect species bounding boxes. Check data availability, original vs augmentation, phenotype annotation meaning, license. No actual download or hash verification."
+}
