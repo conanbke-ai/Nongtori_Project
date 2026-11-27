@@ -254,3 +254,30 @@ Current corrective classifications:
 - `POLICY-GRADE-002`: Nongtori 12/16/22g is the user-confirmed Hadong strawberry Nonghyup direct-sales field/business grading rule. It remains valid for that operating context and must stay distinct from the national official size and quality standards.
 
 Canonical audit: `docs/SOURCE_ALIGNMENT_AUDIT_V1_20261015.md`.
+
+---
+
+## 2026-11-27 응애 우선 원천 데이터 수집
+
+**Status: DISCOVERY / NOT DOWNLOADED / NOT TRAINING_READY.** 기타 병해충의 광범위한 검색·다운로드는 일단 후순위로 두고, 점박이응애 `Tetranychus urticae` 관련 **열화상·환경·현장 확진 자료**를 최우선 확보한다. RGB 객체 탐지 데이터는 보조 evidence 전용이다. 기존 등록된 공개 데이터 소스와 해시가 중복되는 파일을 수집하지 않는다.
+
+### 우선 자료군 및 접근 판단
+
+| 우선 | 출처 | 내용 | 상태 / 경계 |
+|---|---|---|---|
+| P0 | 기존 Nongtori 현장 촬영 FLIR/열화상·환경 기록 | 잎/참조 온도, 촬영 시각·구역·감염 확인 기록 연결 | 실제 원본 파일/온도 행렬 내보내기 및 label join 미확인; SOURCE ACCESS REQUIRED |
+| P0 | Dryad `10.5061/dryad.4j0zpc8jd` | 응애·알 밀도, 잎 온도, 수분/영양 등 실측 | 공개 연구 데이터; **옥수수**, 딸기 학습/현장 검증 대체 금지; 파일·컬럼·단위 감사 필요 |
+| P0 | Smart Agricultural Technology `10.1016/j.atech.2026.101939` | 딸기/오이 응애 초분광 무증상·초기 감염, XGBoost 연구, 1,120 연구 스냅샷 언급 | 논문 공개, 학습 원시 스펙트럼·라벨 파일의 제공/재사용 권한은 UNVERIFIED; 열화상과 센서가 다름 |
+| P1 | Smart Agricultural Technology `10.1016/j.atech.2025.101193` | 딸기 `T. urticae` 시간별 초분광 관측 | 기존 관련 연구 인용과 중복 등록 여부부터 조사; 원본 공개 여부 미확인 |
+| P1 | `10.1016/j.atech.2023.100229` | 딸기/응애/포식성 응애 스마트폰 이미지 3,013장 연구 | 논문 명시: 원천 데이터 confidential; DOWNLOADABLE로 취급 금지; 공개 연구 방법만 참조 |
+| P1 | Gent Lab `miteVision`, `DATA-PEST-002` | 기존 morphology/life stage RGB reference; 약 1,500+ image / ~32k objects full research family | **이미 등록 및 스냅샷 있음**. 원천 버전/스냅샷 v210과 v209/v211·Zenodo test 세트 간 중복 해시 확인 전 다운로드 금지 |
+| P2 | 기타 병해충 외부 후보 | 진딧물·총채벌레·병해 | 응애 핵심 P0 수집·감사 착수 이후에만 제한적으로 확보 |
+
+### 실제 확보 목표 및 검증 기준
+
+- `DISCOVERED`, `ACCESSIBLE`, `DOWNLOADED`, `HASH_VERIFIED`, `ANNOTATED`, `TRAINING_READY`를 별도 집계. 논문에 언급된 사진 수를 실제 확보 수로 표현하지 않는다.
+- 열화상/잎 온도는 radiometric 온도값인지, 장비 앱에서 선택한 지점의 일부 측정값인지 구분. 파일 형식, 단위, 시각, 대상 잎/기준 잎 ROI 및 현장 감염 확진 근거를 연결할 수 없으면 위험 모델의 양성·음성 학습에 사용하지 않는다.
+- 가능하면 같은 잎/구역에서 감염 확인 전후의 반복 관측, 확인된 정상 대조군, 수분 스트레스/광량 등 교란 조건을 수집. 응애 밀도·측정 시각을 보존하고, `Health`/`Risk_Status` 또는 RGB 미탐을 자동 응애 음성으로 변환 금지.
+- 프레임·동일 잎·동일 개체·동일 세션을 독립 표본으로 과다 계산하지 않으며 split 원자성·원본 보존·허가/라이선스·immutable snapshot 정책 유지.
+- P0 원본 접근 불가 시 추가 파운데이션 모델·샤딩·대규모 파인튜닝으로 문제를 덮지 않는다. 작은 검증 배치에서 실제 원본 파일과 라벨 대응을 증명하는 게 우선이다.
+- 2026-11-27 현재 이 문서는 **공개 근거 조사 및 우선순위 결정만** 기록한다. 다운로드한 신규 원천 바이트, 현장 파일 목록, SHA-256, 학습 성능은 확인하지 않았다.
