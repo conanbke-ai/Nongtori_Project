@@ -1,0 +1,32 @@
+{
+  "source_id": "DATA-PEST-003",
+  "source_type": "dataset",
+  "provider": "Roboflow Universe",
+  "title": "pest_detection (Samm)",
+  "original_url": "https://universe.roboflow.com/samm-v6vxt/pest_detection-fkblw",
+  "version_or_revision": "1 (page lists one version; pinned binary revision NOT verified)",
+  "license": "CC BY 4.0 (publisher displayed; origin attribution/license audit pending)",
+  "license_checked_at": "2026-11-27",
+  "status": "DISCOVERED_DOWNLOAD_PENDING",
+  "retrieval": {
+    "requires_login_or_key": "TO_VERIFY",
+    "workspace": "samm-v6vxt",
+    "project": "pest_detection-fkblw",
+    "estimated_page_image_count": 1837
+  },
+  "original_labels": [
+    "Aphids",
+    "Thrips",
+    "Whiteflies",
+    "This dataset was exported via roboflow (possible annotation artifact; audit required)"
+  ],
+  "nongtori_mapping": {
+    "candidate_for": [
+      "APHID",
+      "THRIPS"
+    ],
+    "task": "RGB_OBJECT_DETECTION_AUXILIARY",
+    "training_ready": false
+  },
+  "notes": "Do not interpret listed images as 1837 independent real images. Check version download, actual labels, source image origin, duplication, splits, species/host plant and license. No bytes downloaded or validated as of 2026-11-27."
+}
