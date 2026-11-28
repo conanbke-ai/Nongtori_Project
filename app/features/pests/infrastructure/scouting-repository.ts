@@ -245,6 +245,18 @@ export class ScoutingRepository {
     else await statement.run();
   }
 
+  async originalFieldCheck(farmId: string, locationStateId: string, fieldCheckId: string) {
+    return this.db.prepare(`SELECT c.id, c.farm_id, c.location_state_id,
+      c.primary_evidence_code, c.checked_at
+      FROM scouting_field_checks c
+      JOIN scouting_location_states l ON l.id = c.location_state_id AND l.farm_id = c.farm_id
+      WHERE c.id = ? AND c.farm_id = ? AND l.id = ? LIMIT 1`)
+      .bind(fieldCheckId, farmId, locationStateId).first<{
+        id: string; farm_id: string; location_state_id: string;
+        primary_evidence_code: string; checked_at: string;
+      }>();
+  }
+
   async fieldCheckForCorrection(farmId: string, fieldCheckId: string) {
     return this.db.prepare(`SELECT id, farm_id, location_state_id, case_id, primary_evidence_code, checked_at
       FROM scouting_field_checks WHERE id = ? AND farm_id = ? LIMIT 1`).bind(fieldCheckId, farmId).first<{
@@ -393,17 +405,17 @@ export class ScoutingRepository {
       WHERE id = ? AND farm_id = ?`).bind(locationStateId, farmId).first<ScoutingLocationStateRow>();
     if (!location) return null;
     const observations = await this.db.prepare(`SELECT * FROM scouting_observations
-      WHERE location_state_id = ? ORDER BY observed_at DESC LIMIT ?`).bind(locationStateId, limit).all();
+      WHERE farm_id = ? AND location_state_id = ? ORDER BY observed_at DESC LIMIT ?`).bind(farmId, locationStateId, limit).all();
     const fieldChecks = await this.db.prepare(`SELECT * FROM scouting_field_checks
-      WHERE location_state_id = ? ORDER BY checked_at DESC LIMIT ?`).bind(locationStateId, limit).all();
+      WHERE farm_id = ? AND location_state_id = ? ORDER BY checked_at DESC LIMIT ?`).bind(farmId, locationStateId, limit).all();
     const corrections = await this.db.prepare(`SELECT * FROM scouting_field_check_corrections
-      WHERE location_state_id = ? ORDER BY created_at DESC LIMIT ?`).bind(locationStateId, limit).all();
+      WHERE farm_id = ? AND location_state_id = ? ORDER BY created_at DESC LIMIT ?`).bind(farmId, locationStateId, limit).all();
     const actions = await this.db.prepare(`SELECT * FROM scouting_actions
-      WHERE location_state_id = ? ORDER BY action_at DESC LIMIT ?`).bind(locationStateId, limit).all();
+      WHERE farm_id = ? AND location_state_id = ? ORDER BY action_at DESC LIMIT ?`).bind(farmId, locationStateId, limit).all();
     const alerts = await this.db.prepare(`SELECT * FROM scouting_alert_events
-      WHERE location_state_id = ? ORDER BY created_at DESC LIMIT ?`).bind(locationStateId, limit).all();
+      WHERE farm_id = ? AND location_state_id = ? ORDER BY created_at DESC LIMIT ?`).bind(farmId, locationStateId, limit).all();
     const caseEvents = await this.db.prepare(`SELECT * FROM scouting_case_events
-      WHERE location_state_id = ? ORDER BY created_at DESC LIMIT ?`).bind(locationStateId, limit).all();
+      WHERE farm_id = ? AND location_state_id = ? ORDER BY created_at DESC LIMIT ?`).bind(farmId, locationStateId, limit).all();
     return { location, observations: observations.results, fieldChecks: fieldChecks.results,
       corrections: corrections.results, actions: actions.results, alerts: alerts.results, caseEvents: caseEvents.results };
   }

@@ -1,6 +1,10 @@
 import type { PestLanguage } from '../domain/catalog';
 const copy = {
   "ko": {
+    "fileHelp": "일반 사진은 필수, 열화상은 선택입니다. 이미지 파일 합계 40MB 이하로 선택해 주세요. 파일 정보와 업로드 조건은 서버에서 최종 확인합니다.",
+    "fileRequired": "비어 있지 않은 일반 사진을 선택해 주세요. 다른 선택은 그대로 유지됩니다.",
+    "fileImage": "이미지 파일을 다시 선택해 주세요. 현재 선택은 자동으로 지워지지 않습니다.",
+    "fileSize": "사진 합계가 40MB를 넘습니다. 더 작은 사진으로 다시 선택해 주세요. 현재 선택은 유지됩니다.",
     "target": "병해충 종류",
     "all": "전체 병해충",
     "byType": "병해충별 기록",
@@ -31,6 +35,10 @@ const copy = {
     "alertHelp": "의심 증상과 촬영 위치를 확인하고 현장에서 살펴본 내용을 남겨 주세요."
   },
   "vi": {
+    "fileHelp": "Ảnh thường là bắt buộc, ảnh nhiệt là tùy chọn. Tổng tệp ảnh không quá 40MB. Máy chủ kiểm tra thông tin tệp và điều kiện tải lên lần cuối.",
+    "fileRequired": "Chọn ảnh thường không rỗng. Các lựa chọn khác được giữ nguyên.",
+    "fileImage": "Hãy chọn lại tệp ảnh. Lựa chọn hiện tại không tự bị xóa.",
+    "fileSize": "Tổng ảnh vượt 40MB. Chọn ảnh nhỏ hơn. Lựa chọn hiện tại được giữ nguyên.",
     "target": "Loại sâu bệnh",
     "all": "Tất cả sâu bệnh",
     "byType": "Ghi chép theo loại",
@@ -61,6 +69,10 @@ const copy = {
     "alertHelp": "Kiểm tra triệu chứng và vị trí chụp, rồi ghi lại kết quả kiểm tra tại chỗ."
   },
   "th": {
+    "fileHelp": "ต้องมีภาพปกติ ส่วนภาพความร้อนเป็นตัวเลือก ไฟล์ภาพรวมต้องไม่เกิน 40MB เซิร์ฟเวอร์จะตรวจข้อมูลไฟล์และเงื่อนไขการอัปโหลดขั้นสุดท้าย",
+    "fileRequired": "เลือกภาพปกติที่ไม่ใช่ไฟล์ว่าง ตัวเลือกอื่นยังคงอยู่",
+    "fileImage": "เลือกไฟล์ภาพอีกครั้ง ตัวเลือกปัจจุบันจะไม่ถูกลบอัตโนมัติ",
+    "fileSize": "ภาพรวมเกิน 40MB กรุณาเลือกภาพขนาดเล็กลง ตัวเลือกปัจจุบันยังคงอยู่",
     "target": "ชนิดศัตรูพืชหรือโรค",
     "all": "ทุกชนิด",
     "byType": "บันทึกแยกตามชนิด",
@@ -91,6 +103,10 @@ const copy = {
     "alertHelp": "ตรวจอาการและตำแหน่งถ่ายภาพ แล้วบันทึกสิ่งที่พบในพื้นที่"
   },
   "zh-CN": {
+    "fileHelp": "普通照片必选，热成像照片可选。图片文件总计不超过40MB。文件信息和上传条件由服务器最终检查。",
+    "fileRequired": "请选择非空的普通照片。其他选择保持不变。",
+    "fileImage": "请重新选择图片文件。当前选择不会自动清除。",
+    "fileSize": "照片总计超过40MB。请重新选择较小的照片，当前选择会保留。",
     "target": "病虫害种类",
     "all": "全部病虫害",
     "byType": "按种类记录",

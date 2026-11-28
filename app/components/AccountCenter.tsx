@@ -14,6 +14,7 @@ type Permissions = {
 
 export type AccountRecord = {
   authenticated: boolean;
+  memberId: string | null;
   loginId: string | null;
   email: string | null;
   displayName: string | null;

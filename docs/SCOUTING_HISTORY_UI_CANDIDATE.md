@@ -1,0 +1,31 @@
+# Scouting location history — isolated local candidate
+
+## PRECHECK
+
+PROJECT_SCOPE V1 MUST includes CASE/history and immutable field evidence; PEST_SCOUTING_UI_V1_CONTRACT §4 explicitly includes a history action. Existing scouting-history GET and ScoutingRepository.locationHistory already expose observations/checks/corrections/actions/alerts/case events with farm authorization. The selected-location detail currently has no history action: NEW UI connection, not a new API or model capability.
+
+Base is parent-confirmed main3547c552b12a17e050bb11160415906eb467fa42 with known content tree0581e88a92520e3ede008f867454f2578d6ed034, reconstructed from prior approved PR108 patch. Current remote ref/open PR/writer status cannot be freshly queried here. Original checkout and photo-guidance4/CI5-file candidates remain separate and must retain hashes. This snapshot starts from known main content, not from either unpublished photo candidate. No new Git branch or commit.
+
+Risk: MEDIUM/HIGH (field provenance, read authorization and stale tenant responses). Root QA plan selects Functional/Regression, Product Flow, data-integrity, Security/Privacy read boundary, Compatibility and Accessibility review. Browser remains restricted; hook/unit/SSR evidence is not visual acceptance.
+
+Acceptance:
+
+1. Selected location offers a user-initiated read-only history panel; no history request before opening. No new form, required human input, mutation, schema, threshold or model outcome.
+2. Six existing record families are displayed as separate chronological records. Correction does not rewrite/hide the original; VOID is an invalidated input, not a negative diagnosis. No fabricated actor/time/evidence. Only a safe projection is rendered; no raw JSON/notes/member identity dumped.
+3. Loading/error/real-empty/stale are distinct. Retry is an explicit GET.401/403/404 invalidates old rows; unknown transport failure may retain clearly stale same-scope rows only.
+4. Farm/location switch, unmount and out-of-order responses never show another scope or apply old callbacks. Malformed/mismatched response is not an empty list. Existing server checks are unchanged.
+5. Existing API caps per family: label as recent scoped history, not exhaustive lifetime history or absence of pest. Stable tie display is not a causal ordering claim. No blind pagination/contract extension.
+6. New local diff must not overlap photo5-file candidate. New tests extend existing CI-listed scouting-ui/scouting-hardening files, avoiding a package.json conflict. No real DB/data/R2, model execution, downloads, commit/push/merge/deploy or original modifications.
+
+## Observed implementation / acceptance evidence
+
+- UI connection in existing ScoutingQueue selected detail; new ScoutingHistory owns only user-initiated GET, disclosure/retry and safe display. New scouting-history-reader projects6 record families and owns scoped request sequencing; new CSS is scoped to this panel. Existing labels are reused for field findings/actions; source/case labels are4-language. No API/service/repository/schema/auth/model change.
+- History is bounded recent history, not an exhaustive archive. The selected attention/detail scope remains existing behavior; this does not add an all-location archive browser. Original checks remain visible beside REPLACE/VOID; optional anchor links only to an original actually included in this response. Source note/actor IDs/raw JSON are deliberately not dumped. Existing server GET bootstrap calls remain unchanged; they were exercised only on the synthetic in-memory binding, not a real DB.
+- Initial target:21/22 because new fixture used a nonexistent locationKey and then wrong beds/zones columns. Corrected test fixture to existing house→bed→zone contract, without changing production schema or weakening assertions. Target22/22 then PASS. New tests are5 grouped UI/reader tests plus1 real-handler/SQL integration test within already CI-listed files.
+- Independent read review caught missing44px hit area for original links and calendar normalization of invalid dates. CSS now gives links44px and keyboard-focusable scroll; browser pixels remain NOT_RUN. Calendar failure reproduced in `/workspace/scratch/nongtori-scouting-history-xCYgO5-calendar-before.tap`; projection now validates actual month/day/leap/time/offset and preserves invalid source without rewriting, showing unknown time. Leap/offset and invalid-date regressions PASS in final suite. Independent final rereview found no remaining new P1/P2; reviewer did not execute tests or inspect current remote state.
+- Final actual script: `NODE_OPTIONS='--import=/workspace/scratch/nongtori-capture-ci-u1E0kH-fetch-guard.mjs' node --run test:workflows` PASS92/92 (`/workspace/scratch/nongtori-scouting-history-xCYgO5-workflows.tap`). This is baseline86+history6; the separate photo candidate's92 count refers to a different6-test addition. No combined98-test claim.
+- `node node_modules/typescript/bin/tsc --noEmit --incremental false`, `node --run lint`, `node --run build` PASS. Build log `/workspace/scratch/nongtori-scouting-history-xCYgO5-build.log`; existing route-classification advisory remains. Local Node24.19.0, not remote Node22 execution. Initial TypeScript errors were in the synthetic test helper/types; corrected without any/suppression.
+- Status is IMPLEMENTED / local synthetic checks PASS / READY_FOR_WORK_QA. Actual browser/responsive/keyboard interaction, hosted identity/D1 and operational data are NOT_RUN. No visual acceptance, actual agronomic finding or model-performance claim. No new mutation or operational DB call.
+- Final publication unit includes existing ACTIVE_WORK status plus7 feature/test/doc files (8 total); zero path overlap with preserved photo5-file candidate. No new branch/commit/push/PR/merge/deploy. Latest remote refs/other remote writers remain UNKNOWN; inspect them before future publication, do not overwrite original checkout or use old cached refs as fresh evidence.
+
+Next safe gate: separately review exact local8-file diff and existing CI wiring against freshly available remote main, then ask publication approval if appropriate. Do not activate models, introduce migrations or bypass blocked browser access to label the portfolio flow complete.

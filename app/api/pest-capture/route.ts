@@ -3,10 +3,9 @@ import { NextResponse } from 'next/server';
 import { ensureSchema } from '@/db';
 import { findPestTarget } from '@/app/features/pests/domain/catalog';
 import { hasFarmPermission } from '@/app/lib/farm-auth';
+import { MAX_CAPTURE_TOTAL_BYTES } from '@/app/features/pests/domain/capture-file-rules';
 
 export const runtime = 'edge';
-
-const MAX_TOTAL_BYTES = 40 * 1024 * 1024;
 
 function extension(name: string) {
   return name.toLowerCase().match(/\.([a-z0-9]{1,8})$/)?.[1] ?? 'jpg';
@@ -33,7 +32,7 @@ export async function receivePestCapture(request: Request, legacyDefault?: strin
     if (files.some(({ file }) => !file.type.startsWith('image/'))) {
       return NextResponse.json({ error: '이미지 파일만 접수할 수 있습니다.' }, { status: 422 });
     }
-    if (files.reduce((sum, { file }) => sum + file.size, 0) > MAX_TOTAL_BYTES) {
+    if (files.reduce((sum, { file }) => sum + file.size, 0) > MAX_CAPTURE_TOTAL_BYTES) {
       return NextResponse.json({ error: '사진 합계는 40MB 이하여야 합니다.' }, { status: 413 });
     }
 

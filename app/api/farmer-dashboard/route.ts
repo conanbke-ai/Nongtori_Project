@@ -58,6 +58,7 @@ export async function GET(request: Request) {
       farms,
       account: {
         authenticated: Boolean(identity.userId || identity.email),
+        memberId: null,
         loginId: null,
         email: identity.email || null,
         displayName: null,
@@ -192,6 +193,7 @@ export async function GET(request: Request) {
     farms,
     account: {
       authenticated: true,
+      memberId: member.id,
       loginId: member.loginId,
       email: member.email ?? (identity.email || null),
       displayName: member.displayName,

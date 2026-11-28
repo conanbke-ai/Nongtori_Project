@@ -143,14 +143,29 @@ test('generic review resolves the correct pest; legacy mite verdicts cannot reso
   assert.equal((await reviews.GET(request('alert-reviews?farmId=test-a&predictionId=mildew', 'worker'))).status, 200);
 });
 
-test('owner and worker exchange durable replies on pending records; membership, author and target boundaries hold', async () => {
+test('owner and worker exchange durable replies on pending records; membership, author and target boundaries hold', async (context) => {
+  // Synthetic UUIDs/time make the API's documented created_at,id tie-break
+  // return the reply first. Parentage is a relation, not an array position.
+  const fixtureIds = ['f0000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000002'] as const;
+  const randomUUID = crypto.randomUUID.bind(crypto); let generated = 0;
+  const uuidMock = context.mock.method(crypto, 'randomUUID', () => fixtureIds[generated++] ?? randomUUID());
   const body = { farmId: 'test-a', sessionId: 'pending', content: '사진 확인 부탁드립니다.', languageHint: 'ko' };
   const created = await notes.POST(request('record-notes', 'owner', 'POST', body)); assert.equal(created.status, 201);
   const { id } = await created.json() as { id: string };
   const reply = await notes.POST(request('record-notes', 'worker', 'POST', { ...body, content: '현장에서 다시 확인하겠습니다.', parentNoteId: id })); assert.equal(reply.status, 201);
-  const { rows } = await (await notes.GET(request('record-notes?farmId=test-a&sessionId=pending', 'worker'))).json() as { rows: { parent_note_id: string; author_role_snapshot: string }[] };
-  assert.equal(rows.length, 2); assert.equal(rows[1].parent_note_id, id);
-  assert.deepEqual(rows.map((x: { author_role_snapshot: string }) => x.author_role_snapshot), ['OWNER', 'WORKER']);
+  const { id: replyId } = await reply.json() as { id: string };
+  uuidMock.mock.restore();
+  assert.equal(generated, 2); assert.equal(id, fixtureIds[0]); assert.equal(replyId, fixtureIds[1]);
+  // Modify only this test's memory fixture, never application clocks or stored user data.
+  sqlite.prepare('UPDATE mite_record_notes SET created_at=? WHERE id IN (?,?)').run(stamp, id, replyId);
+  const { rows } = await (await notes.GET(request('record-notes?farmId=test-a&sessionId=pending', 'worker'))).json() as { rows: { id: string; created_at: string; parent_note_id: string | null; author_role_snapshot: string }[] };
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every(row => row.created_at === stamp));
+  assert.deepEqual(rows.map(row => row.id), [replyId, id], 'equal-time rows retain the existing UUID tie-break');
+  const parentRow = rows.find(row => row.id === id), replyRow = rows.find(row => row.id === replyId);
+  assert.ok(parentRow); assert.ok(replyRow);
+  assert.equal(parentRow.parent_note_id, null); assert.equal(replyRow.parent_note_id, id);
+  assert.equal(parentRow.author_role_snapshot, 'OWNER'); assert.equal(replyRow.author_role_snapshot, 'WORKER');
   assert.equal((await notes.PATCH(request('record-notes', 'worker', 'PATCH', { ...body, noteId: id, content: 'overwrite' }))).status, 403);
   assert.equal((await notes.PATCH(request('record-notes', 'owner', 'PATCH', { ...body, noteId: id, content: '사진 확인해 주세요.' }))).status, 200);
   assert.equal((await notes.POST(request('record-notes', 'worker', 'POST', { ...body, sessionId: 'pending-other', parentNoteId: id }))).status, 422);
